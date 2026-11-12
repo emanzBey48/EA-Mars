@@ -1,5 +1,5 @@
 // Canvas rendering. Converts local metres -> screen pixels via a camera; never mutates simulation state.
-import { STATUS } from './layers.js';
+import { STATUS } from '../surface/layers.js';
 
 export class Camera {
   constructor() { this.cx = 0; this.cy = 0; this.pxPerM = 2; this.min = 0.3; this.max = 16; }

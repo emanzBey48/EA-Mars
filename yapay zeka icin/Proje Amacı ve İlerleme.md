@@ -51,7 +51,7 @@ Proje kapsamı kullanıcı kontrollü tek bir kısa harita deneyimi olarak sabit
 
 ### F. Hesaplama, veri ve render ayrımı
 
-Saf jeo-uzamsal hesaplar `public/js/geo.js` içinde; veri katmanı/sample durumları `layers.js` içinde; kullanıcı simülasyonu `sim.js` içinde; Canvas görünümü `render.js` içinde. `createWorldSnapshot()` surface provider’dan kot/eğim alır; `zM` Mars 2000 yüzey yüksekliğidir (astronot beden yüksekliği değil), no-data/unavailable durumunda `null` kalır. Snapshot kopyalanıp derin dondurulur. `hud.js` ve `render()` aynı snapshot’ı tüketir; renderer canlı `sim`/`layer`/`adapter` almaz. Debug handle yalnız `?debug=1` ile açılır.
+Saf jeo-uzamsal hesaplar `public/js/geo/geo.js` içinde; veri katmanı/sample durumları `public/js/surface/layers.js` içinde; kullanıcı simülasyonu `public/js/simulation/sim.js` içinde; Canvas görünümü `public/js/view/render.js` içindedir. `createWorldSnapshot()` surface provider’dan kot/eğim alır; `zM` Mars 2000 yüzey yüksekliğidir (astronot beden yüksekliği değil), no-data/unavailable durumunda `null` kalır. Snapshot kopyalanıp derin dondurulur. `public/js/view/hud.js` ve `render()` aynı snapshot’ı tüketir; renderer canlı `sim`/`layer`/`adapter` almaz. Debug handle yalnız `?debug=1` ile açılır.
 
 ### G. Regresyon kontrolü ve kullanıcı bildirimi
 
@@ -59,7 +59,7 @@ Saf jeo-uzamsal hesaplar `public/js/geo.js` içinde; veri katmanı/sample duruml
 
 ### H. Manifest ve provider registry — kısmen tamamlandı
 
-Güncel kodda `public/js/registry.js` manifest alan doğrulayıcısı (`supported`, `needs_review`, `unavailable`, `invalid`), `SurfaceProviderRegistry`, fallback ve yerel HiRISE provider kaydı var. `main.js` registry’den varsayılan HiRISE’yi seçer; HUD validation/seçim raporunu gösterebilir. `test/core.test.mjs` synthetic manifest, belirsiz kayıt/ölçek, reddedilen candidate, fallback ve snapshot devamlılığı için test örnekleri içeriyor.
+Güncel kodda `public/js/surface/registry.js` manifest alan doğrulayıcısı (`supported`, `needs_review`, `unavailable`, `invalid`), `SurfaceProviderRegistry`, fallback ve yerel HiRISE provider kaydı var. `main.js` registry’den varsayılan HiRISE’yi seçer; HUD validation/seçim raporunu gösterebilir. `test/core.test.mjs` synthetic manifest, belirsiz kayıt/ölçek, reddedilen candidate, fallback ve snapshot devamlılığı için test örnekleri içeriyor.
 
 **Stage 6 tamam değil.** `Sim/data` içinde gerçek organizer verisi yok; desteklenen format şimdilik hazırlanmış `PDS3_PC_REAL_F32_WINDOW`. Registry gerçek yeni format parser’ı değildir; yeni candidate’ın loader’ı/CRS dönüşümü ayrıca yazılmalı. Kodun güncel statik incelemesinde dört fail-closed boşluğu göründü:
 
@@ -81,12 +81,12 @@ Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında 
 | Konum | Sorumluluk |
 |---|---|
 | `public/js/config.js` | Senaryo, waypoint, MAP_FRAME, rota caveat ve kaynaklar |
-| `public/js/geo.js` | Equirectangular/PDS grid/local metre transformu, segment uzaklığı, saf Horn gradyanı |
-| `public/js/layers.js` | `GridElevationLayer`, `UnavailableLayer`, `sampleSurface`, metadata ve no-data durumu |
-| `public/js/registry.js` | Manifest validator, SurfaceProvider registration/factory/fallback; şu an HiRISE default |
-| `public/js/sim.js` | Hareket, saat, rota metrikleri, immutable `WorldSnapshot` |
-| `public/js/input.js` / `hud.js` | Girişler ve DOM HUD; HUD snapshot tüketir |
-| `public/js/render.js` | 2D Canvas kamera, görsel terrain asset’i ve snapshot çizimi |
+| `public/js/geo/geo.js` | Equirectangular/PDS grid/local metre transformu, segment uzaklığı, saf Horn gradyanı |
+| `public/js/surface/layers.js` | `GridElevationLayer`, `UnavailableLayer`, `sampleSurface`, metadata ve no-data durumu |
+| `public/js/surface/registry.js` | Manifest validator, SurfaceProvider registration/factory/fallback; şu an HiRISE default |
+| `public/js/simulation/sim.js` | Hareket, saat, rota metrikleri, immutable `WorldSnapshot` |
+| `public/js/input/input.js` / `public/js/view/hud.js` | Girişler ve DOM HUD; HUD snapshot tüketir |
+| `public/js/view/render.js` | 2D Canvas kamera, görsel terrain asset’i ve snapshot çizimi |
 | `scripts/extract-dtm.mjs` | Kaynak DTM’den altküme/metadata çıkarımı ve JP2 başlık incelemesi |
 | `test/core.test.mjs` | Saf hesaplar, no-data, sim, snapshot ve registry birim kontrolleri |
 | `scripts/smoke-e2e.mjs` | Başsız tarayıcı etkileşim/kabul kontrolü ve `test-output/` screenshot’ları |

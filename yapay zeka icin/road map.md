@@ -103,7 +103,7 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 ### 6. Yarışma verisi intake ve adapter kayıt katmanı — KISMEN TAMAMLANDI; fail-closed boşluklar açık
 
 - **Amaç:** Organizatör verisi geldiğinde çekirdeği değiştirmeden tanımlı `SurfaceProvider`/snapshot yoluna bağlamak; belirsiz veriyle yanlış bilimsel değer üretimini engellemek.
-- **Mevcut kaynak:** `public/js/registry.js` manifest validator’ı, `SurfaceProviderRegistry`, HiRISE sağlayıcı/factory ve fallback’i içeriyor. `main.js` varsayılan HiRISE sağlayıcısını seçiyor; HUD doğrulama/seçim durumunu gösterebiliyor. `test/core.test.mjs` sentetik manifest ve fallback kontrolleri içeriyor.
+- **Mevcut kaynak:** `public/js/surface/registry.js` manifest validator’ı, `SurfaceProviderRegistry`, HiRISE sağlayıcı/factory ve fallback’i içeriyor. `main.js` varsayılan HiRISE sağlayıcısını seçiyor; HUD doğrulama/seçim durumunu gösterebiliyor. `test/core.test.mjs` sentetik manifest ve fallback kontrolleri içeriyor.
 - **Açık çıktı:** Mevcut registry’yi aşağıdaki fail-closed koşullarıyla tamamlamak ve sentetik testlerle sınamak; yeni yarışma verisi veya format adapter’ı uydurmamak.
 - **Sahip:** Alparslan (factory/entegrasyon). Takım arkadaşı becerileri uygunsa ayrı manifest/atıf denetimi veya test QA paketi alabilir.
 - **Bağımlılık:** Aşama 4 SurfaceProvider/WorldSnapshot. Gerçek organizer dataset’i henüz `Sim/data` içinde yok.

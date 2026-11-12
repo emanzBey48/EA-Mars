@@ -4,16 +4,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { adapterFromLabel, pointToSegment, horn3x3Gradient } from '../public/js/geo.js';
-import { GridElevationLayer, UnavailableLayer, makeDescriptor, loadDtmLayer, STATUS } from '../public/js/layers.js';
+import { adapterFromLabel, pointToSegment, horn3x3Gradient } from '../public/js/geo/geo.js';
+import { GridElevationLayer, UnavailableLayer, makeDescriptor, loadDtmLayer, STATUS } from '../public/js/surface/layers.js';
 import {
   VALIDATION_STATUS,
   validateLayerManifest,
   buildHiriseManifestFromMeta,
   SurfaceProviderRegistry,
   createDefaultSurfaceRegistry,
-} from '../public/js/registry.js';
-import { MarswalkSim, PHASE, createWorldSnapshot } from '../public/js/sim.js';
+} from '../public/js/surface/registry.js';
+import { MarswalkSim, PHASE, createWorldSnapshot } from '../public/js/simulation/sim.js';
 import { MAP_FRAME, WAYPOINTS, SCENARIO, ROUTE_ORIGIN_NOTE } from '../public/js/config.js';
 
 const adapter = adapterFromLabel(MAP_FRAME, WAYPOINTS[0]);

@@ -58,14 +58,14 @@ NASA PDS Search API metadata’sı PLACES release 16.0’daki `best_interp.csv` 
 
 Vanilla JS ES modules + Canvas 2D; package.json Node.js ≥20, bağımlılık yok. README smoke için Node ≥22 ve Edge/Chrome belirtir.
 
-- `public/js/geo.js`: Equirectangular/PDS grid/world transforms, point-to-segment, pure Horn 3×3 helper.
-- `public/js/layers.js`: `GridElevationLayer`, `UnavailableLayer`, `sampleElevation`, `sampleSlope`, `sampleSurface`, no-data/OOB/invalid/unavailable status.
-- `public/js/registry.js`: `validateLayerManifest`, `SurfaceProviderRegistry`, HiRISE manifest/factory ve HiRISE fallback.
-- `public/js/sim.js`: hareket/saat/route metrics ve deeply frozen `createWorldSnapshot`.
+- `public/js/geo/geo.js`: Equirectangular/PDS grid/world transforms, point-to-segment, pure Horn 3×3 helper.
+- `public/js/surface/layers.js`: `GridElevationLayer`, `UnavailableLayer`, `sampleElevation`, `sampleSlope`, `sampleSurface`, no-data/OOB/invalid/unavailable status.
+- `public/js/surface/registry.js`: `validateLayerManifest`, `SurfaceProviderRegistry`, HiRISE manifest/factory ve HiRISE fallback.
+- `public/js/simulation/sim.js`: hareket/saat/route metrics ve deeply frozen `createWorldSnapshot`.
 - `public/js/main.js`: provider seçer, her kare snapshot üretip renderer/HUD’a verir.
-- `public/js/hud.js`: snapshot ve layer metadata/status gösterir.
-- `public/js/render.js`: render() snapshot/camera/prepared terrain asset alır; `buildTerrainImage` halen layer’dan görsel asset hazırlar.
-- `public/js/input.js`: kontroller.
+- `public/js/view/hud.js`: snapshot ve layer metadata/status gösterir.
+- `public/js/view/render.js`: render() snapshot/camera/prepared terrain asset alır; `buildTerrainImage` halen layer’dan görsel asset hazırlar.
+- `public/js/input/input.js`: kontroller.
 - `scripts/extract-dtm.mjs`: kaynak DTM’den altküme üretir, metadata doğrular ve orto header inceler.
 - `test/core.test.mjs`, `scripts/smoke-e2e.mjs`: unit/E2E kabul akışları.
 

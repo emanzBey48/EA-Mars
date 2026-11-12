@@ -28,13 +28,13 @@ WASD / ok tuşları: hareket · P / Space: duraklat-devam · R: yeniden başlat 
 | Dosya | Görev |
 |---|---|
 | `public/js/config.js` | Senaryo değerleri (hız, zaman ölçeği, koridor ±10 m), waypointler, harita çerçevesi, kaynaklar |
-| `public/js/geo.js` | Tek dünya↔piksel adaptörü: equirectangular projeksiyon, PDS grid, yerel metre düzlemi, segment uzaklığı, saf 3×3 Horn gradyan/eğim yardımcısı (`horn3x3Gradient`) |
-| `public/js/layers.js` | Biçimden bağımsız katman ve `SurfaceProvider` sınırı (`GridElevationLayer`, `UnavailableLayer`): `sampleElevation(xM,yM)`, `sampleSlope(xM,yM)`, `sampleSurface(xM,yM)`, açık durumlar (`ok`, `no_data`, `out_of_bounds`, `unavailable`, `invalid`) |
-| `public/js/registry.js` | Katman manifest sözleşmesi, alan bazlı metadata doğrulayıcı (`validateLayerManifest`: `supported`, `needs_review`, `unavailable`, `invalid`) ve `SurfaceProviderRegistry` kayıt/seçim/fallback fabrikası |
-| `public/js/sim.js` | Oyuncu, senaryo saati, duraklatma/yeniden başlatma, ilerleme, sapma ve derin dondurulmuş kare sözleşmesi (`createWorldSnapshot`, `deepFreeze`) |
-| `public/js/render.js` | Saf kanvas çizimi: yalnız değiştirilemez `snapshot` (`WorldSnapshot`), `camera` ve hazırlanmış `terrain` varlığıyla çalışır; canlı `sim`/`layer`/`adapter` almaz ve raster örneklemesi ya da rota matematiği yapmaz |
-| `public/js/input.js` | Klavye, fare tekerleği ve kontrol butonları/koridor girdisi bağlama (`bindControls`) |
-| `public/js/hud.js` | Statik bilgi kartları, katman panelleri ve yalnız `WorldSnapshot` tüketen canlı HUD/uyarı banner güncellemeleri (`createHud`; DTM örneklemesi veya simülasyon kuralı içermez) |
+| `public/js/geo/geo.js` | Tek dünya↔piksel adaptörü: equirectangular projeksiyon, PDS grid, yerel metre düzlemi, segment uzaklığı, saf 3×3 Horn gradyan/eğim yardımcısı (`horn3x3Gradient`) |
+| `public/js/surface/layers.js` | Biçimden bağımsız katman ve `SurfaceProvider` sınırı (`GridElevationLayer`, `UnavailableLayer`): `sampleElevation(xM,yM)`, `sampleSlope(xM,yM)`, `sampleSurface(xM,yM)`, açık durumlar (`ok`, `no_data`, `out_of_bounds`, `unavailable`, `invalid`) |
+| `public/js/surface/registry.js` | Katman manifest sözleşmesi, alan bazlı metadata doğrulayıcı (`validateLayerManifest`: `supported`, `needs_review`, `unavailable`, `invalid`) ve `SurfaceProviderRegistry` kayıt/seçim/fallback fabrikası |
+| `public/js/simulation/sim.js` | Oyuncu, senaryo saati, duraklatma/yeniden başlatma, ilerleme, sapma ve derin dondurulmuş kare sözleşmesi (`createWorldSnapshot`, `deepFreeze`) |
+| `public/js/view/render.js` | Saf kanvas çizimi: yalnız değiştirilemez `snapshot` (`WorldSnapshot`), `camera` ve hazırlanmış `terrain` varlığıyla çalışır; canlı `sim`/`layer`/`adapter` almaz ve raster örneklemesi ya da rota matematiği yapmaz |
+| `public/js/input/input.js` | Klavye, fare tekerleği ve kontrol butonları/koridor girdisi bağlama (`bindControls`) |
+| `public/js/view/hud.js` | Statik bilgi kartları, katman panelleri ve yalnız `WorldSnapshot` tüketen canlı HUD/uyarı banner güncellemeleri (`createHud`; DTM örneklemesi veya simülasyon kuralı içermez) |
 | `public/js/main.js` | Uygulama koordinatörü (composition root): her karede `SurfaceProvider` ile örnekleme yapıp tek bir değiştirilemez `WorldSnapshot` üretir ve hem `render` hem `hud`’a verir |
 | `scripts/extract-dtm.mjs` | PDS3 etiketini ayrıştırır, doğrular, DTM penceresini çıkarır, JP2 GeoTIFF başlığını inceler, rota kontrolü |
 | `scripts/smoke-e2e.mjs` | DevTools protokolüyle gerçek tuş basışlı kabul testi (normal çalıştırmada `window.marswalk` olmadığını doğrular, ardından `?debug=1` ile testleri yürütür) |
@@ -60,7 +60,7 @@ WASD / ok tuşları: hareket · P / Space: duraklat-devam · R: yeniden başlat 
 - **Ortogörüntü devre dışı:** Bu bağımlılıksız yığında JPEG 2000 kod çözücü yok. Zemin, DTM’den türetilmiş gölgeli kabartma +
   kot renklendirmesidir ve ortogörüntü olarak adlandırılmaz.
 - **Yarışma verisi ve manifest doğrulaması:** Şu anda `Sim/data` içinde yalnızca doğrulanmış yerel HiRISE DTM fixture’ı vardır;
-  organizatörün yarışma verisi henüz mevcut değildir. Yeni bir katman eklendiğinde `public/js/registry.js` içindeki
+  organizatörün yarışma verisi henüz mevcut değildir. Yeni bir katman eklendiğinde `public/js/surface/registry.js` içindeki
   `validateLayerManifest` CRS, birim, düşey datum, piksel kayıt kuralı (`CENTER_PDS_1BASED`), ölçek/ofset ve no-data alanlarını
   alan bazında denetler (`supported`, `needs_review`, `unavailable`, `invalid`). Belirsiz veya uyumsuz katmanlar sessizce
   örneklenmez ve kot asla `0` ile doldurulmaz; uygulama doğrulanmış HiRISE sağlayıcısına veya `UnavailableLayer` durumuna geri dönerek oynanabilir kalır.

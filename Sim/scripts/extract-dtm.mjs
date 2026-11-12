@@ -4,8 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { adapterFromLabel, pointToSegment } from '../public/js/geo.js';
-import { GridElevationLayer, makeDescriptor, STATUS } from '../public/js/layers.js';
+import { adapterFromLabel, pointToSegment } from '../public/js/geo/geo.js';
+import { GridElevationLayer, makeDescriptor, STATUS } from '../public/js/surface/layers.js';
 import { WAYPOINTS, MAP_FRAME } from '../public/js/config.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));

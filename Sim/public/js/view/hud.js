@@ -1,7 +1,7 @@
 // HUD and DOM panel rendering. Consumes immutable `WorldSnapshot` frames and layer descriptors;
 // performs no DTM sampling, no simulation rules, and no coordinate math.
-import { STATUS } from './layers.js';
-import { PHASE, formatClock } from './sim.js';
+import { STATUS } from '../surface/layers.js';
+import { PHASE, formatClock } from '../simulation/sim.js';
 
 const $ = (id) => document.getElementById(id);
 

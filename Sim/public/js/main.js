@@ -1,13 +1,13 @@
 // App bootstrap (composition root): coordinates simulation, SurfaceProvider sampling,
 // immutable WorldSnapshot creation, canvas rendering, input and HUD.
 import { SCENARIO, WAYPOINTS, MAP_FRAME, ROUTE_ORIGIN_NOTE, SOURCES } from './config.js';
-import { adapterFromLabel } from './geo.js';
-import { UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './layers.js';
-import { createDefaultSurfaceRegistry } from './registry.js';
-import { MarswalkSim, createWorldSnapshot } from './sim.js';
-import { Camera, buildTerrainImage, render } from './render.js';
-import { bindControls } from './input.js';
-import { createHud } from './hud.js';
+import { adapterFromLabel } from './geo/geo.js';
+import { UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
+import { createDefaultSurfaceRegistry } from './surface/registry.js';
+import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
+import { Camera, buildTerrainImage, render } from './view/render.js';
+import { bindControls } from './input/input.js';
+import { createHud } from './view/hud.js';
 
 const $ = (id) => document.getElementById(id);
 const adapter = adapterFromLabel(MAP_FRAME, WAYPOINTS[0]);

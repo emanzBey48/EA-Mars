@@ -2,7 +2,7 @@
 // Every layer exposes a `descriptor` (metadata + access status). Elevation layers additionally expose
 // sampleElevation(x, y) and sampleSlope(x, y) in LOCAL SIM METRES; they never return 0 in place of missing data.
 // A future organiser-provided dataset only needs a loader that produces a descriptor + one of these classes.
-import { horn3x3Gradient } from './geo.js';
+import { horn3x3Gradient } from '../geo/geo.js';
 
 /** Sample statuses. Anything other than OK carries no numeric value. */
 export const STATUS = Object.freeze({

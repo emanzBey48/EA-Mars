@@ -1,6 +1,6 @@
 // Simulation core: player state, scenario clock, route progress and corridor deviation.
 // Works purely in the local metre plane (x east, y north). No DOM, no screen coordinates.
-import { pointToSegment } from './geo.js';
+import { pointToSegment } from '../geo/geo.js';
 
 export const PHASE = Object.freeze({ READY: 'ready', RUNNING: 'running', PAUSED: 'paused', ARRIVED: 'arrived' });
 

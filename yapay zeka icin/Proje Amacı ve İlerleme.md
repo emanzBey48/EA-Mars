@@ -70,9 +70,11 @@ Güncel kodda `public/js/registry.js` manifest alan doğrulayıcısı (`supporte
 
 Ek olarak `transformVerified` boolean’ı insan/loader iddiasıdır; yeni CRS dönüşümünü matematiksel olarak kendiliğinden doğrulamaz. Dönüşüm parametreleri ve footprint kanıtı doğrulanmalı. Bu boşluklar kapatılana ve gerçek kaynak incelenene kadar bilinmeyen candidate örneklenmemeli.
 
-### I. Git ile ortak çalışma — henüz kurulmadı
+### I. Git ile ortak çalışma — yerel depo kuruldu; LFS push bekliyor
 
-12 Kasım 2026 denetiminde workspace ve `Sim` içinde `.git` deposu veya remote yoktu. `yapay zeka icin` belgeleri ve `Sim` kodu aynı repoda paylaşılacaksa workspace proje klasörü depo kökü olmalı. Büyük kaynak DTM/JP2 dosyaları Git dışı tutulmalı; `Sim/.gitignore` ayrıca `Sim/data/` altkümesini dışlıyor, bu yüzden klonlardaki DTM fixture paylaşım yöntemi ekipçe kararlaştırılmalı. Workspace OneDrive altında olduğundan Git working copy’yi OneDrive senkronizasyonu dışında tutup remote üzerinden eşitlemek tercih edilmeli.
+Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında kuruldu; `origin` ayarlı ve AI başlangıç commit’i `54747f7` yerelde. Kimlik doğrulama tamamlandı fakat push sırasında Git LFS’in `github-cloud.s3.amazonaws.com` TLS sertifikası doğrulanamadı; remote’daki branch doğrulanmadı. Büyük IMG/JP2 ve `.f32` LFS’te, proje kodu ve AI yönergeleri aynı depoda. Workspace OneDrive altında olduğundan `.git` eşitleme çatışması riski vardır.
+
+**AI commit kuralı:** Her önemli ve gözden geçirilebilir görev aşamasında yalnız ilgili dosyaları commit et; büyük işi tek commit’te biriktirme. Commit’ten önce staged diff’i gözden geçir. Görev branch’ini remote’a push et ki ekip arkadaşı değişiklikleri görebilsin. Push engellenirse commit hash’ini ve nedeni bildir, remote’a ulaştı iddiasında bulunma. AI kendi kimliğiyle commit etmeli; insanı taklit etmemeli.
 
 ## 3. Güncel kod yapısı ve çalışma
 

@@ -55,7 +55,7 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 | Kaynakta mevcut | `SurfaceProvider`, manifest validator/registry, HiRISE default ve fallback, immutable `WorldSnapshot` | Registry genel yeni format parser’ı değildir. Stage 6 validator boşlukları aşağıda açıkça listelenmiştir. |
 | Açık | Stage 6 manifest doğrulamasını fail-closed tamamla | Lisans/usage, sayısal footprint ve route intersection, doğrulanmış vertical datum, zorunlu expectedFrame ve dönüşüm kanıtı; sentetik testler. |
 | Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; koordinat frame ve DTM kapsamı doğrulanmalı. Erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
-| Takım kararı gerekli | Git ile iki kişilik paylaşım | 12 Kasım 2026 denetiminde repo/remote yoktu. `Sim` ve `yapay zeka icin` yönergelerini birlikte izlemek için workspace proje klasörü repo kökü olmalı; kök `.gitignore` büyük rasterları dışlamalı. DTM fixture yöntemi ayrıca kararlaştırılmalı. |
+| Kuruldu; push bekliyor | Git ile iki kişilik paylaşım | Yerel `main`, `origin` ve başlangıç commit’i `54747f7` kurulu. Push sırasında LFS S3 sertifika doğrulaması başarısız oldu. IMG/JP2/F32 LFS’te; AI belgeleri ile kod aynı repoda. |
 
 ## Sıradaki somut işler
 
@@ -65,4 +65,4 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 
 ### Git başlangıç durumu
 
-12 Kasım 2026'da workspace ve `Sim` içinde `.git` deposu ya da remote yoktu. `Sim` kodu ile `yapay zeka icin` yönergelerini birlikte paylaşmak için workspace proje klasörünü repo kökü yap; kök `.gitignore` ile büyük IMG/JP2 kaynaklarını dışla. `Sim/.gitignore` tüm `data/` klasörünü hariç tuttuğundan, temiz klondaki DTM fixture erişimini ayrıca çöz. Workspace OneDrive altında olduğundan Git working copy’yi senkronizasyon dışında tut ve takım arkadaşlarının ayrı clone kullanmasını sağla. İki AI’nın aynı amacı izlemesi için kısa, izlenen bir rehber ve görev başına branch/PR akışı kullan.
+Workspace kökünde `emanzBey48/EA-Mars` remote’u ayarlanmış, ilk AI commit’i `54747f7` yerelde oluşmuş durumda. LFS objeleri sertifika doğrulaması yüzünden GitHub’a ulaşmadı; bağlantı güvenli biçimde düzeldikten sonra push edilmeli. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; SSL doğrulaması kapatılmasın.

@@ -149,11 +149,12 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 
 ## Git paylaşımı — 12 Kasım 2026 denetim durumu
 
-- Workspace ve `Sim` altında Git deposu veya remote yok; ortak branch/commit akışı henüz kurulmamış.
-- `yapay zeka icin` yönergeleri ile `Sim` kodunu aynı uzak depoda paylaşmak için repo kökü bu workspace klasörü olmalı. Önce kök `.gitignore` içine yaklaşık 381 MB DTM ve 34 MB JP2 raster dosyalarını açıkça ekle.
+- Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında kuruldu ve `origin` ayarlandı. Başlangıç commit’i `54747f7` yerelde. Push, Git LFS nesnelerini `github-cloud.s3.amazonaws.com` adresine yüklerken sertifika doğrulama hatası verdi; uzak dal doğrulanmış değil.
+- `yapay zeka icin` yönergeleri ile `Sim` kodu aynı repo kökündedir. 381 MB IMG, 34 MB JP2 ve 7.5 MB F32 `.gitattributes` ile Git LFS üzerinden izlenir; normal Git’e eklenmez.
 - Workspace OneDrive altında olduğundan, Git working copy’yi OneDrive senkronizasyonunun dışına almak daha güvenlidir. Takım arkadaşları ayrı clone kullansın; OneDrive `.git` senkronizasyonu ortak Git yöntemi olmasın.
-- `Sim/.gitignore` `data/` klasörünün tamamını dışlıyor. Klonlanan ekip arkadaşında hazır DTM altkümesinin bulunması için fixture saklama/indirme yöntemi ayrıca kararlaştırılmalı.
-- İki AI’nın aynı hedefi izlemesi için güncel çalışma rehberi ve kabul ölçütleri repo içinde izlenmeli; görev başına branch açılmalı, bir entegrasyon sahibi PR/diff’i gözden geçirip birleştirmeli.
+- `Sim/.gitignore` `dtm_subset.f32`, `dtm_subset.json` ve `ortho_inspection.json` dosyalarını izlemeye alır; F32 LFS üzerinden klonlanır. Mevcut `test-output` ekran görüntüleri de ilk importta eklendi.
+- AI’lar her önemli, gözden geçirilebilir görev aşamasında ilgili değişiklikleri ayrı commit etsin; büyük işleri tek commit’e yığmasın. Commit öncesi `git status` ve staged diff kontrol edilsin; ilgisiz kullanıcı değişiklikleri eklenmesin. Görev branch’i remote’a push edilsin; push başarısızsa hash ve engel raporlansın. Güvenlik/sertifika doğrulaması kapatılmasın.
+- Commit author kimliği AI’yı belirtmeli ve bir insanı taklit etmemeli. Ana dal entegrasyon sahibi tarafından PR/diff incelemesiyle birleştirilmeli. Testler yalnız kullanıcı istediğinde çalıştırılmalı; çalıştırılmayan test başarılıymış gibi raporlanmamalı.
 
 ## Şu anki en iyi sonraki adım
 

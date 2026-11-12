@@ -64,7 +64,7 @@ Sıradaki dış doğrulama işi, internete kısıtsız bir ortamda PDS Search AP
 - `public/js/main.js`: birleştirme noktası; `window.marswalk` yalnız `?debug=1` veya açık debug bayrağıyla açılır.
 - `scripts/extract-dtm.mjs`: üst klasördeki gerçek DTM’den uygulama alt kümesini ve metadata’yı üretir; JP2 başlığını inceler.
 
-**[AÇIK — SONRAKİ MİMARİ ADIM]** Mevcut kaynakta `WorldSnapshot`/`SurfaceProvider` yok. `MarswalkSim` konumu XY tutuyor; kot HUD içinde katmandan örnekleniyor. `render()` hâlâ canlı `sim`, `adapter`, `layer` alıyor; HUD da `sim`/`layers` okuyup örnekleme yapıyor. Bu yüzden son verilen AI promptundaki sözleşme refaktörü henüz mevcut dosyalara uygulanmış görünmüyor. Promptun başka AI’da çalıştırılıp çalıştırılmadığı veya tamamlanıp tamamlanmadığı bilinmiyor.
+**[KAYNAKTA TAMAMLANDI]** `layers.js` `SurfaceProvider` sınırını, `sim.js` derin dondurulmuş `createWorldSnapshot()` sözleşmesini içeriyor. `main.js` her karede snapshot üretip `render()` ve HUD’a veriyor; renderer canlı `sim`/`layer`/`adapter` almıyor. `registry.js` manifest validator, provider registry ve HiRISE fallback içeriyor. Stage 6’nın validator boşlukları hâlâ açıktır; ayrıntı için `yapay zeka icin/Proje Amacı ve İlerleme.md` ve `yapay zeka icin/road map.md` dosyalarına bak.
 
 ## Yerel çalıştırma ve doğrulama
 
@@ -101,7 +101,11 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 ## Önerilen sonraki somut adım
 
-**Alparslan / entegrasyon:** Önce yerel test sonucunu ve başka AI’dan gelen değişiklikleri Sim dosyaları üzerinden kontrol et. Sonra tek sınırlı kod görevi olarak `SurfaceProvider` adaptör sınırı ve değişmez kare snapshot’ını uygula: snapshot actor `xM/yM` yanında DTM’den türetilmiş `zM`’yi datum/kaynakla veya `null` + durumla taşısın; HUD ve Canvas renderer bu aynı snapshot’ı okusun; renderer canlı sim/layer/adapter’a erişmesin. 2D görünümü ve mevcut testleri koru, 3D kütüphanesi ekleme. Kabul: hareket/saat/sapma davranışı değişmez; kot no-data ise sıfır uydurulmaz; snapshot kopyalanmış/değiştirilemez; renderer yalnız snapshot/view/görsel varlıklarla çalışır.
+**Stage 6 validator boşlukları:** Registry/provider iskeletini yeniden yazma. License/usage, sayısal footprint ve route intersection, `verticalDatumVerified === true`, zorunlu `expectedFrame` ve doğrulanabilir dönüşüm kanıtını fail-closed tamamla; yalnız bu görev için sentetik testleri güncelle. Gerçek organizer verisi gelmeden yeni adapter uydurma.
+
+## Git çalışma kuralı
+
+Workspace kökündeki `emanzBey48/EA-Mars` için yerel `main`, `origin` ve `54747f7` başlangıç commit’i vardır. Git LFS push sertifika doğrulamasında başarısız oldu; remote durumu doğrulanmış değildir. AI’lar her önemli ve gözden geçirilebilir görev aşamasında ilgili değişiklikleri ayrı commit etsin; staged diff’i önceden incelesin ve paylaşım için branch’ini push etsin. Push başarısızsa commit hash’ini ve hatayı bildir, TLS doğrulamasını kapatma. Alparslan entegrasyon sahibi olarak PR/diff’i inceler. Testler yalnız kullanıcı istediğinde çalıştırılır.
 
 **Teammate:** Becerileri ve ilgisi öğrenilene kadar sabit kod görevi atanmadı. Uygunsa PLACES kaynak/koordinat doğrulaması veya demo QA ayrı koşullu paket olabilir.
 

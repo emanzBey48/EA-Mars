@@ -98,11 +98,12 @@ Kullanıcı 12 Kasım 2026’da tüm regresyon kontrollerinin geçtiğini bildir
 
 ## Git ve iki kişilik çalışma — mevcut durum
 
-- 12 Kasım 2026 tarihli denetimde ne workspace kökünde ne `Sim` içinde `.git` deposu veya remote bulundu. Uzak repo, branch ya da commit bilgisi bu klasörden doğrulanmış değil.
-- Bu proje kodu ve `yapay zeka icin` yönergeleri birlikte paylaşılacaksa repo kökü workspace klasörü olmalı; böylece iki AI aynı izlenen bağlamı görür. Yaklaşık 381 MB DTM ve 34 MB JP2 kaynak rasterlarını kök `.gitignore` ile açıkça dışla.
+- Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında oluşturuldu; `origin` ayarlı. Başlangıç commit’i `54747f7` yerelde mevcut. Push sırasında LFS yüklemesi `github-cloud.s3.amazonaws.com` sertifika doğrulamasında başarısız oldu; uzak dalın güncel durumu doğrulanamadı.
+- Repo kökü workspace klasörüdür; uygulama ve `yapay zeka icin` yönergeleri aynı depoda bulunur. 381 MB IMG, 34 MB JP2 ve 7.5 MB F32 dosyaları `.gitattributes` ile Git LFS’te izlenir; normal Git geçmişine binary içerik girmez.
 - Workspace OneDrive altındadır. Git çalışma kopyasını OneDrive senkronizasyonunun dışında tutmak daha güvenlidir; paylaşımı Git remote üzerinden yapın, OneDrive’ın `.git` klasörünü eşitlemesine bel bağlamayın.
-- `Sim/.gitignore`, `data/` klasörünün tamamını dışlıyor. Klonlanan projede hazır DTM altkümesi bulunmayabileceğini hesaba kat; fixture’ın Git’te tutulması, Git LFS veya belgelenmiş harici indirme seçeneklerinden biri ekipçe kararlaştırılmalı. Büyük ham rasterları normal Git geçmişine ekleme.
-- İki AI için çalışma ilkelerini repo içinde herkesin görebileceği izlenen kısa bir `AGENTS.md` veya benzeri rehberde tut; mevcut `yapay zeka icin` belgeleri de repo altında kalır. Her değişiklik için tek görev ve kısa ömürlü branch kullan; entegrasyon Alparslan’da kalsın. Merge öncesi diff ve kabul ölçütlerini gözden geçir.
+- `Sim/.gitignore` üç gerekli data fixture’ını istisna ederek izler; LFS’e bağlanan F32 dosyası klona dahil olmalıdır. Üretilen test ekran görüntüleri şu an repoda; yeni geçici çıktıları görevle ilgisizse ekleme. Büyük ham rasterları normal Git geçmişine ekleme.
+- İki AI için çalışma ilkelerini repo içindeki izlenen `AGENTS.md` ve `yapay zeka icin` belgelerinde tut. Her önemli ve gözden geçirilebilir görev aşamasında küçük, açıklayıcı bir commit oluştur; büyük işi tek commit’te biriktirme. Commit’ten önce yalnız o göreve ait dosyaları stage et ve staged diff’i gözden geçir. Commit’i görev dalına push et ki takım arkadaşı görebilsin; push başarısızsa hash’i ve engeli bildir, “paylaşıldı” deme. Testler yalnız kullanıcı istediğinde çalıştırılır; test çalıştırılmadıysa commit raporunda bunu açıkça yaz.
+- Her görev için kısa ömürlü branch kullan; entegrasyon Alparslan’da kalsın. AI kendi commit kimliğiyle yazsın, bir insanı taklit etmesin. Ana dala merge öncesi diff ve kabul ölçütlerini gözden geçir.
 
 ## Çalışma ilkeleri
 
@@ -114,6 +115,7 @@ Kullanıcı 12 Kasım 2026’da tüm regresyon kontrollerinin geçtiğini bildir
 6. Yeni özellikleri küçük tut; 2D working demo, local fallback ve safety caveat korunmalı. Teammate becerilerini bilmeden rol atama.
 7. Kullanıcı başka AI’yı coding için kullanıyorsa bir tek, net sınırlı implementation prompt’u ve acceptance checks ver. Kullanıcı açıkça kodu burada istemedikçe uygulama kodu düzenleme.
 8. Ajan raporu kısa başlasın: durum, doğrulanmış/çelişkili bilgi, blocker, tek önerilen next step; uzun teknik detay gerekirse altta ver. Türkçe yanıtla.
+9. Önemli görev aşamalarını commit et. Commit yalnız o aşamanın ilgili değişikliklerini içersin; her küçük düzenlemeyi ayrı commit yapma. Uygun branch’te commit’ten sonra remote’a push etmeyi dene; güvenlik/sertifika doğrulamasını kapatma.
 
 ## Güvenlik ve bilimsel doğruluk
 

@@ -7,3 +7,10 @@ Bu depo NASA Space Apps 2026 için Marswalk projesini içerir. Göreve başlamad
 Mevcut 2D Canvas MVP’yi ve HiRISE fallback’ini koru. Bilinmeyen CRS/datum/no-data’yı tahmin etme; no-data değerini sıfıra çevirme; gerçek PLACES izi, canlı telemetri veya güvenli rota iddiası kurma. Kod değişikliklerinde tek görev ve kabul ölçütleriyle çalış; branch/PR kullan ve entegrasyon sahibi Alparslan’dır. Kullanıcı açıkça istemedikçe uygulama kodunu, veriyi veya testleri değiştirme/çalıştırma.
 
 İki AI paralel çalışıyorsa görevleri ayır ve aynı dosyaları eşzamanlı düzenleme. Kullanıcı bildirimiyle bağımsız doğrulamayı açıkça ayır.
+
+## Git commit ritmi
+
+- Her önemli, gözden geçirilebilir görev aşamasından sonra yalnız ilgili değişiklikleri küçük ve açıklayıcı bir commit olarak kaydet. Büyük görevi tek commit’e yığma; her küçük yazım/düzeltme için de commit oluşturma.
+- Commit’ten önce `git status` ve staged diff’i incele; ilgisiz kullanıcı dosyalarını commit’e alma. AI kendi açıkça tanımlanmış author kimliğiyle commit etsin, insanı taklit etmesin.
+- Çalışma dalını her önemli commit’ten sonra remote’a push et ki takım arkadaşı ve diğer AI güncel durumu görebilsin. Push başarısızsa commit hash’ini ve gerçek hatayı bildir; yerel commit’i paylaşılmış gibi gösterme. Sertifika/TLS doğrulamasını kapatma.
+- Ana dala merge entegrasyon sahibi incelemesinden sonra yapılır. Testler yalnız kullanıcı istediğinde çalıştırılır; test yapılmadıysa commit raporunda belirt.

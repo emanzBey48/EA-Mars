@@ -1,0 +1,14 @@
+{
+  "name": "marswalk-sim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marswalk MVP — Interplanetary Survival Guide: Martian Map (user-controlled Jezero walk, HiRISE DTM)",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "prepare-data": "node scripts/extract-dtm.mjs",
+    "start": "node server.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "smoke": "node scripts/smoke-e2e.mjs"
+  }
+}

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marswalk — Interplanetary Survival Guide: Martian Map</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Marswalk · Jezero</h1>
+      <p class="sub">Interplanetary Survival Guide: Martian Map — kullanıcı kontrollü keşif simülasyonu. Mars fizik motoru, canlı NASA telemetrisi veya güvenlik aracı değildir.</p>
+    </div>
+    <div class="phase" id="phase">Hazır</div>
+  </header>
+
+  <main>
+    <section id="mapwrap">
+      <canvas id="map" aria-label="Jezero haritası ve astronot"></canvas>
+      <div id="deviation-banner" class="banner warn" hidden role="alert"></div>
+      <div id="arrived-banner" class="banner ok" hidden>Sol 164 / Roubion waypoint’ine ulaşıldı. Yeniden başlatmak için R.</div>
+      <div id="raster-banner" class="banner info" hidden></div>
+      <div id="start-hint" class="hint">Başlangıç: <b>Sol 120 / WB1</b>. Hedef: <b>Sol 164 / Roubion</b>.<br>Hareket etmek için WASD veya ok tuşlarına basın — senaryo saati ilk hareketle başlar.</div>
+      <div id="legend" class="legend"></div>
+    </section>
+
+    <aside id="panel">
+      <section class="card">
+        <h2>Kontroller</h2>
+        <ul class="keys">
+          <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> hareket</li>
+          <li><kbd>P</kbd> / <kbd>Space</kbd> duraklat · devam</li>
+          <li><kbd>R</kbd> yeniden başlat</li>
+          <li><kbd>+</kbd> / <kbd>−</kbd> / fare tekerleği yakınlaştırma (yalnız görünüm)</li>
+        </ul>
+        <div class="buttons">
+          <button id="btn-pause" type="button">Duraklat</button>
+          <button id="btn-restart" type="button">Yeniden başlat</button>
+        </div>
+      </section>
+
+      <section class="card scenario">
+        <h2><span class="tag tag-scn">Senaryo/UI</span> Simülasyon durumu</h2>
+        <dl>
+          <dt>Oyuncu konumu (yerel düzlem)</dt><dd id="v-pos">—</dd>
+          <dt>Konum (projeksiyonla dönüştürülmüş)</dt><dd id="v-latlon">—</dd>
+          <dt>Senaryo saati</dt><dd id="v-clock">—</dd>
+          <dt>Hareket hızı</dt><dd id="v-speed">—</dd>
+          <dt>Rota ilerlemesi</dt><dd id="v-progress">—</dd>
+          <dt>Rotadan sapma (yerel equirectangular düzlemde sonlu segmente en kısa yatay uzaklık)</dt><dd id="v-dev">—</dd>
+          <dt><label for="in-corridor">Koridor yarı genişliği (her iki yan, m)</label></dt>
+          <dd><input id="in-corridor" type="number" step="1"> <span class="muted">senaryo varsayımı; yerel equirectangular projeksiyon düzleminde hesaplanır, güvenlik sınırı veya NASA operasyon sınırı değil</span></dd>
+          <dt>Yürünen mesafe</dt><dd id="v-walked">—</dd>
+        </dl>
+        <p class="muted small">Yerel düzlem: x doğu, y kuzey, metre; orijin Sol 120 / WB1. Mesafe ve koridor yerel equirectangular projeksiyon düzleminde hesaplanır; bu koridor bir güvenlik sınırı değildir. Saat yalnız simülasyon saatidir; duraklatmada durur, yeniden başlatmada sıfırlanır.</p>
+      </section>
+
+      <section class="card computed">
+        <h2><span class="tag tag-calc">Hesaplanan</span> Oyuncu konumunda DTM</h2>
+        <dl>
+          <dt>Kot</dt><dd id="v-elev">—</dd>
+          <dt>Eğim</dt><dd id="v-slope">—</dd>
+        </dl>
+        <p class="muted small" id="v-calc-note"></p>
+        <p class="muted small">Kot ve eğim yalnız arşiv DTM’sinden türetilmiş değerlerdir; güvenli/güvensiz yorumu, tehlike skoru veya rover karar desteği değildir.</p>
+      </section>
+
+      <section class="card route">
+        <h2><span class="tag tag-route">Rota kökeni</span> Sol 120 → Sol 164</h2>
+        <p><b id="route-note"></b></p>
+        <ul id="route-wps" class="small"></ul>
+        <p class="muted small">Gerçek Perseverance traverse geometrisi (PDS PLACES) bu demoda kullanılmadı; ham PLACES dosyasına erişilemedi.</p>
+      </section>
+
+      <section class="card archive">
+        <h2><span class="tag tag-arch">Arşiv ürünü</span> Katmanlar</h2>
+        <div id="layers"></div>
+      </section>
+
+      <section class="card">
+        <h2>Kaynaklar ve atıf</h2>
+        <ul id="sources" class="small"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

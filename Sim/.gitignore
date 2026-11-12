@@ -1,0 +1,6 @@
+data/*
+!data/dtm_subset.f32
+!data/dtm_subset.json
+!data/ortho_inspection.json
+.e2e-profile/
+node_modules/

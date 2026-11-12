@@ -1,0 +1,43 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #0d0d10; color: #e8e6e3; font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 8px 16px; background: #1a1418; border-bottom: 1px solid #3a2a2a; }
+h1 { margin: 0; font-size: 18px; color: #ffb38a; }
+.sub { margin: 2px 0 0; font-size: 12px; color: #b9b2ad; }
+.phase { padding: 4px 10px; border-radius: 12px; background: #2f2f3a; font-weight: 600; white-space: nowrap; }
+.phase.running { background: #1f5130; } .phase.paused { background: #6b5214; } .phase.arrived { background: #1d4a6b; }
+main { display: flex; height: calc(100% - 58px); }
+#mapwrap { position: relative; flex: 1; min-width: 0; }
+#map { display: block; width: 100%; height: 100%; outline: none; }
+#panel { width: 420px; overflow-y: auto; padding: 8px; background: #141418; border-left: 1px solid #2a2a30; }
+.card { background: #1c1c22; border: 1px solid #2c2c34; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+.card h2 { margin: 0 0 6px; font-size: 14px; }
+dl { margin: 0; display: grid; grid-template-columns: 1fr; }
+dt { font-size: 11px; color: #9a948f; margin-top: 4px; }
+dd { margin: 0; font-variant-numeric: tabular-nums; }
+.muted { color: #8e8883; } .small { font-size: 12px; }
+.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-right: 4px; color: #000; font-weight: 700; }
+.tag-arch { background: #c9a2ff; } .tag-calc { background: #7fe0a8; } .tag-scn { background: #8ec9ff; } .tag-route { background: #ffd34d; }
+.archive { border-left: 3px solid #c9a2ff; } .computed { border-left: 3px solid #7fe0a8; } .scenario { border-left: 3px solid #8ec9ff; } .route { border-left: 3px solid #ffd34d; }
+.keys { margin: 0; padding-left: 18px; }
+kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; border: 1px solid #555; border-bottom-width: 2px; border-radius: 3px; background: #2a2a30; font-size: 11px; text-align: center; }
+.buttons { margin-top: 6px; display: flex; gap: 6px; }
+button { background: #33333d; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+button:hover { background: #44444f; }
+input[type=number] { width: 64px; background: #101014; color: #eee; border: 1px solid #555; border-radius: 3px; padding: 2px 4px; }
+.banner { position: absolute; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 6px; font-weight: 600; max-width: 80%; text-align: center; }
+.banner.warn { top: 12px; background: rgba(170, 20, 20, 0.92); color: #fff; border: 2px solid #ff8a8a; }
+.banner.ok { top: 60px; background: rgba(20, 90, 140, 0.92); color: #fff; }
+.banner.info { bottom: 50px; background: rgba(90, 60, 10, 0.92); color: #ffe2b0; font-weight: 500; font-size: 12px; }
+.hint { position: absolute; left: 12px; top: 12px; max-width: 360px; background: rgba(0, 0, 0, 0.7); padding: 8px 10px; border-radius: 6px; font-size: 13px; }
+.legend { position: absolute; right: 12px; bottom: 12px; max-width: 330px; background: rgba(0, 0, 0, 0.7); padding: 8px 10px; border-radius: 6px; font-size: 12px; }
+.legend .bar { height: 10px; border-radius: 2px; margin: 4px 0 2px; }
+.legend .row { display: flex; justify-content: space-between; }
+.swatch { display: inline-block; width: 22px; height: 0; border-top: 3px dashed #ffd34d; vertical-align: middle; margin-right: 4px; }
+.swatch.corr { border-top: 8px solid rgba(90, 200, 255, 0.35); }
+.swatch.nd { border-top: 8px solid #f0f; }
+.layer { border-top: 1px solid #2c2c34; padding-top: 6px; margin-top: 6px; font-size: 12px; }
+.layer:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+.layer .st-ok { color: #7fe0a8; font-weight: 700; } .layer .st-bad { color: #ffb36b; font-weight: 700; }
+.layer table { border-collapse: collapse; width: 100%; } .layer td { vertical-align: top; padding: 1px 4px 1px 0; } .layer td:first-child { color: #9a948f; white-space: nowrap; }
+.status-bad { color: #ffb36b; } .status-ok { color: #e8e6e3; }
+a { color: #8ec9ff; }

@@ -1,0 +1,161 @@
+﻿# Marswalk — Tam Proje Yol Haritası
+
+**Son güncelleme:** 12 Kasım 2026  
+**Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
+**Bu belge:** Kodlama planı ve karar kaydıdır; uygulama/test çalıştırma kaydı değildir.
+
+## Durum etiketleri ve bilgi kaynağı
+
+- **TAMAMLANDI — dosya/kaynakla:** Güncel dosyalar veya birincil kaynak bunu destekliyor.
+- **TAMAMLANDI — kullanıcı bildirimi:** Kullanıcı tamamlandığını söyledi; bağımsız doğrulama yapılmadı.
+- **AÇIK:** İş sürüyor veya teslimi henüz kodda görünmüyor.
+- **BEKLEMEDE:** Bağımlılık/etkinlik zamanı gelene kadar ertelendi.
+- **KULLANICI BİLDİRDİ:** Kullanıcı tarafından iletilen tarih/test bilgisi; bağımsız doğrulama değildir.
+
+**[KULLANICI BİLDİRDİ]** Etkinlik tarihleri 14–15 Kasım 2026; bugün 12 Kasım olduğundan hazırlık için yaklaşık iki gün var. Bu yol haritası tarih bilgisini resmi takvimden yeniden doğrulamış sayılmaz.
+
+**[KULLANICI BİLDİRDİ]** Alparslan regresyon kontrollerinin tümünün geçtiğini söyledi. Bu notu hazırlayan ajan uygulamayı/testleri yeniden çalıştırmadı ve sonuçlara ilişkin kullanıcıdan ayrıntılı log alınmadı.
+
+## Ürün hedefi ve kapsam sınırları
+
+Marswalk, kullanıcının Mars yüzey haritasında astronotu kendisinin yönettiği kısa bir keşif simülasyonudur. Kullanıcı hareket ettikçe rota, koridor sapması ve seçili bilimsel göstergeler güncellenir. Seçili resmi challenge: *Interplanetary Survival Guide: Martian Map*.
+
+**Kapsam dışı:** Genel Mars fizik motoru, canlı NASA telemetrisi izlenimi, gerçek rover karar desteği, güvenli/güvensiz rota kararı veya veriyle desteklenmeyen risk/güvenlik skoru. 3D bu etkinlik öncesi MVP’nin parçası değildir.
+
+## Bilimsel veri zemini ve kurallar
+
+### Yerel rasterlar
+
+**[DOĞRULANDI]** Yerel DTM `DTEEC_045994_1985_046060_1985_U01.IMG`, PDS3 `MRO-M-HIRISE-5-DTM-V1.0`: 6673×14266 piksel, yaklaşık 1.009663 m/piksel, 32-bit PC_REAL, Mars 2000 eşpotansiyel yüzeyine göre metre. Projeksiyon equirectangular; planetosentrik enlem, 15° standart paralel, merkez meridyen 77.44°E, yarıçap yaklaşık 3394.8398 km. No-data bit deseni `FF7FFFFB`; geçerli aralık yaklaşık −2679.20…−2388.31 m.
+
+Orto `ESP_046060_1985_RED_C_01_ORTHO.JP2` aynı boyut/CRS ve yaklaşık aynı ölçek metadata’sı taşıyor. GeoTIFF `PixelIsArea` okuması ile PDS merkez konvansiyonu arasında yarım piksel x/y kaydı (yaklaşık 0.71 m) vardır. Uygulama kot örneklemesinde DTM PDS etiketini esas alıyor ve hizalama/kayıt belirsizliğini açıklıyor. JPEG2000 çözücüsü olmadığı için orto görsel katmanı etkin değildir; zemin DTM’den türetilmiş görsel kabartmadır.
+
+**Ölçek uyuşmazlığı çözüldü:** HiRISE ürün sayfasındaki 0.25 m/piksel bilgisi yerel `C` ürünü için değildir. Ürün SIS’inde `A` 0.25 m sınıfı, `C` 1 m sınıfıdır; yerel ölçüm ~1.009663 m/piksel.
+
+### Rota ve göstergeler
+
+- Sol 120/WB1: 18.43906919°N, 77.44940206°E.
+- Sol 164/Roubion: 18.42769340°N, 77.45165066°E.
+- Uç noktaları birleştiren doğru, yerel projeksiyon düzleminde 686.204 m.
+- **Kritik uyarı:** Bu çizgi gerçek PDS PLACES traverse polyline’ı değildir; iki tarihsel waypoint arasındaki sadeleştirilmiş bağlantıdır.
+- `data/dtm_subset.json` içindeki `routeCheck`: 681 örnek, kot örneklemlerinde no-data yok; min/max −2588.546/−2568.352 m; uç kotlar −2569.435/−2588.449 m. 3×3 Horn eğimi ortalama 4.691°, P90 8.360°, maksimum 18.904°. Bunlar bu basitleştirilmiş çizgi boyunca arşiv DTM’den örneklenmiş/türetilmiş sonuçlardır; saha ölçümü veya güvenlik sınıflandırması değildir.
+- 10 m/yan koridor **senaryo varsayımıdır**. Mesafe/koridor yerel equirectangular projeksiyon düzleminde hesaplanır; ~18.4° enlemde doğu-batı ölçek farkı yaklaşık %1.8’dir.
+
+### Kaynak/attribution
+
+- [HiRISE Jezero DTM ürün sayfası](https://hirise.lpl.arizona.edu/dtm/dtm.php?ID=ESP_046060_1985)
+- [HiRISE RDR/DTM SIS](https://hirise.lpl.arizona.edu/PDS/DOCUMENT/HIRISE_RDR_SIS.PDF)
+- [Mars 2020 PDS Initial Reports](https://pds-geosciences.wustl.edu/missions/mars2020/Mars%202020%20Initial%20Reports%201-4%20April%202022.pdf)
+- [PDS PLACES bilgi sayfası](https://pds-geosciences.wustl.edu/missions/mars2020/places.htm)
+- [NASA PDS Search API kılavuzu](https://nasa-pds.github.io/pds-api/guides/search/endpoints.html)
+
+Veri katmanlarında kaynak, ürün/sürüm, atıf/lisans bilgisi, birim, düşey datum, CRS, mekânsal ve zamansal kapsam, dönüşüm ve no-data kuralı taşınmalı. Ölçülen/arşivlenen ürün değeri, model/hesap sonucu, senaryo varsayımı ve UI değeri ayrı etiketlenmeli. CRS veya datum bilinmiyorsa tahmin edilmemeli; gösterge `unavailable`/`needs_review` kalmalı. No-data asla 0’a dönüştürülmemeli. Simülasyon saati NASA gözlem zamanı değildir.
+
+## Aşamalar
+
+Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik ekibin toplamı belirtilmedikçe Alparslan’ın entegrasyon/uygulama emeği içindir. Takım arkadaşının becerileri bilinmediğinden sabit teknik sahiplik verilmemiştir.
+
+### 1. MVP kapsamını sabitleme — TAMAMLANDI
+
+- **Amaç:** Challenge’a bağlı, kısa ve oynanabilir demo sınırını belirlemek.
+- **Çıktı:** Kullanıcı kontrollü astronot; yerel harita; 60–90 sn demo akışı; rota/sapma ve en çok iki savunulabilir arazi göstergesi.
+- **Sahip:** Alparslan (ürün kararı); takım arkadaşı daha sonra gözden geçirebilir.
+- **Bağımlılık:** Challenge ve veri kapsamı.
+- **Kabul:** Kullanıcı astronotu kendisi kontrol eder; açıkça ölçüm/hesap/senaryo ayrımı vardır; güvenlik skoru yoktur.
+- **Tahmin:** Tamamlandı; ileriye dönük ek iş yok.
+
+### 2. Veri ve rota doğrulama — TAMAMLANDI / PLACES KOLU AÇIK
+
+- **Amaç:** Kullanılabilir alanı, grid/ölçeği ve rota uçlarını kanıta dayalı belirlemek.
+- **Çıktı:** HiRISE DTM/orto metadata’sı, PDS merkez-piksel transformu, yarım piksel kaydı notu, Sol120–Sol164 uçları ve yerel DTM profil/eğim özeti.
+- **Sahip:** Alparslan; PLACES ham dosya doğrulaması için kısıtsız ağ erişimi olan ekip üyesi koşullu olarak.
+- **Bağımlılık:** Yerel rasterlar ve PDS/HiRISE birincil dokümantasyonu.
+- **Kabul:** Raster boyutu, CRS, ölçek, datum, no-data ve örnekleme açıklanmış; çizginin gerçek rover polyline’ı olmadığı görünür biçimde etiketli.
+- **Tahmin:** Mevcut kanıt tamamlandı. PLACES ham CSV erişirse 2–4 saat; WUSTL/MEB engeli 45–60 dakikada çözülmezse durdur, veri uydurma.
+
+### 3. Fixture tabanlı oynanabilir 2D MVP — TAMAMLANDI (kaynakta); kullanıcı kabulü bildirimi ayrıca
+
+- **Amaç:** Uçtan uca demo akışını çalışır kılmak.
+- **Çıktı:** `Sim` içinde vanilla JS Canvas 2D; WASD/oklar; senaryo saati; duraklat/yeniden başlat; rota/±10 m senaryo koridoru; DTM kotu/Horn eğimi; kaynak ve sınırlama paneli.
+- **Sahip:** Alparslan (entegrasyon); takım arkadaşına becerisi uygunsa demo/QA paketi.
+- **Bağımlılık:** Aşamalar 1–2 ve yerel raster.
+- **Kabul:** README’deki komutlarla başlar; hareket ve sapma çalışır; raster verisi yoksa uygulama açılır ve katman unavailable görünür; gerçek PLACES izi/güvenlik aracı gibi sunulmaz.
+- **Tahmin:** Kod mevcut. Son regresyon başarısı kullanıcı bildirimi; bağımsız tekrar bu notta yapılmadı.
+
+### 4. Hesaplama/veri/render ayrımı ve snapshot sözleşmesi — TAMAMLANDI (kaynakta)
+
+- **Amaç:** Bilimsel hesapları UI/render durumundan ayırıp ileride başka renderer’a geçişi ucuzlatmak.
+- **Çıktı:** `geo.js` koordinat ve Horn saf fonksiyonları; `layers.js` SurfaceProvider rolü; `sim.js` derin dondurulmuş `WorldSnapshot`; HUD ve render aynı snapshot’ı tüketir; debug yalnız opt-in.
+- **Sahip:** Alparslan.
+- **Bağımlılık:** 2D MVP.
+- **Kabul:** Snapshot kopyalanıp derin dondurulmuş; `zM` Mars 2000 kotu, datum/status ile; no-data/unavailable `zM:null`; HUD örnekleme yapmıyor; renderer canlı sim/layer/adapter almıyor.
+- **Tahmin:** Kod ve testler mevcut. Kullanıcı regresyonu geçtiğini bildirdi; bu ajan çalıştırmadı.
+
+### 5. Regresyon kapısı — TAMAMLANDI (kullanıcı bildirimi)
+
+- **Amaç:** Snapshot refaktöründen sonra oynanabilir 2D davranışını doğrulamak.
+- **Çıktı:** Kullanıcı `npm test`, `npm run smoke` ve yerel elle denemelerin geçtiğini bildirdi.
+- **Sahip:** Alparslan.
+- **Bağımlılık:** Aşama 4.
+- **Kabul:** Kullanıcının bildirimine göre regresyon kontrolleri başarılı. Loglar bu belgede incelenmiş/yeniden çalıştırılmış sayılmaz.
+- **Tahmin:** Bildirilen test emeği tamamlandı; yeni kod öncesinde regression komutlarını tekrar çalıştırmak kodlama AI’sının kabul işi olmalı.
+
+### 6. Yarışma verisi intake ve adapter kayıt katmanı — KISMEN TAMAMLANDI; fail-closed boşluklar açık
+
+- **Amaç:** Organizatör verisi geldiğinde çekirdeği değiştirmeden tanımlı `SurfaceProvider`/snapshot yoluna bağlamak; belirsiz veriyle yanlış bilimsel değer üretimini engellemek.
+- **Mevcut kaynak:** `public/js/registry.js` manifest validator’ı, `SurfaceProviderRegistry`, HiRISE sağlayıcı/factory ve fallback’i içeriyor. `main.js` varsayılan HiRISE sağlayıcısını seçiyor; HUD doğrulama/seçim durumunu gösterebiliyor. `test/core.test.mjs` sentetik manifest ve fallback kontrolleri içeriyor.
+- **Açık çıktı:** Mevcut registry’yi aşağıdaki fail-closed koşullarıyla tamamlamak ve sentetik testlerle sınamak; yeni yarışma verisi veya format adapter’ı uydurmamak.
+- **Sahip:** Alparslan (factory/entegrasyon). Takım arkadaşı becerileri uygunsa ayrı manifest/atıf denetimi veya test QA paketi alabilir.
+- **Bağımlılık:** Aşama 4 SurfaceProvider/WorldSnapshot. Gerçek organizer dataset’i henüz `Sim/data` içinde yok.
+- **Mevcut açıklar:** (1) license/usage terms zorunlu değil; (2) coverage metinsel, sayısal footprint ve rota/dünya kesişimi doğrulanmıyor; (3) `verticalDatumVerified` yokken manifest supported olabilir; (4) `expectedFrame` verilmesi zorunlu değil ve `transformVerified` bayrağı dönüşümü matematiksel olarak doğrulamıyor.
+- **Kabul:** Açıklar fail-closed kapanır; HiRISE çıktısı/snapshot alanları ve fallback davranışı korunur; bilinmeyen format/CRS aktif örnekleme açmaz; UI durumları görünür kalır. Dönüşüm ve footprint kanıtı yalnız manifest bayrağı olarak kalmayıp doğrulanabilir girdilerle sınanır.
+- **Tahmin:** Kodun yeni denetiminden önce süre tahmini verilmesin. Gerçek format geldiğinde adapter kapsamı o verinin label/SIS ve dönüşümüne göre ayrıca belirlenir.
+- **Kesme çizgisi:** Bilinmeyen format/CRS’i “otomatik algılama” ile içeri alma; event sırasında veri geldiğinde ilk 60–90 dakikada metadata/erişim doğrulanamazsa yerel HiRISE fixture’a dön.
+
+**Not:** Registry/manifest validator kaynakta mevcut. Önceki “henüz görünmüyor” ifadesi eskimişti. Kullanıcı 12 Kasım 2026’da regresyon kontrollerinin geçtiğini bildirdi; bu yol haritası testleri bağımsız olarak yeniden çalıştırmış sayılmaz.
+
+### 7. Gerçek PLACES traverse doğrulaması — AÇIK / dış ağ bekliyor
+
+- **Amaç:** Basitleştirilmiş çizgiyi gerçek traverse ile, erişilebilir olduğu ölçüde değiştirmek veya karşılaştırmak.
+- **Çıktı:** PDS release/ürün kimliği doğrulanmış ham lokalizasyon dosyası ve PDS4 label/SIS; Sol 120–164 kayıt filtresi; koordinat/frame dönüşümü; DTM extent ve no-data filtresi; gerçek polyline uzunluk/profil karşılaştırması.
+- **Sahip:** Alparslan; erişimi olan teammate varsa indirme/label incelemesi koşullu.
+- **Bağımlılık:** PDS’nin raw CSV’sine engelsiz erişim ve coordinate frame belgeleri.
+- **Kabul:** Üçüncü taraf yerine PDS primary file; koordinatlar dokümana göre dönüştürülmüş; footprint/no-data gerçekten kontrol edilmiş; yol noktaları/ölçüm zamanları kaynağıyla sunulmuş. Erişim yoksa mevcut çizgi simülasyonda kalır ve “gerçek PLACES değil” etiketi korunur.
+- **Tahmin:** 2–4 saat erişim sağlandığında; 45–60 dakika endpoint denemesinden sonra engel tekrarlanırsa park et ve hackathon demosunu bloke etme.
+
+### 8. Demo dondurma ve sunum — AÇIK; etkinlik öncesi kritik yol
+
+- **Amaç:** Kısa, tekrar edilebilir ve bilimsel sınırlamaları açık demo hazırlamak.
+- **Çıktı:** Temiz açılış/başlatma yolu; 60–90 sn kullanıcı senaryosu; kaynak/attribution paneli; fallback akışı; en fazla 3 dakikalık anlatı ve yedek ekran görüntüsü/video.
+- **Sahip:** Alparslan entegrasyon/demo; takım arkadaşı ancak becerileri ve müsaitliği teyit edilirse anlatı, görsel inceleme veya QA.
+- **Bağımlılık:** MVP; en az bir regresyon geçişi; data adapter yalnız doğrulanmışsa.
+- **Kabul:** Yeni makinede README adımları; WASD, duraklat, koridor dışı/geri dönüş ve katman unavailable durumu denenmiş; gerçek PLACES değil ve güvenlik aracı değil açıklaması gözle görünür; attribution okunabilir.
+- **Tahmin:** Hazırlıkta 2–3 odaklı saat; etkinlikte ilk demo için 3–5 saat. Gösterim/teslimden 4 saat önce özellik eklemeyi dondur, yalnız kritik hata düzelt.
+
+### 9. 3D renderer/terrain sunumu — BEKLEMEDE, etkinlik sonrası
+
+- **Amaç:** Aynı simülasyon, veri adaptörü ve WorldSnapshot’ı kullanarak 3D sunum olanağını araştırmak.
+- **Çıktı:** Önce küçük teknik spike/prototip; ayrı camera/render asset katmanı; düşey ölçek ve Mars 2000 datum dönüşüm kararı yazılı; 2D renderer fallback’i korunmuş.
+- **Sahip:** Alparslan; 3D/graphics deneyimi olan teammate varsa spike ortak sahiplenebilir.
+- **Bağımlılık:** Aşama 4 regression kapısı, demo freeze, uygun zaman; organizer verisi kullanılacaksa aşama 6 validasyonu.
+- **Kabul:** 3D yalnız arşiv/hesaplanan veriyi doğru provenance ile sunar; display vertical offset scientific `zM`’yi değiştirmez; no-data yüzeyleri boş/işaretli kalır; mevcut snapshot ve sim kuralları aynı kalır.
+- **Tahmin:** 4–8 saat yalnız renderer spike; tam oynanabilir 3D dikey dilim 2–5 odaklı gün (framework ve asset seçimine göre). Hackathon son iki gününde başlama; süre aşılırsa 2D’ye dön.
+
+## Ekip ve çalışma akışı
+
+- Alparslan uygulama ve entegrasyon sahibidir.
+- Takım arkadaşının becerileri bilinmediği için rol sabitlenmemiştir. Uygunluğuna göre koşullu paketler: PDS label/atıf doğrulama, veri manifest QA, duman testi/demo akışı, sunum görselleri.
+- Kodlamada yalnız tek bir sonraki dikey dilim aç; mevcut çalışır demo ve `Sim/data` girdilerini koru. Doğrulanmamış dış veri, ekstra katman veya 3D motoru kritik yolu kesmemeli.
+
+## Git paylaşımı — 12 Kasım 2026 denetim durumu
+
+- Workspace ve `Sim` altında Git deposu veya remote yok; ortak branch/commit akışı henüz kurulmamış.
+- `yapay zeka icin` yönergeleri ile `Sim` kodunu aynı uzak depoda paylaşmak için repo kökü bu workspace klasörü olmalı. Önce kök `.gitignore` içine yaklaşık 381 MB DTM ve 34 MB JP2 raster dosyalarını açıkça ekle.
+- Workspace OneDrive altında olduğundan, Git working copy’yi OneDrive senkronizasyonunun dışına almak daha güvenlidir. Takım arkadaşları ayrı clone kullansın; OneDrive `.git` senkronizasyonu ortak Git yöntemi olmasın.
+- `Sim/.gitignore` `data/` klasörünün tamamını dışlıyor. Klonlanan ekip arkadaşında hazır DTM altkümesinin bulunması için fixture saklama/indirme yöntemi ayrıca kararlaştırılmalı.
+- İki AI’nın aynı hedefi izlemesi için güncel çalışma rehberi ve kabul ölçütleri repo içinde izlenmeli; görev başına branch açılmalı, bir entegrasyon sahibi PR/diff’i gözden geçirip birleştirmeli.
+
+## Şu anki en iyi sonraki adım
+
+**Aşama 6’nın açık validator boşluklarını kapat:** Registry/provider iskeletini yeniden yazma. Önce license/usage, sayısal footprint ve route intersection, `verticalDatumVerified === true`, zorunlu `expectedFrame` ve dönüşüm kanıtı koşullarını fail-closed uygula; yalnız bu kapsam için sentetik testleri güncelle. Gerçek organizer verisi gelirse ondan sonra metadata/erişim/CRS doğrulaması yap ve yalnız kanıtlanan format için adapter tasarla. PLACES ham dosya işi ayrı dış veri koludur; gerçek rota doğrulanamazsa sadeleştirilmiş çizgi caveat’ı kalmalı.
+

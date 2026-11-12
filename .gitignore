@@ -1,0 +1,9 @@
+# OS/editor noise
+Thumbs.db
+.DS_Store
+
+# Node/browser outputs
+**/node_modules/
+Sim/.e2e-profile/
+
+# Large scientific binaries are tracked through Git LFS via .gitattributes.

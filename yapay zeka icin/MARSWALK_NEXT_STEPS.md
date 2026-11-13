@@ -1,9 +1,9 @@
 # NASA Space Apps 2026 — Martian Map devir notu
 
-**Güncelleme:** 13 Kasım 2026
+**Güncelleme:** 14 Kasım 2026
 **Proje bağlamı:** Kullanıcı kontrollü Marswalk; uygulama kodu bu klasöre eklenmez.
 
-**Ürün yönü (13 Kasım 2026):** Nihai hedef, HiRISE DTM üzerinde birinci şahıs kullanıcı kontrollü Mars keşfidir. “FPS” first-person kamera/keşif demektir; shooter değildir. 2D Canvas MVP ve WebGL2 terrain/first-person Stage 10 dilimi ara aşamalardır. Kullanıcının mevcut 3D'nin hedefe uzak olduğu bildirimi Stage 10 entegrasyonundan önceki görünüm hakkındadır; bu kullanıcı bildirimi bağımsız runtime kabulü değildir. `fbc623f` first-person hareket/temas/rig dilimi sonradan bağımsız denetlendi; JPEG 2000 çözücüsü/orto sınırlaması ise devam ediyor.
+**Ürün yönü (14 Kasım 2026):** Nihai hedef, HiRISE DTM üzerinde birinci şahıs kullanıcı kontrollü Mars keşfidir. “FPS” first-person kamera/keşif demektir; shooter değildir. Stage 9 mesh optimizasyonu, Stage 10 first-person hareket/temas/rig, Stage 11 3D marker-mesh, Stage 8 first-person demo akışı (`f5259d2`) ve Stage 12 Mars zıplama balistiği ile kamera dinamikleri (`58660f0`) bağımsız testlerle doğrulandı (29/29 unit, 32/32 smoke). Sıradaki geliştirme görevi Stage 13 (Efe: Düşük yerçekimi EVA loping ve sıçrama/iniş kinematiği)'dir. JPEG 2000 çözücüsü/orto sınırlaması ise ayrı bloke etmeyen iş olarak devam ediyor.
 
 **Durum notu:** Bu devir belgesi araştırma ve eski iş planı içerir. Güncel kod durumu için önce `Sim/README.md`, `Sim/public/js/` ve `Sim/İkinci Beyin İlerleme Notları.md` dosyalarını kontrol et. Ortak ürün/ajan kuralları `SYSTEM_PROMPT.md`, teknik plan ise `road map.md` içindedir.
 
@@ -56,23 +56,25 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 | Kaynakta mevcut | HiRISE DTM penceresi, PDS grid dönüşümü, kullanıcı hareketi, saat, rota sapması/koridoru, DTM kotu ve Horn eğimi | Çalışan kod ve kabul davranışı için `Sim/README.md` ile kaynak/testleri esas al. DTM yoksa oyun açılmalı, katman unavailable kalmalı. |
 | Kaynakta mevcut | `SurfaceProvider`, manifest validator/registry, HiRISE default ve fallback, immutable `WorldSnapshot` | Registry genel yeni format parser’ı değildir. Stage 6 validator boşlukları aşağıda açıkça listelenmiştir. |
 | Kaynakta mevcut | Modül ayrımı ve snapshot/provider sözleşmesi | Dosya yolları için `Sim/README.md` ve `Sim/public/js/` esas alınır; registry ve `WorldSnapshot` kaynakta vardır. |
-| Stage 9 — runtime kabulü | İlk kabul `d471d6a` üzerinde, birleşik optimizasyon sonrası regresyon da kapandı | `fbc623f` kod HEAD’i bağımsız `npm test` 18/18 ve `npm run smoke` 32/32 geçti. Audit smoke’un ilk turundaki iki mevcut 2D timing kontrolü hemen yapılan tekrarda geçti. |
+| Stage 9 — runtime kabulü | İlk kabul `d471d6a` üzerinde, birleşik optimizasyon sonrası regresyon da kapandı | `fbc623f` kod HEAD’i bağımsız `npm test` 18/18 ve `npm run smoke` 32/32 geçti. |
 | Stage 10 — first-person keşif ve rig entegrasyonu | Tamamlandı (`fbc623f`) | Alparslan: movement/camera/surface-contact ve renderer entegrasyonu. Efe: bağımsız `astronaut-rig.js` geometri/poz modülü. Bağımsız doğrulama 18/18 unit, 32/32 smoke. |
-| Stage 8 — demo kapsamı/akışı | Sıradaki ürün-planlama kararı | First-person diliminin demo kapsamına girip girmeyeceğini, 60–90 sn akışı ve gösterilecek HUD/uyarıları belirle; karar olmadan demo dondurma sayma. |
-| Ayrı görsel işi | JP2 ortogörüntü çözme ve hizalama | Mevcut uyarı bilinen sınırlama; DTM hillshade orto değildir. Decoder/lisans ve yarım-piksel PDS/GeoTIFF kaydı doğrulanmadan orto bindirmesi iddia edilmemeli. Stage 9/10 önkoşulu değildir. |
-| Sonraki demo işi | Stage 8 demo dondurma/sunum | First-person kapsamı gösterilebilir ve demo kararı verilebilir olduktan sonra 60–90 sn akış dondurulur. |
+| Stage 11 — 3D marker-mesh kılavuzları | Tamamlandı (`8054b1a`) | Efe: `marker-mesh.js`. Alparslan: renderer entegrasyonu. Sol 120/164 beacon ve rota kılavuzları. |
+| Stage 8 — first-person demo akışı ve HUD | Tamamlandı (`f5259d2`, `9819da2`) | 3D doğrudan URL açılışı (`?view=3d`), Sol 164 hedef kilidi, nişangah, kontrol kapsülü, varış rozeti; Efe QA merge (`7ed695e`). |
+| Stage 12 — Mars zıplama fiziği ve kamera dinamikleri | Tamamlandı (`58660f0`) | Alparslan: Mars 3.71 m/s² yerçekimi (~1.3s hang-time, ~0.78m apex), havada yatay momentum korunumu, landingRecovery (0.25s), head-bobbing ve landing dip. Bağımsız 29/29 unit, 32/32 smoke test. |
+| Stage 13 — EVA loping ve iniş kinematiği | Sıradaki kodlama görevi (Efe) | Efe `astronaut-rig.js` içinde snapshot hareket girdilerini (`landingRecovery`, `airborne`, `phase`) tüketerek deterministik loping gait, apex balance ve landing squash pozlarını kodlar. |
+| Ayrı görsel işi | JP2 ortogörüntü çözme ve hizalama | Mevcut uyarı bilinen sınırlama; DTM hillshade orto değildir. Decoder/lisans ve yarım-piksel PDS/GeoTIFF kaydı doğrulanmadan orto bindirmesi iddia edilmemeli. Stage 12/13 önkoşulu değildir. |
 | Yarışma verisi gelince | Stage 6 manifest doğrulaması | License/usage, sayısal footprint+kesişim, açıkça doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtıyla fail-closed intake. |
 | Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
-| Kaydedilmiş Git durumu | İki kişilik paylaşım | `docs/shared-code-boundaries` dalındaki `aae4830`; görev bölümü ve belge eşitlemesi `docs/parallel-roadmap` dalındaki `d6a1189` commit’inde remote’da kayıtlı. |
+| Kaydedilmiş Git durumu | İki kişilik paylaşım | `alparslan/stage8-demo-orchestration` dalında Stage 12 (`58660f0`) ve Efe QA merge (`9819da2`) push edildi. |
 
 ## Sıradaki somut işler
 
-1. **Stage 8 demo kapsamı/akışı — sıradaki planlama işi:** Kullanıcı/entegrasyon sahibi first-person Stage 10 dilimini demo kapsamına alıp almayacağına karar versin; başlangıç/son koşullarını, HUD/uyarıları ve 60–90 sn akışını belirlesin. Bu karar verilmeden demo dondurulmuş sayılmaz.
+1. **Stage 13 EVA loping ve sıçrama/iniş kinematiği — sıradaki kod görevi:** Efe `Sim/public/js/view/3d/astronaut-rig.js` ve birim testlerinde düşük yerçekimi EVA sıçramalı loping gait, apex balance pose ve landing squash & recover kinematiğini uygular.
 2. **JP2 ortogörüntü decode/alignment — ayrı, bloke etmeyen iş:** Decoder ve lisansını araştır; `PixelIsArea` ile PDS piksel merkezi arasındaki yarım-piksel kayıt farkını kanıtla doğrulamadan overlay ekleme. Hillshade’i orto diye adlandırma.
 3. **Gerçek PLACES izi — dış erişime bağlı:** PDS’nin aynı birincil ürünü ve label/SIS’i engelsiz ortamdan edinilebilirse koordinat çerçevesini doğrula ve Sol 120–164’i DTM kapsam/no-data ile karşılaştır. Erişim yoksa basitleştirilmiş rota caveat’ı korunur.
 4. **Stage 6 yarışma verisi intake — koşullu:** Organizer dataset ve label/SIS geldiğinde fail-closed validator boşluklarını kaynak/provenance ile kapat; veri/kanıt yokken adapter veya format uydurma. HiRISE fallback korunur.
 5. **Atmosferi ölçülü modelle:** NASA basınç/yoğunluk değerlerini kaynaklı genel/ortalama referans veya açık senaryo girdisi olarak etiketle; Jezero anlık hava ya da gerçek suit fiziği gibi sunma. İnsan/giysi ve aerodinamik parametreleri kaynaklandırılmadan atmosferik kuvvet ekleme.
 
-### Git başlangıç durumu
+### Git güncel durumu
 
-`docs/shared-code-boundaries` üzerindeki `aae4830` ve `docs/parallel-roadmap` üzerindeki `d6a1189` remote’a push edildi. Sonuncusu güncel iki kişilik 3D iş bölümünü ve API sözleşmesini içerir. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; TLS doğrulaması kapatılmasın.
+`alparslan/stage8-demo-orchestration` üzerinde Stage 12 commit'i `58660f0` ve Efe QA merge commit'i `9819da2` remote'a push edilmiş durumdadır. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin.

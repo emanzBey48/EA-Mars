@@ -1,6 +1,6 @@
 ﻿# Marswalk — İkinci Beyin İlerleme Notları
 
-**Güncelleme:** 13 Kasım 2026 — Stage 8 demo ve Stage 11 marker-mesh tamamlandı; Stage 12 (Mars zıplama fiziği) ve Stage 13 (EVA loping kinematiği) yeni paralel görevler olarak atandı
+**Güncelleme:** 14 Kasım 2026 — Stage 8 demo, Stage 11 marker-mesh ve Stage 12 Mars zıplama balistiği/kamera dinamikleri tamamlandı; Stage 13 (EVA loping kinematiği) sıradaki görev olarak tanımlandı
 **Kapsam:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Notun amacı:** Doğrulanmış proje bağlamını, geçerli kararları ve sıradaki işi tek yerde tutmak.
 
@@ -16,7 +16,7 @@
 
 **[DOSYA/KAYNAKLA DOĞRULANDI]** İlk oynanabilir MVP 2D kanvas haritasıdır: WASD/ok tuşlarıyla hareket, senaryo saati, duraklat/devam, yeniden başlat, rota sapması ve koridor, DTM kotu ile 3×3 Horn eğimi. HiRISE’den türetilmiş gölgeli kabartma görsel amaçlıdır; ortogörüntü değildir.
 
-**[GÜNCEL DURUM — KOD/TESTLE DOĞRULANDI]** Stage 9 mesh optimizasyonu ve Stage 10 first-person hareket/kamera/yüzey teması (`fbc623f`), Stage 11 3D waypoint beacon’ları ve rota kılavuz geometrisi (`8054b1a`) ile Stage 8 first-person demo akışı ve HUD entegrasyonu (`f5259d2`) tamamlandı. Bağımsız denetimde `npm test` 24/24 ve `npm run smoke` 32/32 (60.4 FPS) geçti. Sıradaki geliştirme adımı, yarışma öncesi animasyon ve simülasyon gerçekçiliğini artırmak üzere Stage 12 (Alparslan: Mars zıplama fiziği ve kamera dinamiği) ve Stage 13 (Efe: Düşük yerçekimi EVA loping ve sıçrama/iniş kinematiği) bağımsız paralel çalışma paketleridir. Yarışma verisi gelene kadar yerel HiRISE fixture’ı yeterlidir. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; snapshot’lar kopyalanmış ve değiştirilemez olmalı.
+**[GÜNCEL DURUM — KOD/TESTLE DOĞRULANDI]** Stage 9 mesh optimizasyonu ve Stage 10 first-person hareket/kamera/yüzey teması (`fbc623f`), Stage 11 3D waypoint beacon’ları ve rota kılavuz geometrisi (`8054b1a`), Stage 8 first-person demo akışı ve HUD entegrasyonu (`f5259d2`), Efe QA merge'i (`9819da2`) ile Stage 12 Mars düşük yerçekimi zıplama balistiği, havada momentum korunumu, iniş darbe sönümlemesi ve kamera dinamikleri (`58660f0`) tamamlandı. Bağımsız denetimde `npm test` 29/29 ve `npm run smoke` 32/32 (59.3 FPS) geçti. Sıradaki geliştirme adımı, Stage 13 (Efe: Düşük yerçekimi EVA loping ve sıçrama/iniş kinematiği) aşamasıdır. Yarışma verisi gelene kadar yerel HiRISE fixture’ı yeterlidir. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; snapshot’lar kopyalanmış ve değiştirilemez olmalı.
 
 ## Yerel HiRISE verileri ve hizalama
 
@@ -89,7 +89,9 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 **[STAGE 9 REGRESYONU + STAGE 10 — BAĞIMSIZ SON DOĞRULAMA, 13 KASIM]** Mesh bellek optimizasyonu, first-person movement/camera/contact ve astronot rig renderer entegrasyonunu içeren `fbc623f` kod HEAD’i bağımsız denetlendi: `npm test` 18/18, son `npm run smoke` 32/32 geçti. İlk audit smoke turunda iki mevcut 2D timing kontrolü geçici başarısız oldu; hemen tekrarında tüm 32 smoke kontrolü geçti. Smoke 3D geçişi, first-person rig görünürlüğü/heading, gait/pause, bilinmeyen temas ile devam eden jump ayrımı, 2D kontrolleri ve WebGL2 fallback’i kapsadı.
 
-**[STAGE 11 VE STAGE 8 — BAĞIMSIZ DOĞRULAMA, 13 KASIM]** Efe'nin 3D waypoint beacon ve rota kılavuz geometrisi `8054b1a` ile tamamlandı. Alparslan'ın Stage 8 first-person demo akışı, nişangah (`#fp-reticle`), kontrol kapsülü (`#fp-hud-hint`) ve Sol 164 Roubion varış rozeti entegrasyonu `f5259d2` ile tamamlandı. Bağımsız doğrulamada `npm test` 24/24, `npm run smoke` 32/32 geçti (60.4 FPS).
+**[STAGE 11 VE STAGE 8 — BAĞIMSIZ DOĞRULAMA, 13 KASIM]** Efe'nin 3D waypoint beacon ve rota kılavuz geometrisi `8054b1a` ile tamamlandı. Alparslan'ın Stage 8 first-person demo akışı, nişangah (`#fp-reticle`), kontrol kapsülü (`#fp-hud-hint`) ve Sol 164 Roubion varış rozeti entegrasyonu `f5259d2` ile tamamlandı. Efe QA ve marker doğrulama birleştirmesi `9819da2` ile sağlandı (25/25 unit test, 32/32 smoke).
+
+**[STAGE 12 — BAĞIMSIZ DOĞRULAMA, 14 KASIM]** Alparslan tarafından `58660f0` ile tamamlandı. Mars $3.71\text{ m/s}^2$ yerçekimi altında $v_0 = 2.4\text{ m/s}$ dikey zıplama dürtüsüyle $\sim 1.3\text{ s}$ hava süresi ve $\sim 0.78\text{ m}$ apex doğrulandı. Havada yatay momentumun korunumu (balistik intikal), iniş darbe sönümleme süresi (`landingRecovery` $\sim 0.25\text{ s}$, zemin temasında ani tekrar zıplamayı engelleyen ve yatay hızı sönümleyip toparlayan mekanizma), birinci şahıs adım kafa salınımı (head-bobbing) ve iniş kamera esnemesi (landing dip) eklendi. Bağımsız doğrulamada `npm test` 29/29, `npm run smoke` 32/32 geçti (59.3 FPS).
 
 ## Kararlar ve açık konular
 
@@ -102,17 +104,16 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 ### Açık konular
 
-- Stage 12 (Alparslan): Mars 3.71 m/s² yerçekimi altında astronot zıplama mekaniği (~1.3 s uçuş, balistik momentum korunumu, iniş darbe sönümleme süresi / `landingRecovery`), birinci şahıs adım kafa salınımı (head-bobbing) ve iniş kamera esnemesi (landing camera dip).
-- Stage 13 (Efe): `view/3d/astronaut-rig.js` içinde düşük yerçekimi EVA loping yürüyüşü, apex balance pose, landing squash & recover ve first-person view-model kollarda nefes/adım salınımı. Efe diğer dosyalara dokunmaz.
+- Stage 13 (Efe): `view/3d/astronaut-rig.js` içinde düşük yerçekimi EVA loping yürüyüşü, apex balance pose, landing squash & recover ve first-person view-model kollarda nefes/adım salınımı. Alparslan'ın movement API girdilerini (`timeS`, `horizontalSpeedMps`, `verticalSpeedMps`, `grounded`, `airborne`, `phase`, `landingRecovery`, `landingRecoveryFrac`) tüketir. Efe diğer dosyalara dokunmaz.
 - JP2 JPEG 2000 decoder/lisansı ve PixelIsArea/PDS yarım-piksel hizalama araştırması; FPS işinden bağımsızdır.
 - PLACES ham CSV’nin engelsiz ağdan alınması, etiket/SIS ve koordinat çerçevesinin doğrulanması.
 - Yarışma verisi ulaşınca Stage 6 validator boşlukları ve veri adapter intake’i ayrı iş olarak açılmalı; şimdilik bu 3D ana iş hattını bloke etmez.
 
 ## Önerilen sonraki somut adım
 
-**Şu anki adım:** Alparslan ve Efe paralel olarak Stage 12 ve Stage 13 geliştirme paketlerini yürütür:
-- Alparslan (`sim.js`, `config.js`, `camera.js`, `main.js`): Mars yerçekimi zıplama balistiği, havada yatay momentumun korunumu, iniş darbe sönümlemesi ve kamerada adım kafa salınımı ile iniş esnemesini tamamlar; snapshot hareket API'sinde Efe için gerekli alanları (`timeS`, `horizontalSpeedMps`, `verticalSpeedMps`, `grounded`, `airborne`, `phase`, `landingRecovery`) yayınlar.
+**Şu anki adım:** Efe Stage 13 geliştirme paketini yürütür:
 - Efe (`view/3d/astronaut-rig.js` ve birim testleri): Alparslan'ın movement API girdilerine göre Apollo/Mars EVA araştırmalarındaki deterministik loping yürüyüş kinematiği, apex balance pose, landing squash & recover ve view-model kollarda nefes/adım salınımını üretir. Efe simülasyon, kamera, renderer ve main dosyalarına dokunmaz.
+- Alparslan entegrasyon sahibi olarak Efe'nin teslimini denetler ve test eder.
 JP2 decode/alignment bağımsız ve bloke etmeyen iştir; PLACES doğrulaması engelsiz PDS erişimine bağlıdır; Stage 6 organizer-data intake’i gerçek yarışma dataset’i ve label/SIS gelene kadar bekler. No-data, provenance ve 2D fallback politikaları değişmez.
 
 ## Git çalışma kuralı

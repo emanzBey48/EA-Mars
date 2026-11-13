@@ -1,6 +1,6 @@
 ﻿# Marswalk — Proje Amacı ve İlerleme
 
-**Son güncelleme:** 13 Kasım 2026
+**Son güncelleme:** 14 Kasım 2026
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Hedef uygulama:** `C:\Users\Erdem\OneDrive\Desktop\nasa space apps\Sim`
 
@@ -102,14 +102,17 @@ npm start
 
 Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulumuna gerek yok. Gerekirse kaynak DTM’den altküme üretmek için `npm run prepare-data` (kaynak IMG/JP2 Sim’in bir üst klasöründe aranır). Birim testleri `npm test`; README smoke testi için Node.js ≥22 ve Edge/Chrome gerektiğini belirtir: `npm run smoke`. **Ajan, kullanıcı söylemedikçe çalıştırdığını iddia etmemeli.** Kullanıcı manuel regresyonun geçtiğini söyledi; bu bilgi “kullanıcı bildirimi” olarak kalmalı.
 
-## 4. Kalan işler ve öncelik
+## 4. Tamamlanan Aşamalar ve Kalan İşler
 
-1. **Stage 9 — 3D viewer runtime kabulü:** İlk tur `d471d6a` üzerinde `npm test` 13/13 ve `npm run smoke` 26/26 geçti. Ardından mesh optimizasyonunu içeren `fbc623f` kod HEAD’i Stage 10 entegrasyonuyla birlikte bağımsız doğrulandı: `npm test` 18/18 ve son `npm run smoke` 32/32. İlk bağımsız smoke denemesinde iki mevcut 2D timing kontrolü geçici başarısız oldu; hemen yapılan tekrar geçti. İlk turdaki 1.93 sn CPU / 3.21 sn geçiş / 29.1 FPS ölçümleri ortam koşullarına bağlı tarihsel referanstır.
-2. **Stage 10 — first-person keşif ve rig entegrasyonu:** `fbc623f` ile tamamlandı. Alparslan movement/camera/surface-contact ve renderer entegrasyonunun; Efe `view/3d/astronaut-rig.js` renderer-bağımsız rig/poz modülünün sahibiydi. Snapshot hareket sözleşmesi `timeS`, yatay/düşey hız, `grounded`, açık `airborne`, `phase` ve `groundContactStatus` taşır. `zM` arşiv kotu ile retained `bodyWorldZM` ayrıdır; bilinmeyen temas düşüş üretmez, fakat başlamış jump yörüngesi sürebilir. Bilinmeyen kotta tam world rig çizilmez; first-person view-model retained kamera pozu varsa kalabilir. Bağımsız doğrulama `npm test` 18/18, `npm run smoke` 32/32 geçti. Yeni Stage 10 uygulama görevi yok; ilk UX incelemesi ve Stage 8 demo kararı bekliyor.
-3. **Stage 8 demo kapsamı/akışı:** Sıradaki ürün-planlama kararı. First-person diliminin demo kapsamına alınıp alınmayacağı, temiz başlangıç/son koşulları, gösterilecek HUD ve 60–90 saniyelik akış belirlenmeli.
-4. **Atmosfer/kuvvet modeli:** NASA ortalama/seasonal değerlerini referans ve senaryo girdisi olarak açıkça etiketle. Belirli Jezero hava koşulu veya gerçek uzay giysisi modeli olduğunu ileri sürme; gerekli kütle/drag/wind parametreleri kaynaklandırılmadan karakter hareketine atmosfer kuvveti uydurma.
-5. **Ortogörüntü ayrı işi:** JP2 çözme kütüphanesi/lisansı ve `PixelIsArea` ile PDS pixel-center yarım piksel farkı araştırılsın; hizalama doğrulanmadan görsel bindirme iddiası kurma. Stage 10 önkoşulu değildir.
-6. **Yarışma verisi/PLACES:** Gerçek veri gelince Stage 6 intake’i kanıtla aç; gerçek PLACES traverse ise erişilebilir aynı birincil PDS ürünüyle ayrı doğrulansın. HiRISE fallback’i ve rota caveat’ı korunur.
+1. **Stage 9 — 3D viewer runtime kabulü:** İlk tur `d471d6a` üzerinde `npm test` 13/13 ve `npm run smoke` 26/26 geçti. Ardından mesh optimizasyonunu içeren `fbc623f` kod HEAD’i Stage 10 entegrasyonuyla birlikte bağımsız doğrulandı: `npm test` 18/18 ve `npm run smoke` 32/32.
+2. **Stage 10 — first-person keşif ve rig entegrasyonu:** `fbc623f` ile tamamlandı. Alparslan movement/camera/surface-contact ve renderer entegrasyonunun; Efe `view/3d/astronaut-rig.js` renderer-bağımsız rig/poz modülünün sahibiydi. Snapshot hareket sözleşmesi `timeS`, yatay/düşey hız, `grounded`, açık `airborne`, `phase` ve `groundContactStatus` taşır.
+3. **Stage 11 — 3D waypoint beacon ve rota kılavuz geometrisi:** `8054b1a` ile tamamlandı. Efe `marker-mesh.js` modülünü yazdı, Alparslan renderer'a entegre etti. Sol 120 / WB1 ve Sol 164 / Roubion 3D fenerleri, rota şeridi ve koridor sınırları eklendi.
+4. **Stage 8 — first-person demo akışı ve HUD entegrasyonu:** `f5259d2` ve `9819da2` ile tamamlandı. Doğrudan 3D URL açılışı (`?view=3d`), Sol 164 hedef kilidi, nişangah (`#fp-reticle`), kontrol kılavuz kapsülü (`#fp-hud-hint`) ve Roubion varış rozeti eklendi.
+5. **Stage 12 — Mars düşük yerçekimi zıplama balistiği ve kamera dinamikleri:** `58660f0` ile Alparslan tarafından tamamlandı. Mars $3.71\text{ m/s}^2$ yerçekimi altında $v_0 = 2.4\text{ m/s}$ dikey zıplama dürtüsüyle $\sim 1.3\text{ s}$ hava süresi ve $\sim 0.78\text{ m}$ apeks doğrulandı. Havada yatay momentum korunumu (balistik transit), iniş darbe sönümleme süresi (`landingRecovery` $\sim 0.25\text{ s}$) ve birinci şahıs adım kafa salınımı (head-bobbing) ile iniş kamera esnemesi (landing dip) eklendi. Bağımsız `npm test` 29/29 ve `npm run smoke` 32/32 geçti (59.3 FPS).
+6. **Sıradaki iş — Stage 13: Düşük Yerçekimi EVA Loping ve Sıçrama/İniş Poz Kinematiği:** Efe'nin kodlama görevidir. Yalnızca `Sim/public/js/view/3d/astronaut-rig.js` ve birim testlerinde Alparslan'ın snapshot'a eklediği `landingRecovery`, `landingRecoveryFrac`, `grounded`, `airborne` verilerini tüketerek Apollo/Mars EVA loping yürüyüşü, apex balance, landing squash & recover ve view-model salınım kinematiğini kodlar; renderer/simülasyon dosyalarına dokunmaz.
+7. **Atmosfer/kuvvet modeli:** NASA ortalama/seasonal değerlerini referans ve senaryo girdisi olarak açıkça etiketle. Belirli Jezero hava koşulu veya gerçek uzay giysisi modeli olduğunu ileri sürme; gerekli kütle/drag/wind parametreleri kaynaklandırılmadan karakter hareketine atmosfer kuvveti uydurma.
+8. **Ortogörüntü ayrı işi:** JP2 çözme kütüphanesi/lisansı ve `PixelIsArea` ile PDS pixel-center yarım piksel farkı araştırılsın; hizalama doğrulanmadan görsel bindirme iddiası kurma. Stage 12/13 önkoşulu değildir.
+9. **Yarışma verisi/PLACES:** Gerçek veri gelince Stage 6 intake’i kanıtla aç; gerçek PLACES traverse ise erişilebilir aynı birincil PDS ürünüyle ayrı doğrulansın. HiRISE fallback’i ve rota caveat’ı korunur.
 
 ## 5. Kaynaklar ve atıf
 

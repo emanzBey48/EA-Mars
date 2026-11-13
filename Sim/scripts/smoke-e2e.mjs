@@ -109,7 +109,7 @@ try {
   check('4b Geçerli 3×3 komşulukta eğim gösteriliyor', /^\d+\.\d °/.test(d2.slope), d2.slope.slice(0, 60));
   const oob = await evaluate(`(() => { const m = window.marswalk; m.sim.setPosition(1500, 0); m.updateHud(); return { e: document.getElementById('v-elev').textContent, s: document.getElementById('v-slope').textContent }; })()`);
   await sleep(200); await shot('03-out-of-bounds.png');
-  check('4c Kapsam dışı konum açıkça ayrılıyor', oob.e.startsWith('Kapsam dışı') && oob.s.startsWith('Kapsam dışı'), oob.e.slice(0, 90));
+  check('4c Kapsam dışı konum ve bilinmeyen kot açıkça ayrılıyor', oob.e.includes('Yükseklik bilinmiyor') && oob.e.includes('Kapsam dışı') && oob.s.startsWith('Kapsam dışı'), oob.e.slice(0, 90));
   // No-data: the loaded window contains no no-data cells, so inject the product MISSING_CONSTANT into one in-memory cell (test only).
   const nd = await evaluate(`(() => { const m = window.marswalk, L = m.layers.dtm; m.sim.setPosition(0, -100); const c = m.adapter.localToCell(0, -100);
     const i0 = (c.row - L.rowOffset) * L.cols + (c.col - L.colOffset); const keep = [L.bits[i0], L.bits[i0 + 1]];
@@ -117,7 +117,7 @@ try {
     L.bits[i0] = keep[0]; L.bits[i0 + 1] = L.noDataBits; m.updateHud(); const neigh = { e: document.getElementById('v-elev').textContent, s: document.getElementById('v-slope').textContent };
     L.bits[i0 + 1] = keep[1]; m.updateHud(); const back = { e: document.getElementById('v-elev').textContent, s: document.getElementById('v-slope').textContent };
     return { centre, neigh, back }; })()`);
-  check('4d No-data hücresi "Veri yok" gösteriyor (0 değil)', nd.centre.e.startsWith('Veri yok') && !/\d+\.\d\d m/.test(nd.centre.e), nd.centre.e.slice(0, 80));
+  check('4d No-data hücresi kotu bilinmiyor ve "Veri yok" gösteriyor (0 değil)', nd.centre.e.includes('Yükseklik bilinmiyor') && nd.centre.e.includes('Veri yok') && nd.centre.e.includes('no-data') && !/\d+\.\d\d m/.test(nd.centre.e), nd.centre.e.slice(0, 80));
   check('4e Komşu hücre no-data ise eğim üretilmiyor, kot gösteriliyor', /m \(Mars 2000/.test(nd.neigh.e) && nd.neigh.s.startsWith('Veri yok'), nd.neigh.s.slice(0, 80));
   check('4f Geri yüklenince değerler dönüyor', /m \(Mars 2000/.test(nd.back.e) && /°/.test(nd.back.s));
 

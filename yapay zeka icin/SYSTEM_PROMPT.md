@@ -3,7 +3,7 @@
 ## Son güncelleme / durum
 
 - **Güncelleme:** 13 Kasım 2026.
-- **Durum:** Kullanıcı kontrollü 2D Canvas MVP, SurfaceProvider/immutable WorldSnapshot sınırı ve ilk manifest/provider registry kaynakta mevcut. Stage 6 validator’ı kısmen tamamlandı; aşağıda açıklanan license, numeric footprint ve fail-closed vertical datum boşlukları açık.
+- **Durum:** Nihai hedef ayrıntılı 3D Mars simülasyonu; kaynakta 2D Canvas MVP, SurfaceProvider/immutable WorldSnapshot sınırı ve ilk manifest/provider registry mevcut. Kullanıcı yönlendirmesiyle yarışma verisi gelene kadar ana geliştirme odağı, mevcut HiRISE DTM ile 3D dikey dilimdir. Stage 6 validator boşlukları açık, fakat yarışma verisi gelene kadar kritik yol değildir.
 - **Kullanıcı bildirimi:** Alparslan regresyon kontrollerinin geçtiğini söyledi. Bu promptu izleyen ajan bunları yeniden çalıştırmadıkça bağımsız doğrulama iddiasında bulunmamalı.
 - **Etkinlik tarihi:** 14–15 Kasım 2026 kullanıcı tarafından bildirildi; resmi takvim olarak bağımsız doğrulanmış gibi sunma.
 
@@ -31,7 +31,7 @@ Dosya yazmadan önce güncel durumu ve doğru hedefi kontrol et. Kullanıcı ba�
 - Kullanıcı astronotu WASD/ok tuşlarıyla kontrol eder; harita, rota, simülasyon saati ve sapma görünür.
 - Çalışan 2D Canvas MVP’yi koru; onu 3D ürün vizyonuna geçiş için ara kilometre taşı olarak ele al. Genel amaçlı ve doğrulanmamış Mars fizik modeli, canlı NASA telemetrisi, gerçek rover kontrolü, güvenlik/karar destek sistemi veya temelsiz safety score üretme.
 - 10 m/yan rota koridoru **senaryo varsayımıdır**, NASA/rover güvenlik eşiği değildir.
-- 3D renderer henüz uygulanmadı ve etkinlik öncesi takvimde ertelendi; ürün hedefi ayrıntılı 3D simülasyon olmaya devam eder. Yeni 3D işi mevcut MVP’yi ve bilimsel veri sınırlarını koruyan aşamalı planla yürüt. Doğrulanmış kaynak olmadan fiziksel gerçekçilik iddiası kurma.
+- 3D renderer henüz uygulanmadı. Yarışma verisi gelene kadar mevcut HiRISE DTM/fixture’ı kullanarak 3D dikey dilimi ana iş olarak geliştir; veri geldiğinde 3D veri adapter’ını doğrulanmış manifest üzerinden ayrıca bağla. Mevcut MVP’yi ve bilimsel veri sınırlarını koru. Doğrulanmış kaynak olmadan fiziksel gerçekçilik iddiası kurma.
 - Rota açıklamasını hiçbir zaman düşürme: Sol 120/WB1–Sol 164/Roubion bağlantısı gerçek PLACES traverse polyline’ı değil, tarihsel iki waypoint arasındaki sadeleştirilmiş doğrudur.
 
 ## Doğrulanmış yerel raster ve açık belirsizlik
@@ -128,4 +128,4 @@ Kullanıcı 12 Kasım 2026’da tüm regresyon kontrollerinin geçtiğini bildir
 
 ## İlk yanıt / sıradaki eylem
 
-Kullanıcı yeni bir iş istediğinde önce güncel dosya durumunu doğrula, tamamlanan ve açık işleri ayır. Şu an beklenen en yakın teknik iş Stage 6’yı fail-closed tamamlamaktır: lisans/usage alanı, sayısal footprint+route intersection, açıkça doğrulanmış düşey datum ve canonical transform kanıtı/`expectedFrame` zorunluluğu için validator ve sentetik testleri tamamla. Registry ve provider temelinin kaynakta zaten bulunduğunu esas al; baştan kurma. Sonrasında organizer verisi gerçekten geldiyse gerçek format adapter’ı tasarla; gelmediyse data uydurma ve PLACES erişimini ayrı doğrulama işi olarak tut. Diğer proje belgelerini yalnız açıkça istendiğinde güncelle.
+Kullanıcı yeni bir iş istediğinde önce güncel dosya durumunu doğrula, tamamlanan ve açık işleri ayır. Yarışma verisi henüz gelmediyse sıradaki ana iş, mevcut HiRISE DTM ile 3D dikey dilimi planlamak/uygulamaktır: terrain mesh, avatar-kamera etkileşimi ve snapshot’tan render’a giden sınırlı entegrasyon. İşleri dosya kümelerine göre böl; `main.js`, `config.js`, snapshot/provider sözleşmelerini Alparslan koordine etsin. Stage 6 validator boşluklarını yarışma verisi gelene kadar beklet; veri gelince lisans/usage, sayısal footprint+kesişim, doğrulanmış düşey datum, zorunlu `expectedFrame` ve dönüşüm kanıtıyla fail-closed intake aç. Gerçek veriyi/PLACES izini uydurma. Diğer proje belgelerini kullanıcı açıkça istediğinde güncelle.

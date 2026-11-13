@@ -56,16 +56,18 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 | Kaynakta mevcut | HiRISE DTM penceresi, PDS grid dönüşümü, kullanıcı hareketi, saat, rota sapması/koridoru, DTM kotu ve Horn eğimi | Çalışan kod ve kabul davranışı için `Sim/README.md` ile kaynak/testleri esas al. DTM yoksa oyun açılmalı, katman unavailable kalmalı. |
 | Kaynakta mevcut | `SurfaceProvider`, manifest validator/registry, HiRISE default ve fallback, immutable `WorldSnapshot` | Registry genel yeni format parser’ı değildir. Stage 6 validator boşlukları aşağıda açıkça listelenmiştir. |
 | Kaynakta mevcut | Modül ayrımı ve snapshot/provider sözleşmesi | Dosya yolları için `Sim/README.md` ve `Sim/public/js/` esas alınır; registry ve `WorldSnapshot` kaynakta vardır. |
-| Açık | Stage 6 manifest doğrulamasını fail-closed tamamla | License/usage, sayısal footprint+kesişim, açıkça doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtı. |
+| Şu an ana odak | 3D dikey dilim | Mevcut HiRISE DTM fixture’ı ile `view/3d/` terrain mesh’i; avatar/kamera entegrasyonu Alparslan’da; `zM` ile görsel Z ayrılır, no-data boş kalır. |
+| Yarışma verisi gelince | Stage 6 manifest doğrulaması | License/usage, sayısal footprint+kesişim, açıkça doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtıyla fail-closed intake. |
 | Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
 | Kaydedilmiş Git durumu | İki kişilik paylaşım | `docs/shared-code-boundaries` dalındaki `aae4830` ve bu belge eşitlemesinin `docs/parallel-roadmap` dalındaki `3060829` commit’i remote’da kayıtlı. |
 
 ## Sıradaki somut işler
 
-1. **Önce Stage 6 validator boşlukları:** `registry.js` ve `SurfaceProviderRegistry` zaten mevcut; iskeleti yeniden yazma. License/usage zorunluluğu, sayısal coverage ve rota/kullanım alanı kesişimi, `verticalDatumVerified === true`, zorunlu `expectedFrame` ve doğrulanabilir dönüşüm kanıtı için küçük bir kod görevi ve sentetik kabul testleri hazırla. Gerçek veriye özel adapter üretme.
-2. **PLACES dış veri işi ayrı kalsın:** PDS tarafından doğrulanan aynı `best_interp.csv` ile label/SIS edinilebilirse Sol 120–164 izini koordinat çerçevesine göre dönüştürüp DTM footprint/no-data ile kesiştir. Erişim yoksa gerçek rota iddiasında bulunma.
-3. **Git paylaşımını kur:** Aşağıdaki adımları takım arkadaşınla repo sahibi/visibility ve fixture saklama kararı verdikten sonra uygula.
+1. **3D arayüzünü kilitle — Alparslan:** Renderer’ın alacağı snapshot, hazırlanmış terrain varlığı, `zM`→görsel Z kuralı ve no-data davranışını kabul ölçütleriyle yaz; `main.js`/`config.js`/snapshot sözleşmeleri tek sahipte kalsın.
+2. **Terrain modülü — takım arkadaşı:** 3D deneyimi varsa sadece yeni `view/3d/terrain.js` ve özel yardımcılarında HiRISE fixture’ından mesh üret. Deneyimi yoksa bağımsız 3D etkileşim, HUD ve asset gereksinimleri araştırması/wireframe kabul listesi ver. Aynı anda aynı dosyalara girmeyin.
+3. **Sıralı avatar-kamera entegrasyonu — Alparslan:** Terrain arayüzü sabitlenince ayrı `view/3d/` modüllerinde avatar/kamera işini bağla; mevcut 2D seçeneğini koru.
+4. **Yarışma verisi geldiğinde Stage 6:** Registry mevcut; lisans/usage, sayısal coverage+kesişim, verified vertical datum, zorunlu expectedFrame ve transform kanıtını fail-closed doğrula. PLACES gerçek izi ayrıca PDS kaynağına erişim varsa ele alınır.
 
 ### Git başlangıç durumu
 
-`docs/shared-code-boundaries` üzerindeki `aae4830` ve belge eşitlemesini içeren `docs/parallel-roadmap` üzerindeki `3060829` remote’a push edildi. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; TLS doğrulaması kapatılmasın.
+`docs/shared-code-boundaries` üzerindeki `aae4830` ile `docs/parallel-roadmap` üzerindeki belge commit’leri remote’a push edildi; mevcut dal bu görev başında `ae570b5` idi. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; TLS doğrulaması kapatılmasın.

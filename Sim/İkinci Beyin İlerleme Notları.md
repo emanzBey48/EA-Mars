@@ -16,7 +16,7 @@
 
 **[DOSYA/KAYNAKLA DOĞRULANDI]** İlk oynanabilir MVP 2D kanvas haritasıdır: WASD/ok tuşlarıyla hareket, senaryo saati, duraklat/devam, yeniden başlat, rota sapması ve koridor, DTM kotu ile 3×3 Horn eğimi. HiRISE’den türetilmiş gölgeli kabartma görsel amaçlıdır; ortogörüntü değildir.
 
-**[YÖN/KARAR]** 3D nihai ürün yönüdür; henüz uygulama yok ve etkinlik öncesi takvimde ertelendi. Geçişten önce jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı. Fizik ve veri hesapları saf/deterministik kalmalı; renderer kamera, sprite, animasyon ve etiketleri yönetmeli. Veri örnekleri/snapshot’lar kopyalanmış ve değiştirilemez olmalı.
+**[YÖN/KARAR]** 3D nihai ürün yönüdür; henüz uygulama yok ve şimdi ana geliştirme odağıdır. Yarışma verisi gelene kadar yerel HiRISE fixture’ı kullanılır. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; veri örnekleri/snapshot’lar kopyalanmış ve değiştirilemez olmalı.
 
 ## Yerel HiRISE verileri ve hizalama
 
@@ -96,14 +96,14 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 ### Açık konular
 
 - Yerel kullanıcı testinin sonucu ve demo öncesi kalan UX sorunları.
-- Stage 6 manifest validator boşluklarının kapatılması ve yalnız istenirse ilgili sentetik testlerin çalıştırılması.
-- Ayrıntılı 3D hedef için sahne/terrain, etkileşim ve kaynaklı simülasyon kapsamı ayrı kabul ölçütleriyle planlanmalı; mevcut kaynakta 3D renderer yok.
+- Yarışma verisi gelene kadar yerel HiRISE DTM ile 3D dikey dilim: terrain mesh, avatar/kamera ve WorldSnapshot entegrasyonu. Mevcut kaynakta 3D renderer yok.
+- Yarışma verisi ulaşınca Stage 6 validator boşlukları ve veri adapter intake’i ayrı iş olarak açılmalı; şimdilik bu 3D ana iş hattını bloke etmez.
 - PLACES ham CSV’nin engelsiz ağdan alınması, etiket/SIS ve koordinat çerçevesinin doğrulanması.
 - DTM–JP2 yarım piksel kayıt farkının gerektiğinde piksel merkezi/köşesi düzeyinde bağımsız yeniden teyidi.
 
 ## Önerilen sonraki somut adım
 
-**Stage 6 validator boşlukları:** Registry/provider iskeletini yeniden yazma. License/usage, sayısal footprint ve route intersection, `verticalDatumVerified === true`, zorunlu `expectedFrame` ve doğrulanabilir dönüşüm kanıtını fail-closed tamamla; yalnız bu görev için sentetik testleri güncelle. Gerçek organizer verisi gelmeden yeni adapter uydurma.
+**Şu anki ana adım — 3D dikey dilim:** Alparslan `WorldSnapshot`→renderer sözleşmesini, bilimsel `zM` ile görsel Z ölçeğini ve no-data mesh kuralını sabitlesin. Ardından 3D deneyimli teammate mevcut HiRISE fixture’ından yalnız yeni `view/3d/terrain.js` modülünü üretsin; 3D deneyimi yoksa UX/HUD/asset gereksinimlerini inceleyip wireframe kabul listesi sunsun. Avatar/kamera entegrasyonu arayüz kararlaştırıldıktan sonra Alparslan’da kalsın. Yarışma verisi gelince Stage 6 intake’i ayrı aç; veri veya PLACES izi uydurma.
 
 ## Git çalışma kuralı
 
@@ -117,7 +117,7 @@ AI’lar önemli ve gözden geçirilebilir aşamaları küçük commit’lere ay
 
 - **[KAYNAKTA TAMAMLANDI]** `Sim/public/js` modülleri alanlara göre düzenlendi: `geo/`, `surface/`, `simulation/`, `input/` ve `view/`. `main.js` ile `config.js` entegrasyon noktaları olarak kökte kaldı; `index.html` giriş yolu değişmedi.
 - **[MİMARİ KARAR]** Her modülün paylaşılan çalışma zamanı state’ini okuyacağı mutable global dosya oluşturulmadı. Ortak değişmeyen değerler `config.js`’te; çalışma zamanı bağımlılıkları parametre/callback ile aktarılıyor. `main.js`, `config.js` ve snapshot/provider sözleşmeleri koordine edilerek değiştirilmesi gereken sıcak noktalardır.
-- **[AÇIK]** Rota geometrisi ve metrikleri hâlâ `geo` ile `simulation` arasında dağılmıştır; henüz `route/` modülü yok. 3D renderer da yok; nihai ürün hedefi olarak etkinlik sonrası `view/3d/` altında planlanmalıdır.
+- **[AÇIK]** Rota geometrisi ve metrikleri hâlâ `geo` ile `simulation` arasında dağılmıştır; henüz `route/` modülü yok. 3D renderer da yok; ana iş olarak bağımsız `view/3d/` katmanında geliştirilecek.
 - **[GIT]** `docs/parallel-roadmap` dalındaki belge eşitlemesi `3060829 docs: align Marswalk project notes with current code` commit’iyle `origin/docs/parallel-roadmap` dalına push edildi. Önceki `aae4830` modül düzenleme commit’i `docs/shared-code-boundaries` dalındadır. Bu oturumda uygulama koduna/testlere dokunulmadı.
 - **[DOĞRULAMA]** `git diff --check` temizdi. Bu oturumda test çalıştırılmadı.
 

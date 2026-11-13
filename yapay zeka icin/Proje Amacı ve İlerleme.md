@@ -102,11 +102,11 @@ Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulum
 
 ## 4. Kalan işler ve öncelik
 
-1. **Stage 6 doğrulamasını kapat:** Lisans/usage alanı, sayısal spatial bounds/intersection ve zorunlu doğrulanmış düşey datum alanlarını validator’a ekle; transform/frame kontrolünü açık kanıtla fail-closed yap; synthetic valid/invalid testleri güncelle. İlk bounded kodlama promptu hazırlanmıştı; registry’nin son hali ise promptun bazı kısımlarını içeriyor, tüm boşlukları değil. Bir sonraki AI kodlama adımında güncel kaynak incelensin.
-2. **Gerçek organizer dataset’i gelirse:** Önce dosya/label/SIS/provenance, format, CRS, birim/datum, zaman/kapsam, no-data, scaling/offset, lisans ve footprint doğrula. Uygun loader yoksa `UnavailableLayer`/HiRISE fallback kullan. Bilinmeyen CRS’i tahmin etme.
-3. **PLACES raw CSV’yi engelsiz ağdan al:** PDS Search API ile doğrulanmış aynı release/product’ı indir; coordinate frame ve label/SIS ile Sol 120–164 gerçek polyline’ı çıkar, DTM footprint/no-data’yı kontrol et. Erişim yine bloklanırsa mevcut simplified line ve görünür caveat kalır.
-4. **Demo freeze:** Etkinlik tarihleri 14–15 Kasım 2026 olduğu kullanıcı tarafından bildirildi; 13 Kasım itibarıyla yaklaşık bir gün var. İlk demo için özellik eklemeyi erken dondur, kullanıcı akışını ve attribution/fallback’i göster; son 4 saatte yalnız kritik hata düzelt.
-5. **3D ana ürün hedefi:** Ayrıntılı 3D Mars simülasyonu etkinlik sonrası ana ürün yönüdür. Aşamaları belirle; mevcut `WorldSnapshot` ve surface adapter’ı koruyarak renderer spike ile başla, Mars 2000 `zM` ile display vertical offset’i ayır. Fiziksel gerçekçilik ve çevresel davranışları yalnız kaynak/kanıt ve açık kabul ölçütleriyle ekle.
+1. **Öncelik — 3D dikey dilim:** Yarışma verisi gelene kadar yerel HiRISE fixture ile 3D terrain ve astronot-kamera deneyimini kur. Önce `WorldSnapshot`→renderer arayüzünü ve `zM` ile görsel Z ayrımını netleştir; ardından modülleri ayrı dosya kümelerinde geliştir.
+2. **İş bölümü:** Alparslan `main.js`, `config.js`, snapshot/provider sözleşmeleri ve entegrasyonu tek başına koordine etsin. 3D deneyimli teammate yeni `view/3d/terrain.js` mesh modülünü alsın; deneyimi yoksa 3D UX, HUD, ölçek ve asset gereksinimleri için bağımsız araştırma/wireframe kabul listesi teslim etsin. Avatar/kamera entegrasyonu terrain arayüzü kararlaştırıldıktan sonra Alparslan’ın sıralı işi olsun.
+3. **Yarışma verisi gelince:** Önce dosya/label/SIS/provenance, lisans, format, CRS, birim/datum, zaman/kapsam, no-data ve footprint’i doğrula; Stage 6 registry boşluklarını kapatıp yalnız kanıtlanan formatı bağla. HiRISE fallback’ini koru.
+4. **PLACES ayrı dış veri işi:** Aynı PDS release/product, label/SIS ve koordinat referansıyla Sol 120–164 gerçek polyline’ını doğrula; erişim yoksa sadeleştirilmiş hat caveat’ı kalır.
+5. **Etkinlik takvimi:** 14–15 Kasım 2026 kullanıcı bildirimidir. Tarih yaklaşmış olsa da mevcut öncelik kullanıcı yönlendirmesiyle 3D dikey dilimdir; teslim kapsamını ve demoyu entegrasyon sahibi belirlesin.
 
 ## 5. Kaynaklar ve atıf
 

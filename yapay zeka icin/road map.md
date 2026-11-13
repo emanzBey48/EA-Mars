@@ -20,7 +20,7 @@
 
 Marswalk’ın nihai ürün vizyonu, astronotun Mars yüzeyini keşfettiği ayrıntılı ve kullanıcı kontrollü bir 3D simülasyondur. Şu an çalışan 2D Canvas deneyimi bu hedefe giden MVP/ara kilometre taşıdır; ürün amacı olarak 3D’nin yerini almaz. Seçili resmi challenge: *Interplanetary Survival Guide: Martian Map*.
 
-**Mevcut etkinlik MVP’sinin sınırı:** Genel amaçlı ve doğrulanmamış Mars fizik modeli, canlı NASA telemetrisi izlenimi, gerçek rover karar desteği, güvenli/güvensiz rota kararı veya veriyle desteklenmeyen risk/güvenlik skoru. 3D renderer ürün vizyonunun parçasıdır; etkinlik öncesi zaman sınırı nedeniyle MVP’ye alınmamış ve sonraki aşamaya ertelenmiştir.
+**Bilimsel/ürün sınırı:** Genel amaçlı ve doğrulanmamış Mars fizik modeli, canlı NASA telemetrisi izlenimi, gerçek rover karar desteği, güvenli/güvensiz rota kararı veya veriyle desteklenmeyen risk/güvenlik skoru üretme. 3D renderer nihai ürün vizyonudur; kullanıcı yönlendirmesiyle yarışma verisi gelene kadar yerel doğrulanmış HiRISE verisi üstünde ana geliştirme odağıdır.
 
 ## Bilimsel veri zemini ve kurallar
 
@@ -100,21 +100,21 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 - **Kabul:** Kullanıcının bildirimine göre regresyon kontrolleri başarılı. Loglar bu belgede incelenmiş/yeniden çalıştırılmış sayılmaz.
 - **Tahmin:** Bildirilen test emeği tamamlandı; yeni kod öncesinde regression komutlarını tekrar çalıştırmak kodlama AI’sının kabul işi olmalı.
 
-### 6. Yarışma verisi intake ve adapter kayıt katmanı — KISMEN TAMAMLANDI; fail-closed boşluklar açık
+### 6. Yarışma verisi intake ve adapter kayıt katmanı — KISMEN TAMAMLANDI; veri gelene kadar beklemede
 
 - **Amaç:** Organizatör verisi geldiğinde çekirdeği değiştirmeden tanımlı `SurfaceProvider`/snapshot yoluna bağlamak; belirsiz veriyle yanlış bilimsel değer üretimini engellemek.
 - **Mevcut kaynak:** `public/js/surface/registry.js` manifest validator’ı, `SurfaceProviderRegistry`, HiRISE sağlayıcı/factory ve fallback’i içeriyor. `main.js` varsayılan HiRISE sağlayıcısını seçiyor; HUD doğrulama/seçim durumunu gösterebiliyor. `test/core.test.mjs` sentetik manifest ve fallback kontrolleri içeriyor.
-- **Açık çıktı:** Mevcut registry’yi aşağıdaki fail-closed koşullarıyla tamamlamak ve sentetik testlerle sınamak; yeni yarışma verisi veya format adapter’ı uydurmamak.
+- **Açık çıktı:** Yarışma verisi geldiğinde mevcut registry’yi fail-closed koşullarla tamamlamak ve sentetik testlerle sınamak; veri gelmeden yeni format/adapter uydurmamak. Bu iş, 3D dikey dilimden sonra açılacak.
 - **Sahip:** Alparslan (factory/entegrasyon). Takım arkadaşı becerileri uygunsa ayrı manifest/atıf denetimi veya test QA paketi alabilir.
 - **Bağımlılık:** Aşama 4 SurfaceProvider/WorldSnapshot. Gerçek organizer dataset’i henüz `Sim/data` içinde yok.
 - **Mevcut açıklar:** (1) license/usage alanı yok ve doğrulanmıyor; (2) coverage yalnız `description` metniyle denetleniyor, sayısal footprint ve rota/dünya kesişimi doğrulanmıyor; (3) `verticalDatumVerified` yalnız `false` iken review oluşturuyor, alan yokken manifest supported olabilir; (4) `expectedFrame` `validateLayerManifest()` için opsiyonel ve verilmezse CRS/grid karşılaştırmaları atlanıyor; `transformVerified` bayrağı dönüşümü matematiksel olarak doğrulamıyor.
-- **Kabul:** Açıklar fail-closed kapanır; HiRISE çıktısı/snapshot alanları ve fallback davranışı korunur; bilinmeyen format/CRS aktif örnekleme açmaz; UI durumları görünür kalır. Dönüşüm ve footprint kanıtı yalnız manifest bayrağı olarak kalmayıp doğrulanabilir girdilerle sınanır.
+- **Kabul:** Yarışma verisi alındığında açıklar fail-closed kapanır; HiRISE çıktısı/snapshot alanları ve fallback davranışı korunur; bilinmeyen format/CRS aktif örnekleme açmaz; UI durumları görünür kalır. Dönüşüm ve footprint kanıtı yalnız manifest bayrağı olarak kalmayıp doğrulanabilir girdilerle sınanır.
 - **Tahmin:** Kodun yeni denetiminden önce süre tahmini verilmesin. Gerçek format geldiğinde adapter kapsamı o verinin label/SIS ve dönüşümüne göre ayrıca belirlenir.
 - **Kesme çizgisi:** Bilinmeyen format/CRS’i “otomatik algılama” ile içeri alma; event sırasında veri geldiğinde ilk 60–90 dakikada metadata/erişim doğrulanamazsa yerel HiRISE fixture’a dön.
 
 **Not:** Registry/manifest validator kaynakta mevcut. Önceki “henüz görünmüyor” ifadesi eskimişti. Kullanıcı 12 Kasım 2026’da regresyon kontrollerinin geçtiğini bildirdi; bu yol haritası testleri bağımsız olarak yeniden çalıştırmış sayılmaz.
 
-### 7. Gerçek PLACES traverse doğrulaması — AÇIK / dış ağ bekliyor
+### 7. Gerçek PLACES traverse doğrulaması — AÇIK / 3D dikey dilimden sonra ayrı dış veri işi
 
 - **Amaç:** Basitleştirilmiş çizgiyi gerçek traverse ile, erişilebilir olduğu ölçüde değiştirmek veya karşılaştırmak.
 - **Çıktı:** PDS release/ürün kimliği doğrulanmış ham lokalizasyon dosyası ve PDS4 label/SIS; Sol 120–164 kayıt filtresi; koordinat/frame dönüşümü; DTM extent ve no-data filtresi; gerçek polyline uzunluk/profil karşılaştırması.
@@ -132,14 +132,14 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 - **Kabul:** Yeni makinede README adımları; WASD, duraklat, koridor dışı/geri dönüş ve katman unavailable durumu denenmiş; gerçek PLACES değil ve güvenlik aracı değil açıklaması gözle görünür; attribution okunabilir.
 - **Tahmin:** Hazırlıkta 2–3 odaklı saat; etkinlikte ilk demo için 3–5 saat. Gösterim/teslimden 4 saat önce özellik eklemeyi dondur, yalnız kritik hata düzelt.
 
-### 9. Ayrıntılı 3D simülasyon — ÜRÜN HEDEFİ; uygulama aşaması etkinlik sonrası beklemede
+### 9. Ayrıntılı 3D simülasyon — ÜRÜN HEDEFİ VE ŞU ANKİ ANA GELİŞTİRME ODAĞI
 
-- **Amaç:** Ürünün ana vizyonu olan ayrıntılı, kullanıcı kontrollü Mars yüzeyi 3D simülasyonunu mevcut 2D MVP ve kaynaklı veri sözleşmeleri üzerine inşa etmek.
-- **Çıktı:** Önce küçük teknik spike/prototip; ardından kapsamlı 3D sahne/terrain ve etkileşim planı. Ayrı camera/render asset katmanı; düşey ölçek ve Mars 2000 datum dönüşüm kararı yazılı; 2D renderer ara sürüm/fallback olarak korunmuş.
-- **Sahip:** Alparslan; 3D/graphics deneyimi olan teammate varsa spike ortak sahiplenebilir.
-- **Bağımlılık:** Aşama 4 regression kapısı, demo freeze, uygun zaman; organizer verisi kullanılacaksa aşama 6 validasyonu.
-- **Kabul:** 3D yalnız arşiv/hesaplanan veriyi doğru provenance ile sunar; display vertical offset scientific `zM`’yi değiştirmez; no-data yüzeyleri boş/işaretli kalır; mevcut snapshot ve sim kuralları aynı kalır.
-- **Tahmin:** 4–8 saat yalnız renderer spike; ayrıntılı ve tamamlanmış 3D ürün ek kapsam ve zaman planı gerektirir. Etkinlik öncesi son iki günde başlama; 2D MVP’yi geçici demo olarak kullan.
+- **Amaç:** Yarışma verisi ulaşana kadar mevcut doğrulanmış HiRISE DTM/fixture’ı kullanarak ayrıntılı 3D simülasyonun oynanabilir dikey dilimini kurmak. Veri kaynağını sonradan değiştirilebilir provider sınırında tut.
+- **Çıktı:** Aşamalı 3D sahne/terrain ve etkileşim. Terrain mesh ve no-data boşlukları; kullanıcı kontrollü astronot/avatar; kamera ve temel aydınlatma; mevcut WorldSnapshot/HUD ile entegrasyon. Ayrı render modülü; Mars 2000 bilimsel `zM` ile görsel vertical scale/offset kararı yazılı. 2D renderer ara sürüm/fallback olarak korunur.
+- **Sahip:** Arayüz ve entegrasyon Alparslan’da; 3D deneyimi olan takım arkadaşı terrain mesh’i ayrı dosya kümesinde geliştirir. Beceri durumu netleşene kadar görev koşulludur.
+- **Bağımlılık:** Aşama 4 WorldSnapshot/SurfaceProvider sınırı; başlangıç verisi olarak yerel HiRISE fixture. Organizer verisi gelirse aşama 6 intake tamamlanmadan ona geçme.
+- **Kabul:** 3D yalnız mevcut arşiv/hesaplanan veriyi doğru provenance ile sunar; `zM` kaynak kotu olarak kalır ve görsel dikey abartıdan ayrılır; no-data mesh’te sahte sıfır yüzey üretmez; avatar ve kamera snapshot/sim kurallarıyla çalışır; 2D sürüm açılabilir kalır.
+- **Tahmin:** Önce küçük bir dikey dilim ve ardından kullanıcıyla gözden geçirilmiş kapsam planı çıkar; ayrıntılı tamamlanmış ürün için eforu prototip görüldükten sonra tahmin et.
 
 ## Paralel çalışma şeritleri ve dosya sınırları
 
@@ -151,16 +151,27 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 | Yüzey/veri (`surface`) | `Sim/public/js/surface/` | Manifest/atıf/lisans metadata QA’sı veya yeni validator kuralının sınırlı uygulaması. Gerçek dataset, label ve kullanım koşulu doğrulanmadan adapter/format uydurulmaz. |
 | Simülasyon (`simulation`) | `Sim/public/js/simulation/` | Hareket, saat, faz ve rota metriği kurallarını incelemek; UI/DOM veya Canvas koduna dokunmamak. |
 | Girdi (`input`) | `Sim/public/js/input/` | Klavye ve kontrol erişilebilirliği/olay eşlemesini iyileştirmek; simülasyon kuralını bu dosyalara taşımamak. |
-| Görünüm (`view`) | `Sim/public/js/view/` | HUD okunabilirliği, 2D Canvas sunumu ve görsel varlıkların sunumunu geliştirmek; bilimsel örnekleme veya rota hesabını görünüm katmanına eklememek. |
+| Görünüm (`view`) | `Sim/public/js/view/` | 2D Canvas ara sürümü ve yeni `view/3d/` sahne, terrain, kamera modülleri; bilimsel örnekleme veya rota hesabını görünüm katmanına eklememek. |
 
-Ek bağımsız işler olarak PLACES kaynak/koordinat doğrulaması, attribution/manifest QA, demo anlatısı ve görsel inceleme alınabilir; bunlar belirli bir takım arkadaşına ancak beceri ve ilgi alanı öğrenilince verilsin. `public/js/main.js`, `config.js` ve snapshot/provider sözleşmeleri entegrasyon sıcak noktalarıdır: entegrasyon sahibi bunları koordine eder ve aynı anda yalnız bir sahibi değiştirir. Rota hesabı halen `geo` ile `simulation` arasında dağılmıştır; bu aşamada yeni `route/` modülü oluşturmayın. 3D renderer henüz kaynakta yoktur, ancak nihai ürün hedefidir; mevcut zaman planında etkinlik sonrasına bırakılmıştır ve aynı snapshot sözleşmesini tüketen ayrı bir `view/3d/` katmanı olarak tasarlanmalıdır.
+Ek bağımsız işler olarak PLACES kaynak/koordinat doğrulaması, attribution/manifest QA, demo anlatısı ve görsel inceleme alınabilir; bunlar belirli bir takım arkadaşına ancak beceri ve ilgi alanı öğrenilince verilsin. `public/js/main.js`, `config.js` ve snapshot/provider sözleşmeleri entegrasyon sıcak noktalarıdır: entegrasyon sahibi bunları koordine eder ve aynı anda yalnız bir sahibi değiştirir. Rota hesabı halen `geo` ile `simulation` arasında dağılmıştır; bu aşamada yeni `route/` modülü oluşturmayın. 3D renderer şu an ana geliştirme odağıdır ve mevcut HiRISE fixture ile bağımsız `view/3d/` katmanında ilerlemelidir.
 
-Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi clone’unu kullanmalı; aynı makinede çalışıyorlarsa OneDrive dışında ayrı clone veya ayrı Git worktree tercih edilmeli. Aynı OneDrive klasöründeki ortak `.git` checkout’unda iki kişinin/AI’nın paralel dosya ve Git işlemleri güvenli değildir. Entegrasyon sahibi branch/PR diff’lerini gözden geçirip birleştirir. Kodlamada yalnız tek bir sonraki dikey dilim aç; mevcut çalışır 2D MVP ve `Sim/data` girdilerini koru. Doğrulanmamış dış veri veya ekstra katman kritik yolu kesmemeli; 3D ertelenmiş nihai ürün hedefi olarak planlı aşamalarda ele alınmalı.
+### Şu anki iş bölümü: yarışma verisi gelene kadar 3D dikey dilim
+
+| Sahip | Görev paketi | Dosya sınırı | Kabul ölçütü |
+|---|---|---|---|
+| Alparslan (entegrasyon sahibi) | 3D arayüzünü ve render/snapshot bağlantısını belirle; 3D açılış seçimi, ortak ayarlar ve entegrasyonu yönet. | `Sim/public/js/main.js`, `config.js`, snapshot/provider sözleşmeleri; entegrasyon öncesi tek sahip. | Renderer mevcut `WorldSnapshot` ve SurfaceProvider verisini alır; UI/render katmanı raster örneklemez; 2D fallback çalışır. |
+| Takım arkadaşı — 3D deneyimi varsa | HiRISE DTM fixture’ından 3D terrain mesh, kot renkleri/aydınlatma ve no-data boşluklarını üret. | Yeni `Sim/public/js/view/3d/terrain.js` ve bu modülün özel yardımcıları; `main.js`, `config.js`, `surface/`, `simulation/` yok. | 1.009663 m hücre ölçeği korunur; Mars 2000 `zM` bilimsel kaynak kotu kalır; no-data sıfır tabanlı yüzey olmaz; orto hizalıymış gibi sunulmaz. |
+| Takım arkadaşı — 3D deneyimi yoksa alternatif paket | 3D kullanıcı akışı, sahne içi bilgi hiyerarşisi ve asset/ölçek gereksinimleri için kısa referans araştırması ve wireframe kabul listesi hazırla. | Doküman/araştırma çıktısı; uygulama dosyalarına dokunma. | Avatar, kamera, yön/ölçek, rota, HUD ve veri kökeni için karar listesi çıkar; doğrulanmayan asset/lisans varsayımı yapma. |
+| Alparslan + reviewer sıralı entegrasyonu | Astronot/avatar, kamera kontrolleri ve HUD’ı terrain renderer’a bağla; sonra organizer verisi gerçekten ulaşınca Stage 6 intake aç. | Avatar/kamera için ayrı `view/3d/` dosyaları; `input/`, `main.js` ve snapshot sözleşmesi entegrasyon sahibinin değişiklik sırasına bağlı. | WASD ile avatar hareketi sim state’i izler; kamera takibi kararlı; 2D/3D seçiminde aynı sim ve kaynak metadatası korunur. |
+
+İlk kilitlenecek sözleşme: 3D renderer hangi immutable snapshot alanlarını ve hazırlanmış terrain varlığını alır; `zM` nasıl görsel Z’ye çevrilir; no-data mesh nasıl boş kalır. Bu arayüz onaylanmadan paralel modül kodlamasına başlamayın. AI kodlama yardımı ayrı review veya farklı dosya kümesinde çalışır; entegrasyon dosyalarına eşzamanlı yazmaz.
+
+Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi clone’unu kullanmalı; aynı makinede çalışıyorlarsa OneDrive dışında ayrı clone veya ayrı Git worktree tercih edilmeli. Aynı OneDrive klasöründeki ortak `.git` checkout’unda iki kişinin/AI’nın paralel dosya ve Git işlemleri güvenli değildir. Entegrasyon sahibi branch/PR diff’lerini gözden geçirip birleştirir. Kodlamada bir seferde tek 3D dikey dilim aç; mevcut 2D MVP ve `Sim/data` girdilerini koru. Yarışma verisi gelene kadar 3D odağı doğrulanmış yerel HiRISE fixture’ı ile sürdür; veriyi uydurma veya 3D prototipi ona bağımlı kılma.
 
 ## Git paylaşımı — 13 Kasım 2026 durum kaydı
 
 - Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu ve `origin` ayarlı. `docs/shared-code-boundaries` branch’indeki `aae4830` commit’inin `origin/docs/shared-code-boundaries`’a push edildiği biliniyor. Mevcut bilgiye göre bu commit `main`’e birleştirilmiş değil.
-- Bu belge eşitlemesi `docs/parallel-roadmap` dalında `3060829 docs: align Marswalk project notes with current code` commit’iyle kaydedildi ve `origin/docs/parallel-roadmap` dalına başarıyla push edildi.
+- Önceki belge eşitlemeleri `3060829`, `0bddf5e` ve `ae570b5` commit’leriyle `origin/docs/parallel-roadmap` dalına push edildi; bu güncel 3D görev bölümü henüz commit edilmedi.
 - `yapay zeka icin` yönergeleri ile `Sim` kodu aynı repo kökündedir. 381 MB IMG, 34 MB JP2 ve 7.5 MB F32 `.gitattributes` ile Git LFS üzerinden izlenir; normal Git’e eklenmez.
 - Workspace OneDrive altında olduğundan, Git çalışma kopyasını OneDrive senkronizasyonunun dışına almak daha güvenlidir. Takım üyeleri ayrı clone/worktree kullansın; OneDrive `.git` senkronizasyonu ortak Git yöntemi olmasın.
 - `Sim/.gitignore` `dtm_subset.f32`, `dtm_subset.json` ve `ortho_inspection.json` dosyalarını izlemeye alır; F32 LFS üzerinden klonlanır. Mevcut `test-output` ekran görüntüleri de ilk importta eklendi.
@@ -169,5 +180,5 @@ Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi
 
 ## Şu anki en iyi sonraki adım
 
-**Aşama 6’nın açık validator boşluklarını kapat:** Registry/provider iskeletini yeniden yazma. Önce license/usage, sayısal footprint ve route intersection, `verticalDatumVerified === true`, zorunlu `expectedFrame` ve dönüşüm kanıtı koşullarını fail-closed uygula; yalnız bu kapsam için sentetik testleri güncelle. Gerçek organizer verisi gelirse ondan sonra metadata/erişim/CRS doğrulaması yap ve yalnız kanıtlanan format için adapter tasarla. PLACES ham dosya işi ayrı dış veri koludur; gerçek rota doğrulanamazsa sadeleştirilmiş çizgi caveat’ı kalmalı.
+**Aşama 9’un ilk dikey dilimini başlat:** Önce Alparslan 3D renderer ↔ `WorldSnapshot` arayüzünü ve görsel yükseklik eşlemesini kilitlesin. Ardından 3D deneyimi olan takım arkadaşı `view/3d/terrain.js` içinde yalnız yerel HiRISE fixture’ından mesh üretimini geliştirsin; deneyimi yoksa 3D sahne/HUD gereksinim ve görsel hiyerarşi araştırmasını teslim etsin. Bu aşamada mevcut 2D fallback’i koru, no-data için sahte taban üretme, bilimsel kotla görsel Z’yi ayrı tut. Organizer verisi geldiğinde Stage 6 intake’i ayrı görev olarak aç; PLACES ham dosya işi de ayrı dış veri kolu kalsın.
 

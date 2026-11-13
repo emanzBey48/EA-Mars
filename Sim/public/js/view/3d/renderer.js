@@ -290,8 +290,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
       const elevationKnown = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
       let avatarDrawn = false;
-      if (elevationKnown) {
-        const zDisplay = (player.zM - referenceElevationM) * verticalScale;
+      if (elevationKnown && Number.isFinite(player.bodyWorldZM)) {
+        const zDisplay = (player.bodyWorldZM - referenceElevationM) * verticalScale;
         if (Number.isFinite(zDisplay)) {
           gl.uniform3f(locations.objectOffset, player.xM, player.yM, zDisplay);
           gl.uniform1f(locations.headingRad, Number.isFinite(player.headingRad) ? player.headingRad : 0);

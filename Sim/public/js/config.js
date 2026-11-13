@@ -3,6 +3,10 @@
 export const SCENARIO = {
   // Game movement speed in the scenario clock (NOT a claim about real astronaut walking speed on Mars).
   walkSpeedMps: 1.2,
+  // NASA Planet Compare rounded Mars surface gravity reference; not a local Jezero measurement.
+  marsGravityMps2: 3.71,
+  // Game-control impulse for a small hop; not an astronaut or suit performance estimate.
+  jumpImpulseMps: 2.5,
   // Scenario clock runs this many times faster than wall-clock time, so the ~686 m link fits a short demo.
   timeScale: 8,
   // Route corridor half-width on each side of the line (m). Demo assumption, NOT a NASA operational limit.
@@ -39,6 +43,7 @@ export const MAP_FRAME = {
 };
 
 export const SOURCES = [
+  { label: 'NASA Mars yerçekimi referansı (3.71 m/s²; küresel yuvarlatılmış değer)', url: 'https://solarsystem.nasa.gov/planet-compare/?intent=121' },
   { label: 'HiRISE Jezero DTM / ortho ürün sayfası (ESP_046060_1985)', url: 'https://hirise.lpl.arizona.edu/dtm/dtm.php?ID=ESP_046060_1985' },
   { label: 'HiRISE RDR/DTM ürün dokümanı (SIS)', url: 'https://hirise.lpl.arizona.edu/PDS/DOCUMENT/HIRISE_RDR_SIS.PDF' },
   { label: 'Mars 2020 Initial Reports (waypoint bağlamı)', url: 'https://pds-geosciences.wustl.edu/missions/mars2020/Mars%202020%20Initial%20Reports%201-4%20April%202022.pdf' },

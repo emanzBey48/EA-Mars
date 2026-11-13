@@ -14,6 +14,7 @@ import {
   createDefaultSurfaceRegistry,
 } from '../public/js/surface/registry.js';
 import { MarswalkSim, PHASE, createWorldSnapshot } from '../public/js/simulation/sim.js';
+import { cameraRelativeMovement, createFirstPersonCamera, getViewProjectionMatrix, lookCamera, setFirstPersonPose } from '../public/js/view/3d/camera.js';
 import { MAP_FRAME, WAYPOINTS, SCENARIO, ROUTE_ORIGIN_NOTE } from '../public/js/config.js';
 
 const adapter = adapterFromLabel(MAP_FRAME, WAYPOINTS[0]);
@@ -317,4 +318,79 @@ test('SurfaceProviderRegistry: rejects unverified candidate manifest (no 0 eleva
   const snap = createWorldSnapshot({ sim, surfaceProvider: resolved.provider, adapter, waypoints, routeNote: ROUTE_ORIGIN_NOTE });
   assert.equal(snap.astronaut.elevationStatus, STATUS.OK);
   assert.ok(Number.isFinite(snap.astronaut.zM) && snap.astronaut.zM < -2000);
+});
+
+test('first-person camera: camera-relative input is normalized and look/pose remain finite', () => {
+  const east = cameraRelativeMovement(0, { up: true });
+  assert.ok(Math.abs(east.moveX - 1) < 1e-12 && Math.abs(east.moveY) < 1e-12);
+  const north = cameraRelativeMovement(Math.PI / 2, { up: true });
+  assert.ok(Math.abs(north.moveX) < 1e-12 && Math.abs(north.moveY - 1) < 1e-12);
+  const eastFacingRight = cameraRelativeMovement(0, { right: true });
+  assert.ok(Math.abs(eastFacingRight.moveX) < 1e-12 && Math.abs(eastFacingRight.moveY + 1) < 1e-12);
+  const diagonal = cameraRelativeMovement(0, { up: true, right: true });
+  assert.ok(Math.abs(Math.hypot(diagonal.moveX, diagonal.moveY) - 1) < 1e-12);
+
+  const camera = createFirstPersonCamera({ yawRad: 0 });
+  setFirstPersonPose(camera, { xM: 10, yM: 20, bodyZDisplay: -3 });
+  assert.equal(camera.xM, 10);
+  assert.equal(camera.yM, 20);
+  assert.ok(camera.zDisplay > -3);
+  lookCamera(camera, 100, -20);
+  assert.ok(camera.yawRad > 0 && camera.pitchRad > 0);
+  assert.ok([...getViewProjectionMatrix(camera, 16 / 9)].every(Number.isFinite));
+});
+
+test('first-person sim: time-step-stable horizontal input, Mars gravity, contact and explicit unknown terrain', () => {
+  const wholeStep = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const splitStep = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const known = { status: STATUS.OK, value: -2500 };
+  wholeStep.stepFirstPerson(0, {}, known);
+  splitStep.stepFirstPerson(0, {}, known);
+  wholeStep.stepFirstPerson(0.1, { moveX: 1 }, known);
+  splitStep.stepFirstPerson(0.05, { moveX: 1 }, known);
+  splitStep.stepFirstPerson(0.05, { moveX: 1 }, known);
+  assert.ok(Math.abs(wholeStep.pos.x - splitStep.pos.x) < 1e-10);
+  assert.ok(Math.abs(wholeStep.simTimeS - splitStep.simTimeS) < 1e-10);
+  assert.equal(wholeStep.grounded, true);
+  assert.equal(wholeStep.bodyWorldZM, -2500);
+
+  const jump = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  jump.stepFirstPerson(0, {}, known);
+  jump.stepFirstPerson(0.025, { jump: true }, known);
+  assert.equal(jump.grounded, false);
+  assert.ok(jump.bodyWorldZM > known.value);
+  assert.ok(jump.verticalSpeedMps > 0);
+  const unknown = { status: STATUS.NO_DATA, value: null };
+  jump.stepFirstPerson(0.025, {}, unknown);
+  const waypoints = WAYPOINTS.map((w) => ({ ...w, local: adapter.latLonToLocal(w.latDeg, w.lonDeg) }));
+  const snapshot = createWorldSnapshot({
+    sim: jump,
+    surfaceProvider: { sampleSurface: () => ({
+      elevation: { status: STATUS.NO_DATA, value: null, unit: 'm', verticalDatum: 'Mars 2000', source: 'test', method: 'test' },
+      slope: { status: STATUS.NO_DATA, value: null, unit: '°' },
+      zM: null,
+      status: STATUS.NO_DATA,
+    }) },
+    adapter, waypoints,
+  });
+  assert.equal(snapshot.astronaut.zM, null);
+  assert.equal(snapshot.astronaut.elevationStatus, STATUS.NO_DATA);
+  assert.equal(snapshot.astronaut.movement.grounded, false);
+  assert.equal(snapshot.astronaut.movement.groundContactStatus, STATUS.NO_DATA);
+  assert.ok(Number.isFinite(snapshot.astronaut.bodyWorldZM), 'retained world-Z pose anchor is separate from sampled surface zM');
+  assert.equal(Object.isFrozen(snapshot.astronaut.movement), true);
+  assert.equal(snapshot.astronaut.movement.timeS, jump.simTimeS);
+  assert.equal(snapshot.astronaut.movement.phase, PHASE.RUNNING);
+});
+
+test('first-person sim: unknown initial terrain never seeds world Z, ground contact, or a jump', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const unknown = { status: STATUS.UNAVAILABLE, value: null };
+  sim.resolveSurfaceContact(unknown);
+  sim.stepFirstPerson(0.05, { jump: true }, unknown);
+  assert.equal(sim.bodyWorldZM, null);
+  assert.equal(sim.bodyWorldZReferenceM, null);
+  assert.equal(sim.grounded, false);
+  assert.equal(sim.verticalSpeedMps, 0);
+  assert.equal(sim.heightAboveReferenceM, 0);
 });

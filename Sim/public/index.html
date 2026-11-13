@@ -23,12 +23,12 @@
         <button id="btn-view-2d" type="button" aria-pressed="true">2D</button>
         <button id="btn-view-3d" type="button" aria-pressed="false" disabled>3D yükleniyor…</button>
       </div>
-      <div id="view-note" class="view-note" hidden>3D görünümde dikey ölçek 3× sunum abartısıdır; kaynak kotu HUD’da Mars 2000 metre olarak gösterilir.</div>
+      <div id="view-note" class="view-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Dikey ölçek 3× sunum abartısıdır.</div>
       <div id="view-status" class="banner info" hidden role="status" aria-live="polite"></div>
       <div id="deviation-banner" class="banner warn" hidden role="alert"></div>
       <div id="arrived-banner" class="banner ok" hidden>Sol 164 / Roubion waypoint’ine ulaşıldı. Yeniden başlatmak için R.</div>
       <div id="raster-banner" class="banner info" hidden></div>
-      <div id="start-hint" class="hint">Başlangıç: <b>Sol 120 / WB1</b>. Hedef: <b>Sol 164 / Roubion</b>.<br>Hareket etmek için WASD veya ok tuşlarına basın — senaryo saati ilk hareketle başlar.</div>
+      <div id="start-hint" class="hint">Başlangıç: <b>Sol 120 / WB1</b>. Hedef: <b>Sol 164 / Roubion</b>.<br>2D haritada WASD/oklarla hareket edin. 3D’de kamera yönüne göre yürüyün; senaryo saati ilk hareketle başlar.</div>
       <div id="legend" class="legend"></div>
     </section>
 
@@ -37,7 +37,9 @@
         <h2>Kontroller</h2>
         <ul class="keys">
           <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> hareket</li>
-          <li><kbd>P</kbd> / <kbd>Space</kbd> duraklat · devam</li>
+          <li><kbd>P</kbd> duraklat · devam</li>
+          <li><kbd>Space</kbd> 2D’de duraklat · 3D’de küçük simülasyon sıçraması</li>
+          <li>3D sahneye tıkla: fare bakışı · <kbd>Esc</kbd> fare kilidini bırakır</li>
           <li><kbd>R</kbd> yeniden başlat</li>
           <li><kbd>+</kbd> / <kbd>−</kbd> / fare tekerleği yakınlaştırma (yalnız görünüm)</li>
         </ul>

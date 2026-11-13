@@ -3,6 +3,9 @@
 
 const MIN_PITCH_RAD = (5 * Math.PI) / 180;
 const MAX_PITCH_RAD = (85 * Math.PI) / 180;
+const FIRST_PERSON_MIN_PITCH_RAD = (-85 * Math.PI) / 180;
+const FIRST_PERSON_MAX_PITCH_RAD = (85 * Math.PI) / 180;
+const FIRST_PERSON_EYE_HEIGHT_M = 1.62; // presentation/game camera choice; not suit anthropometry
 
 function finite(value, name) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be a finite number`);
@@ -97,6 +100,72 @@ export function createCamera({
   return camera;
 }
 
+/** Creates an eye-level camera. Yaw 0 points east (+X), positive yaw turns north (+Y). */
+export function createFirstPersonCamera({
+  xM = 0,
+  yM = 0,
+  zDisplay = 0,
+  yawRad = 0,
+  pitchRad = 0,
+  eyeHeightM = FIRST_PERSON_EYE_HEIGHT_M,
+  fovYRad = Math.PI / 2.5,
+  nearM = 0.05,
+  farM = 3000,
+} = {}) {
+  const camera = {
+    mode: 'first-person',
+    xM: finite(xM, 'xM'),
+    yM: finite(yM, 'yM'),
+    zDisplay: finite(zDisplay, 'zDisplay'),
+    yawRad: finite(yawRad, 'yawRad'),
+    pitchRad: finite(pitchRad, 'pitchRad'),
+    eyeHeightM: finite(eyeHeightM, 'eyeHeightM'),
+    fovYRad: finite(fovYRad, 'fovYRad'),
+    nearM: finite(nearM, 'nearM'),
+    farM: finite(farM, 'farM'),
+  };
+  if (camera.eyeHeightM <= 0) throw new RangeError('eyeHeightM must be greater than zero');
+  if (!(camera.fovYRad > 0 && camera.fovYRad < Math.PI)) throw new RangeError('fovYRad must be between 0 and PI');
+  if (!(camera.nearM > 0 && camera.farM > camera.nearM)) throw new RangeError('Camera clipping planes are invalid');
+  camera.pitchRad = Math.min(FIRST_PERSON_MAX_PITCH_RAD, Math.max(FIRST_PERSON_MIN_PITCH_RAD, camera.pitchRad));
+  return camera;
+}
+
+/** Updates the eye-level camera pose from the simulated body position in display coordinates. */
+export function setFirstPersonPose(camera, { xM, yM, bodyZDisplay, verticalScale = 1 }) {
+  if (camera.mode !== 'first-person') throw new TypeError('A first-person camera is required');
+  camera.xM = finite(xM, 'xM');
+  camera.yM = finite(yM, 'yM');
+  const scale = finite(verticalScale, 'verticalScale');
+  if (scale <= 0) throw new RangeError('verticalScale must be greater than zero');
+  camera.zDisplay = finite(bodyZDisplay, 'bodyZDisplay') + camera.eyeHeightM * scale;
+  return camera;
+}
+
+/** Applies mouse deltas; positive horizontal movement turns east-facing yaw toward north. */
+export function lookCamera(camera, deltaX, deltaY, sensitivity = 0.0025) {
+  if (camera.mode !== 'first-person') throw new TypeError('A first-person camera is required');
+  camera.yawRad = finite(camera.yawRad + finite(deltaX, 'deltaX') * finite(sensitivity, 'sensitivity'), 'yawRad');
+  camera.pitchRad = Math.min(FIRST_PERSON_MAX_PITCH_RAD, Math.max(FIRST_PERSON_MIN_PITCH_RAD,
+    camera.pitchRad - finite(deltaY, 'deltaY') * sensitivity));
+  return camera;
+}
+
+/** Converts forward/back and strafe input to a normalized local-world movement vector. */
+export function cameraRelativeMovement(yawRad, { up = false, down = false, left = false, right = false } = {}) {
+  const forward = (up ? 1 : 0) - (down ? 1 : 0);
+  const strafe = (right ? 1 : 0) - (left ? 1 : 0);
+  if (!forward && !strafe) return { moveX: 0, moveY: 0 };
+  const fx = Math.cos(finite(yawRad, 'yawRad'));
+  const fy = Math.sin(yawRad);
+  // Positive strafe follows camera-right: south when facing east, east when facing north.
+  const rx = fy, ry = -fx;
+  const x = fx * forward + rx * strafe;
+  const y = fy * forward + ry * strafe;
+  const length = Math.hypot(x, y);
+  return { moveX: x / length, moveY: y / length };
+}
+
 /** Sets an explicit local-world target; zDisplay is presentation space, not source elevation zM. */
 export function setCameraTarget(camera, { xM, yM, zDisplay }) {
   camera.targetXM = finite(xM, 'xM');
@@ -116,12 +185,17 @@ export function orbitCamera(camera, deltaYawRad, deltaPitchRad) {
 export function zoomCamera(camera, factor) {
   const scale = finite(factor, 'factor');
   if (scale <= 0) throw new RangeError('factor must be greater than zero');
+  if (camera.mode === 'first-person') {
+    camera.fovYRad = Math.max(0.35, Math.min(1.5, camera.fovYRad * scale));
+    return camera;
+  }
   camera.distanceM = Math.max(0.1, camera.distanceM * scale);
   return camera;
 }
 
 /** Returns the camera position in local X/Y metres and display Z. */
 export function getCameraPosition(camera) {
+  if (camera.mode === 'first-person') return { xM: camera.xM, yM: camera.yM, zDisplay: camera.zDisplay };
   const horizontal = camera.distanceM * Math.cos(camera.pitchRad);
   return {
     xM: camera.targetXM + horizontal * Math.cos(camera.yawRad),
@@ -135,9 +209,22 @@ export function getViewProjectionMatrix(camera, aspect) {
   finite(aspect, 'aspect');
   if (aspect <= 0) throw new RangeError('aspect must be greater than zero');
   const eye = getCameraPosition(camera);
+  if (camera.mode === 'first-person') {
+    const cosPitch = Math.cos(camera.pitchRad);
+    const target = [
+      eye.xM + Math.cos(camera.yawRad) * cosPitch,
+      eye.yM + Math.sin(camera.yawRad) * cosPitch,
+      eye.zDisplay + Math.sin(camera.pitchRad),
+    ];
+    return multiply4(perspective(camera.fovYRad, aspect, camera.nearM, camera.farM), viewFromEye(eye, target));
+  }
   const view = lookAt(
     [eye.xM, eye.yM, eye.zDisplay],
     [camera.targetXM, camera.targetYM, camera.targetZDisplay],
   );
   return multiply4(perspective(camera.fovYRad, aspect, camera.nearM, camera.farM), view);
+}
+
+function viewFromEye(eye, target) {
+  return lookAt([eye.xM, eye.yM, eye.zDisplay], target);
 }

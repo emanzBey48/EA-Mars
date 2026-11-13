@@ -79,6 +79,12 @@ try {
   for (let i = 0; i < 100; i++) { const ok = await evaluate('!!(window.marswalk && window.marswalk.layers.dtm.available)').catch(() => false); if (ok) break; await sleep(200); }
   await sleep(500);
 
+  // Enter 3D from a paused, already-moved 2D run to exercise zero-time surface-anchor initialization.
+  await keyEvt('keyDown', 'KeyW', 'w'); await sleep(120); await keyEvt('keyUp', 'KeyW', 'w'); await sleep(80);
+  await evaluate(`document.getElementById('btn-pause').click()`); await sleep(60);
+  const pre3dPhase = await evaluate('window.marswalk.sim.phase');
+  check('0a 3D geçişi öncesi hareket ve duraklatma kabul ediliyor', pre3dPhase === 'paused', `faz=${pre3dPhase}`);
+
   // Stage 9 runtime coverage: lazily build/upload the full fixture mesh, switch both ways,
   // sample rendered-frame cadence/JS heap, and exercise unknown elevation without changing data.
   const heapBefore = await send('Runtime.getHeapUsage').then((r) => r.result?.usedSize ?? null);
@@ -94,14 +100,12 @@ try {
   const canvas3dState = await evaluate(`(() => { const c=document.getElementById('map-3d'); const r=c.getBoundingClientRect(); return {hidden:c.hidden,w:r.width,h:r.height}; })()`);
   check('6a 2D→3D geçişi terrain mesh ile açılıyor', diag3d?.activeView === '3d' && diag3d.terrainMeshReady && !canvas3dState.hidden && canvas3dState.w > 400,
     `active=${diag3d?.activeView}, mesh=${diag3d?.terrainMeshReady}, hücre=${diag3d?.terrainMeshCellCount}, CPU build=${diag3d?.terrainMeshBuildMs?.toFixed(1)} ms, ilk geçiş=${first3dWallMs} ms`);
-  const avatarProjection = await evaluate(`(() => { const m=window.marswalk,c=document.getElementById('map-3d');
-    const v=c.getBoundingClientRect(),cam=m.camera3d,mesh=m.getDiagnostics().terrainMeshProvenance;
-    const verticalScale=3, halfFov=Math.tan(cam.fovYRad/2), modelHeight=1.51, modelWidth=1.06;
-    return {heightPx:v.height*modelHeight*verticalScale*Math.cos(cam.pitchRad)/(2*halfFov*cam.distanceM),
-      widthPx:v.height*modelWidth/(2*halfFov*cam.distanceM), distanceM:cam.distanceM, validVertices:mesh?.validVertexCount}; })()`);
-  check("6b Avatar viewport'ta boyut/renk ayrımıyla seçilebilir", (diag3d?.renderer?.terrainTriangles ?? 0) > 0 && diag3d?.renderer?.avatarDrawn === true &&
-    avatarProjection.heightPx >= 50 && avatarProjection.widthPx >= 16,
-    `üçgen=${diag3d?.renderer?.terrainTriangles}, avatarDrawn=${diag3d?.renderer?.avatarDrawn}, yaklaşık ${avatarProjection.widthPx.toFixed(0)}×${avatarProjection.heightPx.toFixed(0)} px @ ${avatarProjection.distanceM} m; model ölçümü varsayımsal projeksiyon hesabıdır`);
+  const fpPose = await evaluate(`(() => { const m=window.marswalk,c=m.camera3d,s=m.getSnapshot(); const d=m.getDiagnostics();
+    return {mode:c.mode,eyeHeightM:c.eyeHeightM,eyeZ:c.zDisplay,bodyZ:s.astronaut.bodyWorldZM,
+      avatarDrawn:d.renderer?.avatarDrawn,triangles:d.renderer?.terrainTriangles}; })()`);
+  check('6b Göz hizası first-person pozu geçerli DTM sahnesine bağlı', fpPose.mode === 'first-person' && fpPose.eyeHeightM > 0 &&
+    Number.isFinite(fpPose.eyeZ) && Number.isFinite(fpPose.bodyZ) && fpPose.triangles > 0,
+    `mode=${fpPose.mode}, eye=${fpPose.eyeHeightM} m, bodyWorldZM=${fpPose.bodyZ}, terrain triangles=${fpPose.triangles}`);
   await shot('05-stage9-3d.png');
   const heapAfter = await send('Runtime.getHeapUsage').then((r) => r.result?.usedSize ?? null);
   const fps = await evaluate(`new Promise(resolve => { let n=0, start=performance.now(); function tick(t){ n++; if(t-start>=2500) resolve({frames:n,elapsedMs:t-start,fps:n*1000/(t-start)}); else requestAnimationFrame(tick); } requestAnimationFrame(tick); })`);
@@ -110,6 +114,18 @@ try {
     `${fps?.fps?.toFixed(1)} FPS / ${fps?.frames} kare / ${fps?.elapsedMs?.toFixed(0)} ms; son render=${frameMs?.toFixed?.(2) ?? 'n/a'} ms`);
   check('6d JS heap farkı ölçüldü (GPU belleği dahil değil)', Number.isFinite(heapBefore) && Number.isFinite(heapAfter),
     `heap ${heapBefore ?? 'n/a'} → ${heapAfter ?? 'n/a'} bytes (Δ ${Number.isFinite(heapBefore) && Number.isFinite(heapAfter) ? heapAfter - heapBefore : 'n/a'}); GPU memory API yok`);
+  await press('KeyP', 'p');
+  const fpBefore = await evaluate(`(() => { const m=window.marswalk; return {x:m.sim.pos.x,y:m.sim.pos.y,yaw:m.camera3d.yawRad}; })()`);
+  await keyEvt('keyDown', 'KeyW', 'w'); await sleep(450); await keyEvt('keyUp', 'KeyW', 'w'); await sleep(100);
+  const fpAfter = await evaluate(`(() => { const m=window.marswalk,s=m.getSnapshot(),d=m.getDiagnostics(); return {x:m.sim.pos.x,y:m.sim.pos.y,
+    yaw:m.camera3d.yawRad,mode:d.cameraMode,grounded:s.astronaut.movement.grounded,status:s.astronaut.elevationStatus,
+    cameraX:m.camera3d.xM,cameraY:m.camera3d.yM}; })()`);
+  const fpDeltaX = fpAfter.x - fpBefore.x, fpDeltaY = fpAfter.y - fpBefore.y;
+  const fpAlong = fpDeltaX * Math.cos(fpBefore.yaw) + fpDeltaY * Math.sin(fpBefore.yaw);
+  check('6h Birinci şahıs WASD kamera yönünde hareket ediyor ve geçerli DTM temasını koruyor',
+    fpAfter.mode === 'first-person' && fpAlong > 0.5 && fpAfter.grounded && fpAfter.status === 'ok' &&
+      Math.abs(fpAfter.cameraX - fpAfter.x) < 1e-6 && Math.abs(fpAfter.cameraY - fpAfter.y) < 1e-6,
+    `kamera yönündeki ilerleme=${fpAlong.toFixed(2)} m, grounded=${fpAfter.grounded}, sample=${fpAfter.status}`);
   await evaluate(`document.getElementById('btn-view-2d').click()`); await sleep(100);
   const back2d = await evaluate(`({active:window.marswalk.getDiagnostics().activeView, hidden:document.getElementById('map').hidden})`);
   await evaluate(`document.getElementById('btn-view-3d').click()`); await sleep(150);

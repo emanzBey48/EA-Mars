@@ -27,6 +27,12 @@ export class MarswalkSim {
     this.headingRad = Math.atan2(this.route.b.y - this.route.a.y, this.route.b.x - this.route.a.x);
     this.simTimeS = 0;
     this.distanceWalkedM = 0;
+    this.verticalSpeedMps = 0;
+    this.grounded = false;
+    this.bodyWorldZReferenceM = null;
+    this.heightAboveReferenceM = 0;
+    this.horizontalVelocityXMps = 0;
+    this.horizontalVelocityYMps = 0;
     this.trail = [{ x: this.pos.x, y: this.pos.y }];
   }
 
@@ -73,6 +79,113 @@ export class MarswalkSim {
     }
     const m = this.metrics();
     if (m.distToEndM <= this.scenario.arrivalRadiusM) this.phase = PHASE.ARRIVED;
+  }
+
+  /**
+   * Advances first-person motion using a camera-relative horizontal direction and the most
+   * recently sampled surface value supplied by the composition root. This module never queries
+   * a layer/provider itself. `bodyWorldZReferenceM` is a retained Mars-world-Z origin only; it is
+   * not a replacement for the current sample when that sample is unknown.
+   *
+   * @param {number} dtWall wall-clock delta in seconds
+   * @param {{moveX?:number,moveY?:number,jump?:boolean,headingRad?:number}} input normalized local-world input
+   * @param {{status?:string,value?:number|null}} surface most recent elevation sample at current pos
+   */
+  stepFirstPerson(dtWall, input = {}, surface = {}) {
+    const dt = Math.max(0, Math.min(0.1, dtWall));
+    const dtSim = dt * this.scenario.timeScale;
+    const moveX = Number.isFinite(input.moveX) ? input.moveX : 0;
+    const moveY = Number.isFinite(input.moveY) ? input.moveY : 0;
+    const moveLength = Math.hypot(moveX, moveY);
+    const moving = moveLength > 0;
+
+    if (this.phase === PHASE.PAUSED || this.phase === PHASE.ARRIVED) {
+      this.horizontalVelocityXMps = 0;
+      this.horizontalVelocityYMps = 0;
+      return;
+    }
+
+    const sampleKnown = this.resolveSurfaceContact(surface);
+
+    if (this.phase === PHASE.READY && (moving || input.jump)) this.phase = PHASE.RUNNING;
+    if (this.phase !== PHASE.RUNNING) return;
+
+    if (Number.isFinite(input.headingRad)) this.headingRad = input.headingRad;
+    if (input.jump && this.grounded && sampleKnown && this.bodyWorldZReferenceM !== null) {
+      this.verticalSpeedMps = this.scenario.jumpImpulseMps;
+      this.grounded = false;
+    }
+
+    if (!this.grounded && this.bodyWorldZReferenceM !== null && dtSim > 0) {
+      const previousVerticalSpeedMps = this.verticalSpeedMps;
+      this.verticalSpeedMps -= this.scenario.marsGravityMps2 * dtSim;
+      this.heightAboveReferenceM += (previousVerticalSpeedMps + this.verticalSpeedMps) * 0.5 * dtSim;
+      if (this.heightAboveReferenceM <= 0 && sampleKnown) {
+        this.heightAboveReferenceM = 0;
+        this.verticalSpeedMps = 0;
+        this.grounded = true;
+      }
+    }
+
+    this.simTimeS += dtSim;
+    if (moving && dtSim > 0) {
+      const nx = moveX / moveLength, ny = moveY / moveLength;
+      const speed = this.scenario.walkSpeedMps;
+      const d = speed * dtSim;
+      const nextX = Math.min(this.bounds.xMax, Math.max(this.bounds.xMin, this.pos.x + nx * d));
+      const nextY = Math.min(this.bounds.yMax, Math.max(this.bounds.yMin, this.pos.y + ny * d));
+      this.distanceWalkedM += Math.hypot(nextX - this.pos.x, nextY - this.pos.y);
+      this.pos.x = nextX;
+      this.pos.y = nextY;
+      this.horizontalVelocityXMps = nx * speed;
+      this.horizontalVelocityYMps = ny * speed;
+      const last = this.trail[this.trail.length - 1];
+      if (Math.hypot(last.x - nextX, last.y - nextY) > 2) this.trail.push({ x: nextX, y: nextY });
+    } else {
+      this.horizontalVelocityXMps = 0;
+      this.horizontalVelocityYMps = 0;
+    }
+    const m = this.metrics();
+    if (m.distToEndM <= this.scenario.arrivalRadiusM) {
+      this.phase = PHASE.ARRIVED;
+      this.horizontalVelocityXMps = 0;
+      this.horizontalVelocityYMps = 0;
+    }
+  }
+
+  /** Reconciles body motion with a fresh sample injected by the composition root. */
+  resolveSurfaceContact(surface = {}) {
+    if (surface.status === 'ok' && Number.isFinite(surface.value)) {
+      if (this.bodyWorldZReferenceM === null) {
+        this.bodyWorldZReferenceM = surface.value;
+        this.heightAboveReferenceM = 0;
+        this.grounded = true;
+      } else if (this.grounded) {
+        this.bodyWorldZReferenceM = surface.value;
+        this.heightAboveReferenceM = 0;
+      } else {
+        const bodyWorldZM = this.bodyWorldZReferenceM + this.heightAboveReferenceM;
+        this.bodyWorldZReferenceM = surface.value;
+        this.heightAboveReferenceM = bodyWorldZM - surface.value;
+        if (this.heightAboveReferenceM <= 0) {
+          this.heightAboveReferenceM = 0;
+          this.verticalSpeedMps = 0;
+          this.grounded = true;
+        }
+      }
+      return true;
+    }
+    // Keep an existing world-Z origin for an airborne trajectory; it is never current ground.
+    this.grounded = false;
+    return false;
+  }
+
+  get horizontalSpeedMps() {
+    return Math.hypot(this.horizontalVelocityXMps, this.horizontalVelocityYMps);
+  }
+
+  get bodyWorldZM() {
+    return this.bodyWorldZReferenceM === null ? null : this.bodyWorldZReferenceM + this.heightAboveReferenceM;
   }
 
   /** Teleport (used by tests / debugging only). */
@@ -153,6 +266,15 @@ export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints =
       zM, // Mars 2000 surface elevation in metres, or null (never 0 on missing data; not body height)
       zDatum: elevation.verticalDatum,
       elevationStatus: elevation.status,
+      bodyWorldZM: Number.isFinite(sim.bodyWorldZM) ? sim.bodyWorldZM : null,
+      movement: {
+        timeS: sim.simTimeS,
+        horizontalSpeedMps: sim.horizontalSpeedMps,
+        verticalSpeedMps: sim.verticalSpeedMps,
+        grounded: sim.grounded,
+        phase: sim.phase,
+        groundContactStatus: elevation.status,
+      },
       latDeg: ll.latDeg,
       lonDeg: ll.lonDeg,
     },

@@ -62,7 +62,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     `<li>Düz çizgi uzunluğu (projeksiyon düzleminde): ${routeLengthM.toFixed(1)} m · Kaynak: Mars 2020 Initial Reports (PDS)</li>`;
   $('sources').innerHTML = sources.map((s) => `<li><a href="${s.url}" target="_blank" rel="noopener">${s.label}</a></li>`).join('') +
     '<li>Görüntü/veri: NASA/JPL/University of Arizona (HiRISE).</li>';
-  $('v-speed').textContent = `${scenario.walkSpeedMps} m/s senaryo hızı × ${scenario.timeScale} zaman hızlandırma (oyun için seçilmiş değer; gerçek Mars yürüyüş hızı iddiası değil)`;
+  $('v-speed').textContent = `${scenario.walkSpeedMps} m/s senaryo hızı × ${scenario.timeScale} zaman hızlandırma (gerçek Mars yürüyüş hızı iddiası değil). 3D düşey ivme: ${scenario.marsGravityMps2} m/s² (NASA küresel referansı; Jezero yerel ölçümü değil). Space sıçrama girdisi ${scenario.jumpImpulseMps} m/s oyun varsayımıdır, suit performansı değildir.`;
 
   function renderLayerPanel(layers, terrain, currentCorridorM = corridorHalfWidthM) {
     const regBanner = layers.selectionReport

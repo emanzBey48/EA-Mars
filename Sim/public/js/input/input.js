@@ -15,6 +15,7 @@ export function bindControls({
   pauseBtn,
   restartBtn,
   corridorInput,
+  lookEl,
   corridorMin,
   corridorMax,
   initialCorridor,
@@ -23,8 +24,12 @@ export function bindControls({
   onZoom,
   onViewChange,
   onCorridorChange,
+  isFirstPerson = () => false,
+  onJump = () => {},
+  onLook = () => {},
+  onPointerLockChange = () => {},
 }) {
-  const keys = { up: false, down: false, left: false, right: false };
+  const keys = { up: false, down: false, left: false, right: false, jump: false, jumpPressed: false };
   const clearKeys = () => { for (const k in keys) keys[k] = false; };
   const triggerRestart = () => { clearKeys(); onRestart(); };
 
@@ -32,13 +37,37 @@ export function bindControls({
     if (e.target instanceof HTMLInputElement) return;
     const k = KEYMAP[e.code];
     if (k) { keys[k] = true; e.preventDefault(); return; }
-    if (e.code === 'KeyP' || e.code === 'Space') { e.preventDefault(); if (!e.repeat) onTogglePause(); }
+    if (e.code === 'Space' && isFirstPerson()) {
+      e.preventDefault();
+      keys.jump = true;
+      if (!e.repeat) { keys.jumpPressed = true; onJump(); }
+    }
+    else if (e.code === 'KeyP' || e.code === 'Space') { e.preventDefault(); if (!e.repeat) { clearKeys(); onTogglePause(); } }
     else if (e.code === 'KeyR') { if (!e.repeat) triggerRestart(); }
     else if (e.key === '+' || e.code === 'NumpadAdd' || e.code === 'Equal') onZoom(1.25);
     else if (e.key === '-' || e.code === 'NumpadSubtract' || e.code === 'Minus') onZoom(0.8);
   });
-  window.addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) keys[k] = false; });
+  window.addEventListener('keyup', (e) => {
+    const k = KEYMAP[e.code];
+    if (k) keys[k] = false;
+    if (e.code === 'Space') keys.jump = false;
+  });
   window.addEventListener('blur', clearKeys);
+
+  lookEl?.addEventListener('click', () => {
+    if (isFirstPerson() && typeof lookEl.requestPointerLock === 'function' && document.pointerLockElement !== lookEl) {
+      const request = lookEl.requestPointerLock();
+      request?.catch?.(() => onPointerLockChange(false));
+    }
+  });
+  document.addEventListener('pointerlockchange', () => {
+    const locked = document.pointerLockElement === lookEl;
+    if (!locked) clearKeys();
+    onPointerLockChange(locked);
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (isFirstPerson() && document.pointerLockElement === lookEl) onLook(e.movementX, e.movementY);
+  });
 
   mapEl.addEventListener('wheel', (e) => {
     e.preventDefault();

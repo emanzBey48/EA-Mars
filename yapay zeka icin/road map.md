@@ -61,7 +61,7 @@ Aşama numaraları yürütme sırası değildir. Mevcut sıra: Stage 9’daki 3D
 
 - **Amaç:** Challenge’a bağlı, kısa ve oynanabilir demo sınırını belirlemek.
 - **Çıktı:** Kullanıcı kontrollü astronot; yerel harita; 60–90 sn demo akışı; rota/sapma ve en çok iki savunulabilir arazi göstergesi.
-- **Sahip:** Alparslan (ürün kararı); takım arkadaşı daha sonra gözden geçirebilir.
+- **Sahip:** Alparslan (ürün kararı); Efe daha sonra gözden geçirebilir.
 - **Bağımlılık:** Challenge ve veri kapsamı.
 - **Kabul:** Kullanıcı astronotu kendisi kontrol eder; açıkça ölçüm/hesap/senaryo ayrımı vardır; güvenlik skoru yoktur.
 - **Tahmin:** Tamamlandı; ileriye dönük ek iş yok.
@@ -79,7 +79,7 @@ Aşama numaraları yürütme sırası değildir. Mevcut sıra: Stage 9’daki 3D
 
 - **Amaç:** Uçtan uca demo akışını çalışır kılmak.
 - **Çıktı:** `Sim` içinde vanilla JS Canvas 2D; WASD/oklar; senaryo saati; duraklat/yeniden başlat; rota/±10 m senaryo koridoru; DTM kotu/Horn eğimi; kaynak ve sınırlama paneli.
-- **Sahip:** Alparslan (entegrasyon); takım arkadaşına becerisi uygunsa demo/QA paketi.
+- **Sahip:** Alparslan (entegrasyon); Efe becerisi uygunsa demo/QA paketine destek olabilir.
 - **Bağımlılık:** Aşamalar 1–2 ve yerel raster.
 - **Kabul:** README’deki komutlarla başlar; hareket ve sapma çalışır; raster verisi yoksa uygulama açılır ve katman unavailable görünür; gerçek PLACES izi/güvenlik aracı gibi sunulmaz.
 - **Tahmin:** Kod mevcut. Son regresyon başarısı kullanıcı bildirimi; bağımsız tekrar bu notta yapılmadı.
@@ -107,7 +107,7 @@ Aşama numaraları yürütme sırası değildir. Mevcut sıra: Stage 9’daki 3D
 - **Amaç:** Organizatör verisi geldiğinde çekirdeği değiştirmeden tanımlı `SurfaceProvider`/snapshot yoluna bağlamak; belirsiz veriyle yanlış bilimsel değer üretimini engellemek.
 - **Mevcut kaynak:** `public/js/surface/registry.js` manifest validator’ı, `SurfaceProviderRegistry`, HiRISE sağlayıcı/factory ve fallback’i içeriyor. `main.js` varsayılan HiRISE sağlayıcısını seçiyor; HUD doğrulama/seçim durumunu gösterebiliyor. `test/core.test.mjs` sentetik manifest ve fallback kontrolleri içeriyor.
 - **Açık çıktı:** Yarışma verisi geldiğinde mevcut registry’yi fail-closed koşullarla tamamlamak ve sentetik testlerle sınamak; veri gelmeden yeni format/adapter uydurmamak. Bu iş, 3D dikey dilimden sonra açılacak.
-- **Sahip:** Alparslan (factory/entegrasyon). Takım arkadaşı becerileri uygunsa ayrı manifest/atıf denetimi veya test QA paketi alabilir.
+- **Sahip:** Alparslan (factory/entegrasyon). Efe'nin becerisi ve kapasitesi uygunsa ayrı manifest/atıf denetimi veya test QA paketi alabilir.
 - **Bağımlılık:** Aşama 4 SurfaceProvider/WorldSnapshot. Gerçek organizer dataset’i henüz `Sim/data` içinde yok.
 - **Mevcut açıklar:** (1) license/usage alanı yok ve doğrulanmıyor; (2) coverage yalnız `description` metniyle denetleniyor, sayısal footprint ve rota/dünya kesişimi doğrulanmıyor; (3) `verticalDatumVerified` yalnız `false` iken review oluşturuyor, alan yokken manifest supported olabilir; (4) `expectedFrame` `validateLayerManifest()` için opsiyonel ve verilmezse CRS/grid karşılaştırmaları atlanıyor; `transformVerified` bayrağı dönüşümü matematiksel olarak doğrulamıyor.
 - **Kabul:** Yarışma verisi alındığında açıklar fail-closed kapanır; HiRISE çıktısı/snapshot alanları ve fallback davranışı korunur; bilinmeyen format/CRS aktif örnekleme açmaz; UI durumları görünür kalır. Dönüşüm ve footprint kanıtı yalnız manifest bayrağı olarak kalmayıp doğrulanabilir girdilerle sınanır.
@@ -120,7 +120,7 @@ Aşama numaraları yürütme sırası değildir. Mevcut sıra: Stage 9’daki 3D
 
 - **Amaç:** Basitleştirilmiş çizgiyi gerçek traverse ile, erişilebilir olduğu ölçüde değiştirmek veya karşılaştırmak.
 - **Çıktı:** PDS release/ürün kimliği doğrulanmış ham lokalizasyon dosyası ve PDS4 label/SIS; Sol 120–164 kayıt filtresi; koordinat/frame dönüşümü; DTM extent ve no-data filtresi; gerçek polyline uzunluk/profil karşılaştırması.
-- **Sahip:** Alparslan; erişimi olan teammate varsa indirme/label incelemesi koşullu.
+- **Sahip:** Alparslan; Efe'nin erişimi varsa indirme/label incelemesine destek vermesi koşullu.
 - **Bağımlılık:** PDS’nin raw CSV’sine engelsiz erişim ve coordinate frame belgeleri.
 - **Kabul:** Üçüncü taraf yerine PDS primary file; koordinatlar dokümana göre dönüştürülmüş; footprint/no-data gerçekten kontrol edilmiş; yol noktaları/ölçüm zamanları kaynağıyla sunulmuş. Erişim yoksa mevcut çizgi simülasyonda kalır ve “gerçek PLACES değil” etiketi korunur.
 - **Tahmin:** 2–4 saat erişim sağlandığında; 45–60 dakika endpoint denemesinden sonra engel tekrarlanırsa park et ve hackathon demosunu bloke etme.
@@ -129,23 +129,24 @@ Aşama numaraları yürütme sırası değildir. Mevcut sıra: Stage 9’daki 3D
 
 - **Amaç:** Kısa, tekrar edilebilir ve bilimsel sınırlamaları açık demo hazırlamak.
 - **Çıktı:** Temiz açılış/başlatma yolu; 60–90 sn kullanıcı senaryosu; kaynak/attribution paneli; fallback akışı; en fazla 3 dakikalık anlatı ve yedek ekran görüntüsü/video.
-- **Sahip:** Alparslan entegrasyon/demo; takım arkadaşı ancak becerileri ve müsaitliği teyit edilirse anlatı, görsel inceleme veya QA.
+- **Sahip:** Alparslan entegrasyon/demo; Efe ancak becerisi ve müsaitliği teyit edilirse anlatı, görsel inceleme veya QA desteği verir.
 - **Bağımlılık:** Mevcut 2D MVP; 3D ilk dilim gösterilebilir olduğunda demoya dahil edilip edilmeyeceğine entegrasyon sahibi karar verir. Yarışma verisi adapter’ı bu aşamanın önkoşulu değildir.
 - **Kabul:** Yeni makinede README adımları; WASD, duraklat, koridor dışı/geri dönüş ve katman unavailable durumu denenmiş; gerçek PLACES değil ve güvenlik aracı değil açıklaması gözle görünür; attribution okunabilir.
 - **Tahmin:** Hazırlıkta 2–3 odaklı saat; etkinlikte ilk demo için 3–5 saat. Gösterim/teslimden 4 saat önce özellik eklemeyi dondur, yalnız kritik hata düzelt.
 
-### 9. Ayrıntılı 3D simülasyon — ÜRÜN HEDEFİ VE ŞU ANKİ ANA GELİŞTİRME ODAĞI
+### 9. Ayrıntılı 3D simülasyon — ÜRÜN HEDEFİ; İLK DİKEY DİLİM KODU TAMAM, RUNTIME KABULÜ AÇIK
 
 - **Amaç:** Yarışma verisi ulaşana kadar mevcut doğrulanmış HiRISE DTM/fixture’ı kullanarak ayrıntılı 3D simülasyonun oynanabilir dikey dilimini kurmak. Veri kaynağını sonradan değiştirilebilir provider sınırında tut.
 - **Çıktı:** Aşamalı 3D sahne/terrain ve etkileşim. Terrain mesh ve no-data boşlukları; kullanıcı kontrollü astronot/avatar; kamera ve temel aydınlatma; mevcut WorldSnapshot/HUD ile entegrasyon. Ayrı render modülü; Mars 2000 bilimsel `zM` ile görsel vertical scale/offset kararı yazılı. 2D renderer ara sürüm/fallback olarak korunur.
-- **Sahip:** Alparslan runtime/scene/camera seçimi ve uygulama entegrasyonunun; takım arkadaşı renderer’dan bağımsız CPU terrain mesh builder’ın sahibidir. İki paket aşağıda eşzamanlı başlayabilir.
+- **Sahip:** Alparslan runtime/scene/camera seçimi ve uygulama entegrasyonunun; Efe renderer’dan bağımsız CPU terrain mesh builder’ın sahibidir.
 - **Bağımlılık:** Aşama 4 WorldSnapshot/SurfaceProvider sınırı; başlangıç verisi olarak yerel HiRISE fixture. Organizer verisi gelirse aşama 6 intake tamamlanmadan ona geçme.
 - **Kabul:** 3D yalnız mevcut arşiv/hesaplanan veriyi doğru provenance ile sunar; `zM` kaynak kotu olarak kalır ve görsel dikey abartıdan ayrılır; no-data mesh’te sahte sıfır yüzey üretmez; `zM=null` iken 3D avatar modeli gizlenip yatay konum ve “yükseklik bilinmiyor” durumu HUD/ekran göstergesinde korunur; avatar ve kamera snapshot/sim kurallarıyla çalışır; 2D sürüm açılabilir kalır.
-- **Tahmin:** Önce küçük bir dikey dilim ve ardından kullanıcıyla gözden geçirilmiş kapsam planı çıkar; ayrıntılı tamamlanmış ürün için eforu prototip görüldükten sonra tahmin et.
+- **Durum (13 Kasım 2026):** İlk dikey dilimin kodu `eb21d42`, `3600563`, `ac1ca70` ve `b1a91ca` commit’leriyle mevcut; son statik denetimde blocker/major bulgu çıkmadı. Mesh kurulumu sırasında görünüm seçiminin yarış durumu `9d642c3` ile düzeltildi. Test veya tarayıcı smoke çalıştırılmadı; Stage 9 runtime kabulü bu nedenle henüz tamamlanmış sayılmaz.
+- **Tahmin:** İlk dikey dilimin uygulama kodu tamamlandı. Tarayıcı kabulü ve bellek/CPU davranışı ölçülmediği için kalan QA eforu henüz tahmin edilmedi; ayrıntılı 3D ürün eforu prototip ve kullanıcı gözden geçirmesinden sonra tahmin edilecek.
 
 ## Paralel çalışma şeritleri ve dosya sınırları
 
-Her bağımsız iş bir kabul ölçütü ve belirli bir dosya kümesiyle tanımlansın. Aynı dosya kümesini aynı anda yalnız bir kişi/AI değiştirsin; bağımsız şeritler ayrı branch ve commit'lerle ilerleyebilir. Takım arkadaşının 3D runtime deneyimi bilinmiyor diye kod görevi bekletilmez: CPU mesh builder görevinde render kütüphanesi bağımlılığı yoktur; gerçek teknik engel çıkarsa Alparslan’la kapsamı daraltıp yardım istenir.
+Her bağımsız iş bir kabul ölçütü ve belirli bir dosya kümesiyle tanımlansın. Aynı dosya kümesini aynı anda yalnız bir kişi/AI değiştirsin; bağımsız şeritler ayrı branch ve commit'lerle ilerleyebilir. Efe'nin 3D runtime deneyimi bilinmiyor diye kod görevi bekletilmez: CPU mesh builder görevinde render kütüphanesi bağımlılığı yoktur; gerçek teknik engel çıkarsa Alparslan’la kapsamı daraltıp yardım istenir.
 
 | Şerit | Ana klasör | Bağımsız iş örnekleri ve sınır |
 |---|---|---|
@@ -155,15 +156,15 @@ Her bağımsız iş bir kabul ölçütü ve belirli bir dosya kümesiyle tanıml
 | Girdi (`input`) | `Sim/public/js/input/` | Klavye ve kontrol erişilebilirliği/olay eşlemesini iyileştirmek; simülasyon kuralını bu dosyalara taşımamak. |
 | Görünüm (`view`) | `Sim/public/js/view/` | 2D Canvas ara sürümü ve yeni `view/3d/` sahne, terrain, kamera modülleri; bilimsel örnekleme veya rota hesabını görünüm katmanına eklememek. |
 
-PLACES kaynak/koordinat doğrulaması, attribution/manifest QA ve demo anlatısı sonraki bağımsız işlerdir; hiçbiri ilk 3D dikey dilimi bloke etmez. `public/js/main.js`, `config.js` ve snapshot/provider sözleşmeleri entegrasyon sıcak noktalarıdır: entegrasyon sahibi bunları koordine eder ve aynı anda yalnız bir sahibi değiştirir. Rota hesabı halen `geo` ile `simulation` arasında dağılmıştır; bu aşamada yeni `route/` modülü oluşturmayın. 3D renderer şu an ana geliştirme odağıdır ve mevcut HiRISE fixture ile bağımsız `view/3d/` katmanında ilerlemelidir.
+PLACES kaynak/koordinat doğrulaması, attribution/manifest QA ve demo anlatısı bağımsız işlerdir; hiçbiri ilk 3D dikey dilimi bloke etmez. `public/js/main.js`, `config.js` ve snapshot/provider sözleşmeleri entegrasyon sıcak noktalarıdır: entegrasyon sahibi bunları koordine eder ve aynı anda yalnız bir sahibi değiştirir. Rota hesabı halen `geo` ile `simulation` arasında dağılmıştır; bu aşamada yeni `route/` modülü oluşturmayın. İlk 3D dikey dilimin kodu mevcut HiRISE fixture ile tamamlandı; sıradaki iş runtime QA ve Stage 8 demo hazırlığıdır.
 
 ### Şu anki iş bölümü: yarışma verisi gelene kadar 3D dikey dilim
 
 | Sahip | Görev paketi | Dosya sınırı | Kabul ölçütü |
 |---|---|---|---|
-| Alparslan (entegrasyon sahibi) | 3D runtime kararını (Three.js mi, WebGL2 mi) ver; scene/camera/render lifecycle’ını ve snapshot bağlantısını kur; 2D/3D seçimini entegre et. | `Sim/public/js/main.js`, `config.js`, snapshot/provider sözleşmeleri ve `Sim/public/js/view/3d/renderer.js`, `camera.js`; bu dosyaların tek sahibi. | Seçim ve bağımlılık gerekçesi kısa kayda geçirilir; kare başına renderer yalnız immutable `WorldSnapshot`, kamera ve hazırlanmış mesh asset’i alır; canlı sim/layer/provider örneklemez; 2D fallback çalışır. |
-| Takım arkadaşı (paralel kod paketi) | HiRISE `GridElevationLayer` girdisinden renderer’dan bağımsız CPU terrain mesh asset’i üret. Görev belirli bir 3D kütüphane deneyimine bağlı değildir. | Yeni `Sim/public/js/view/3d/terrain-mesh.js`; yalnız bu modüle özel yardımcılar. `main.js`, `config.js`, `renderer.js`, `camera.js`, `surface/`, `simulation/` ve test dosyalarına dokunma. | `positions: Float32Array` (local X/Y metre + display Z), `normals: Float32Array`, `indices: Uint32Array`, vertex-aligned `sourceElevationsM: Float32Array`; yerel metre koordinatlarında bounds; kaynak `zM`, datum, çözünürlük ve valid/omitted sayıları içeren provenance. Görsel Z açık `referenceElevationM`/`verticalScale` ile hesaplanır. No-data içeren quad üçgenlenmez, sıfırla doldurulmaz veya boşluk üzerinden köprülenmez. WebGL/Three.js nesnesi döndürmez. |
-| Alparslan (sonraki entegrasyon dilimi) | Mesh asset’ini renderer’a bağla; astronot modeli, kamera takibi, input ve HUD etkileşimini tamamla. | `renderer.js`, `camera.js`, ayrı avatar/presentation dosyaları, `input/`, `main.js` ve gerekiyorsa `config.js`; entegrasyon sahibi koordinasyonunda, takım arkadaşının mesh dosyalarıyla çakışmadan. | WASD mevcut sim state’ini sürer; kamera takibi kararlıdır; `zM` null/geçersizken avatar kotu uydurulmaz ve HUD bilinmiyor durumunu gösterir; 2D/3D aynı snapshot ve metadata’yı kullanır. |
+| Alparslan (runtime/scene/camera; TAMAMLANDI) | Native WebGL2 seçildi; renderer lifecycle’ı ve snapshot bağlantısı kuruldu; 2D/3D seçimi entegre edildi. | `Sim/public/js/main.js`, `Sim/public/js/view/3d/renderer.js`, `camera.js`; bu dosyaların entegrasyon sahibi tek sahibi. | Runtime seçimi/gerekçesi `renderer.js`’te kayıtlı; kare başına renderer immutable `WorldSnapshot`, kamera ve hazırlanmış mesh asset’ini alır; canlı sim/layer/provider örneklemez; 2D fallback kodda mevcut. |
+| Efe (paralel kod paketi; TAMAMLANDI) | HiRISE `GridElevationLayer` girdisinden renderer’dan bağımsız CPU terrain mesh asset’i üret. Görev belirli bir 3D kütüphane deneyimine bağlı değildir. | `Sim/public/js/view/3d/terrain-mesh.js`; yalnız bu modüle özel yardımcılar. `main.js`, `config.js`, `renderer.js`, `camera.js`, `surface/`, `simulation/` ve test dosyalarına dokunma. | `positions: Float32Array` (local X/Y metre + display Z), `normals: Float32Array`, `indices: Uint32Array`, vertex-aligned `sourceElevationsM: Float32Array`; yerel metre koordinatlarında bounds; kaynak `zM`, datum, çözünürlük ve valid/omitted sayıları içeren provenance. Görsel Z açık `referenceElevationM`/`verticalScale` ile hesaplanır. No-data içeren quad üçgenlenmez, sıfırla doldurulmaz veya boşluk üzerinden köprülenmez. WebGL/Three.js nesnesi döndürmez. |
+| Alparslan (3D entegrasyon; KOD TAMAMLANDI, QA AÇIK) | Mesh asset’ini renderer’a bağla; astronot modeli, kamera takibi, input ve HUD etkileşimini tamamla. | `renderer.js`, `camera.js`, `input/`, `main.js`, `index.html`, `styles.css`; Efe'nin mesh dosyası ayrı kalır. | WASD mevcut sim state’ini sürer; kamera yatay konumu takip eder; `zM` null/geçersizken avatar çizilmez ve HUD bilinmeyen kotu gösterir; 2D/3D aynı snapshot ve metadata’yı kullanır. Statik incelemede kod arayüzü karşılandı; browser QA bekliyor. |
 | Sonraki bağımsız dalga | Yarışma verisi geldiğinde Stage 6 intake/validator; 3D yolunu bekletmeden ayrı branch’te aç. Bilinen validator işi daha erken alınırsa sentetik validator dosya kümesi ayrıca atanır. | `surface/registry.js`, ilgili ayrı validator testleri; ilk iki paketin dosyalarına dokunma. | License/usage, sayısal footprint+kesişim, doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtı fail-closed sınanır; HiRISE fallback korunur. Gerçek format/data gelmeden adapter uydurulmaz. |
 
 #### 3D renderer arayüz sözleşmesi — ilk dikey dilim
@@ -174,7 +175,7 @@ PLACES kaynak/koordinat doğrulaması, attribution/manifest QA ve demo anlatıs�
 - **No-data ve avatar:** Mesh builder yalnız dört köşesi de geçerli olan grid quad’larını triangulate eder; no-data/invalid hücreyi sıfıra çevirmeden ve bilinmeyen üzerinden üçgen köprü kurmadan boş bırakır. Snapshot’ta `astronaut.zM === null` veya `elevationStatus !== 'ok'` ise dünya koordinatında avatar mesh’i çizilmez; yatay konum ve “yükseklik bilinmiyor” durumu HUD/ekran göstergesinde sunulur. Son geçerli kotu veya sıfırı ikame etmez; simülasyonun x/y hareketi snapshot’a göre sürer.
 - **Veri ve geri dönüş:** Başlangıç fixture’ı mevcut doğrulanmış HiRISE DTM’dir; yarışma verisi geldiğinde yeni adapter/manifest intake ayrıca doğrulanır. 2D Canvas görünümü çalışır seçim/fallback olarak kalır.
 
-Bu sözleşme, iki paralel uygulama görevini aynı anda açmak için yeterli başlangıç kabulüdür. Alparslan runtime seçimini kendi dosya kümesinde verir; mesh builder bu seçime bağımlı değildir. Belirli `referenceElevationM` ve `verticalScale` değerleri prototip/ürün kararı olarak ayrıca verilmeli; ölçülmüş/datum gerçekleri gibi sunulmamalıdır. Mesh arayüzünde değişiklik gerekirse iki görev sahibinin yazılı eşgüdümüyle, ilgili dosyalar düzenlenmeden önce netleştirilir.
+Bu sözleşme Efe'nin mesh builder'ı ile Alparslan'ın entegrasyon paketinin arayüzünü tanımlar. Runtime kararı WebGL2 olarak uygulanmış; `referenceElevationM` yüklenen DTM kot aralığının orta noktası, `verticalScale` ise açıkça sunum amaçlı 3× seçilmiştir. Bu değerler ölçüm veya datum düzeltmesi değildir. Mesh arayüzünde değişiklik gerekirse iki görev sahibinin yazılı eşgüdümüyle, ilgili dosyalar düzenlenmeden önce netleştirilir.
 
 Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi clone’unu kullanmalı; aynı makinede çalışıyorlarsa OneDrive dışında ayrı clone veya ayrı Git worktree tercih edilmeli. Aynı OneDrive klasöründeki ortak `.git` checkout’unda iki kişinin/AI’nın paralel dosya ve Git işlemleri güvenli değildir. Entegrasyon sahibi branch/PR diff’lerini gözden geçirip birleştirir. Kodlamada bir seferde tek 3D dikey dilim aç; mevcut 2D MVP ve `Sim/data` girdilerini koru. Yarışma verisi gelene kadar 3D odağı doğrulanmış yerel HiRISE fixture’ı ile sürdür; veriyi uydurma veya 3D prototipi ona bağımlı kılma.
 
@@ -188,7 +189,17 @@ Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi
 - AI’lar her önemli, gözden geçirilebilir görev aşamasında ilgili değişiklikleri ayrı commit etsin; büyük işleri tek commit’e yığmasın. Commit öncesi `git status` ve staged diff kontrol edilsin; ilgisiz kullanıcı değişiklikleri eklenmesin. Kullanıcı onayı gereken durumda onay olmadan commit/push yapılmasın. Push başarısızsa hash ve engel raporlansın. Güvenlik/sertifika doğrulaması kapatılmasın.
 - Commit author kimliği AI’yı belirtmeli ve bir insanı taklit etmemeli. Ana dal entegrasyon sahibi tarafından PR/diff incelemesiyle birleştirilmeli. Testler yalnız kullanıcı istediğinde çalıştırılmalı; çalıştırılmayan test başarılıymış gibi raporlanmamalı.
 
-## Şu anki en iyi sonraki adım
+## Yarışma verisi gelene kadar kalan işler — 13 Kasım 2026
 
-**Aşama 9’un iki paralel paketini başlat:** Alparslan kendi branch/clone’unda 3D runtime kararını verip `renderer.js`/`camera.js` ve `main.js` entegrasyonunu geliştirsin. Takım arkadaşı ayrı clone/branch’te yalnız `terrain-mesh.js` CPU builder’ını geliştirsin; builder typed-array API’sini yukarıdaki sözleşmeye göre üretsin. Kod veya test kapsamı ayrıca istenmedikçe mesh paketi test dosyası değiştirmez ve test çalıştırmaz. İşler tamamlanınca Alparslan entegrasyon sahibi olarak arayüzü ve diff’leri birleştirsin. 2D fallback’i koru; no-data için sahte taban üretme; bilimsel kotla görsel Z’yi ayrı tut. Yarışma verisi geldiğinde Stage 6 intake ayrı görev olur; PLACES işi de dış veri kolu olarak kalır.
+| Sahip | Uygulama durumu | Yarışma verisinden önce kalan |
+|---|---|---|
+| Efe | CPU mesh builder tamamlandı (`3600563`); statik denetimde blocker bulunmadı ve entegrasyon branch'inde kullanılıyor. Kodlama paketi 1/1 tamam. | Yeni kod işi yok. 1,884,301 hücrelik fixture için mesh hazırlama bellek/CPU davranışı ve no-data boşluklarının tarayıcıdaki görünümü ortak runtime QA’da gözlenecek; efor henüz ölçülmedi. |
+| Alparslan | WebGL2 runtime/renderer/kamera temeli, mesh entegrasyonu, 2D/3D seçimi, fallback, kamera takibi, avatar ve kot HUD’ı tamam (`eb21d42`, `3600563`, `ac1ca70`, `b1a91ca`; görünüm yarışı düzeltmesi `9d642c3`). Kod paketleri tamam. | Runtime QA: 2D↔3D ve input, WebGL/mesh hata fallback’i, kot bilinmiyorken avatarın gizlenmesi, görsel terrain/kamera ve bellek/CPU davranışı. Efor henüz ölçülmedi; test veya browser smoke çalıştırılmadı. |
+
+- **Stage 9:** Efe ve Alparslan’ın ilk dikey dilim kodu tamam; runtime kabulü tarayıcıda gözlenmediği için açık.
+- **Stage 8:** Demo dondurma/sunum hazırlığı açık. Yol haritası tahmini: hazırlıkta 2–3 odaklı saat; etkinlikte ilk demo için 3–5 saat.
+- **Stage 7 / PLACES:** Alparslan’ın ayrı, bloke etmeyen dış veri işi. PDS dosyasına erişim olursa 2–4 saat; endpoint engeli 45–60 dakikada çözülmezse park et.
+- **Stage 6 / yarışma verisi intake:** Veri gelene kadar beklemede. Gerçek dataset ve label/SIS olmadan yeni adapter veya format geliştirme.
+
+**Sıradaki iş:** Stage 9 runtime QA’nın planlanması ve ardından Stage 8 demo hazırlığı. Efe için yeni implementation paketi şu an açık değil; QA/optimizasyon gerekirse bulgulara göre ayrı görev ver.
 

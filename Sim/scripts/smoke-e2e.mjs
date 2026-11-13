@@ -79,6 +79,68 @@ try {
   for (let i = 0; i < 100; i++) { const ok = await evaluate('!!(window.marswalk && window.marswalk.layers.dtm.available)').catch(() => false); if (ok) break; await sleep(200); }
   await sleep(500);
 
+  // Stage 9 runtime coverage: lazily build/upload the full fixture mesh, switch both ways,
+  // sample rendered-frame cadence/JS heap, and exercise unknown elevation without changing data.
+  const heapBefore = await send('Runtime.getHeapUsage').then((r) => r.result?.usedSize ?? null);
+  const threeDStart = Date.now();
+  await evaluate(`document.getElementById('btn-view-3d').click()`);
+  let diag3d = null;
+  for (let i = 0; i < 100; i++) {
+    diag3d = await evaluate('window.marswalk.getDiagnostics()').catch(() => null);
+    if (diag3d?.activeView === '3d' && diag3d.renderer) break;
+    await sleep(100);
+  }
+  const first3dWallMs = Date.now() - threeDStart;
+  const canvas3dState = await evaluate(`(() => { const c=document.getElementById('map-3d'); const r=c.getBoundingClientRect(); return {hidden:c.hidden,w:r.width,h:r.height}; })()`);
+  check('6a 2D→3D geçişi terrain mesh ile açılıyor', diag3d?.activeView === '3d' && diag3d.terrainMeshReady && !canvas3dState.hidden && canvas3dState.w > 400,
+    `active=${diag3d?.activeView}, mesh=${diag3d?.terrainMeshReady}, hücre=${diag3d?.terrainMeshCellCount}, CPU build=${diag3d?.terrainMeshBuildMs?.toFixed(1)} ms, ilk geçiş=${first3dWallMs} ms`);
+  const avatarProjection = await evaluate(`(() => { const m=window.marswalk,c=document.getElementById('map-3d');
+    const v=c.getBoundingClientRect(),cam=m.camera3d,mesh=m.getDiagnostics().terrainMeshProvenance;
+    const verticalScale=3, halfFov=Math.tan(cam.fovYRad/2), modelHeight=1.51, modelWidth=1.06;
+    return {heightPx:v.height*modelHeight*verticalScale*Math.cos(cam.pitchRad)/(2*halfFov*cam.distanceM),
+      widthPx:v.height*modelWidth/(2*halfFov*cam.distanceM), distanceM:cam.distanceM, validVertices:mesh?.validVertexCount}; })()`);
+  check("6b Avatar viewport'ta boyut/renk ayrımıyla seçilebilir", (diag3d?.renderer?.terrainTriangles ?? 0) > 0 && diag3d?.renderer?.avatarDrawn === true &&
+    avatarProjection.heightPx >= 50 && avatarProjection.widthPx >= 16,
+    `üçgen=${diag3d?.renderer?.terrainTriangles}, avatarDrawn=${diag3d?.renderer?.avatarDrawn}, yaklaşık ${avatarProjection.widthPx.toFixed(0)}×${avatarProjection.heightPx.toFixed(0)} px @ ${avatarProjection.distanceM} m; model ölçümü varsayımsal projeksiyon hesabıdır`);
+  await shot('05-stage9-3d.png');
+  const heapAfter = await send('Runtime.getHeapUsage').then((r) => r.result?.usedSize ?? null);
+  const fps = await evaluate(`new Promise(resolve => { let n=0, start=performance.now(); function tick(t){ n++; if(t-start>=2500) resolve({frames:n,elapsedMs:t-start,fps:n*1000/(t-start)}); else requestAnimationFrame(tick); } requestAnimationFrame(tick); })`);
+  const frameMs = await evaluate(`window.marswalk.getDiagnostics().renderer?.frameRenderMs ?? null`);
+  check('6c 3D frame cadence ölçüldü (başsız tarayıcı)', Number.isFinite(fps?.fps) && fps.fps > 0,
+    `${fps?.fps?.toFixed(1)} FPS / ${fps?.frames} kare / ${fps?.elapsedMs?.toFixed(0)} ms; son render=${frameMs?.toFixed?.(2) ?? 'n/a'} ms`);
+  check('6d JS heap farkı ölçüldü (GPU belleği dahil değil)', Number.isFinite(heapBefore) && Number.isFinite(heapAfter),
+    `heap ${heapBefore ?? 'n/a'} → ${heapAfter ?? 'n/a'} bytes (Δ ${Number.isFinite(heapBefore) && Number.isFinite(heapAfter) ? heapAfter - heapBefore : 'n/a'}); GPU memory API yok`);
+  await evaluate(`document.getElementById('btn-view-2d').click()`); await sleep(100);
+  const back2d = await evaluate(`({active:window.marswalk.getDiagnostics().activeView, hidden:document.getElementById('map').hidden})`);
+  await evaluate(`document.getElementById('btn-view-3d').click()`); await sleep(150);
+  const back3d = await evaluate(`window.marswalk.getDiagnostics()`);
+  check('6e 3D→2D→3D tekrar geçişi çalışıyor', back2d.active === '2d' && !back2d.hidden && back3d.activeView === '3d',
+    `2D=${back2d.active}, yeniden 3D=${back3d.activeView}`);
+  const unknown = await evaluate(`(() => { const m=window.marswalk, L=m.layers.dtm, original=L.sampleSurface; L.sampleSurface=()=>({
+    elevation:{status:'unavailable',value:null,unit:'m',verticalDatum:null,source:null,method:null,cell:null,reason:'test-only unknown elevation'},
+    slope:{status:'unavailable',value:null,unit:'°',verticalDatum:null,source:null,method:null,window:'3×3',cell:null,reason:'test-only unknown elevation'},zM:null,status:'unavailable'});
+    m.updateHud(); return {original: typeof original}; })()`);
+  await sleep(150);
+  const unknownState = await evaluate(`(() => { const m=window.marswalk,d=m.getDiagnostics(),s=m.getSnapshot(); return {zM:s.astronaut.zM,status:s.astronaut.elevationStatus,
+    hud:document.getElementById('v-elev').textContent,avatarDrawn:d.renderer?.avatarDrawn,active:d.activeView}; })()`);
+  check('6f Unknown elevation HUD açık, kot null ve avatar çizilmemiş', unknown.original === 'function' && unknownState.zM === null && unknownState.status === 'unavailable' && unknownState.hud.includes('Yükseklik bilinmiyor') && unknownState.avatarDrawn === false,
+    `zM=${unknownState.zM}, status=${unknownState.status}, avatarDrawn=${unknownState.avatarDrawn}`);
+  await evaluate(`location.reload()`);
+  for (let i = 0; i < 100; i++) { const ok = await evaluate('!!(window.marswalk && window.marswalk.layers.dtm.available)').catch(() => false); if (ok) break; await sleep(200); }
+  await sleep(300);
+  const failureUrl = new URL(debugUrl); failureUrl.searchParams.set('testWebGL2Failure','1');
+  await send('Page.navigate', { url: failureUrl.toString() });
+  for (let i = 0; i < 100; i++) { const ready = await evaluate('!!window.marswalk').catch(() => false); if (ready) break; await sleep(100); }
+  const fallback = await evaluate(`(() => { const d=window.marswalk.getDiagnostics(); return {available:d.rendererAvailable,error:d.rendererError,
+    active:d.activeView,canvas2dHidden:document.getElementById('map').hidden,disabled:document.getElementById('btn-view-3d').disabled,
+    text:document.getElementById('view-status').textContent}; })()`);
+  check('6g WebGL2 init hatasında test-only deterministik 2D fallback çalışıyor', !fallback.available && fallback.active === '2d' && !fallback.canvas2dHidden && fallback.disabled && fallback.text.includes('2D harita kullanılabilir'),
+    `${fallback.error}; aktif=${fallback.active}, 2D gizli=${fallback.canvas2dHidden}`);
+
+  await send('Page.navigate', { url: debugUrl.toString() });
+  for (let i = 0; i < 100; i++) { const ok = await evaluate('!!(window.marswalk && window.marswalk.layers.dtm.available)').catch(() => false); if (ok) break; await sleep(200); }
+  await sleep(300);
+
   // 1. Opens; map + controls visible + immutable WorldSnapshot check
   const dom = await evaluate(`(() => { const c = document.getElementById('map'); const r = c.getBoundingClientRect(); const snap = window.marswalk.getSnapshot(); return { w: r.width, h: r.height, text: document.body.innerText, dtm: window.marswalk.layers.dtm.available, frozen: Object.isFrozen(snap) && Object.isFrozen(snap.astronaut) && Object.isFrozen(snap.route) && Object.isFrozen(snap.trail), zM: snap.astronaut.zM }; })()`);
   await shot('01-start.png');

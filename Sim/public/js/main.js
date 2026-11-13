@@ -13,11 +13,14 @@ import { bindControls } from './input/input.js';
 import { createHud } from './view/hud.js';
 
 const $ = (id) => document.getElementById(id);
+const debugParams = new URLSearchParams(window.location.search);
+const debugEnabled = debugParams.get('debug') === '1' || window.__MARSWALK_ENABLE_DEBUG__ === true;
+const forceWebgl2Failure = debugEnabled && debugParams.get('testWebGL2Failure') === '1';
 const adapter = adapterFromLabel(MAP_FRAME, WAYPOINTS[0]);
 const waypoints = WAYPOINTS.map((w) => ({ ...w, local: adapter.latLonToLocal(w.latDeg, w.lonDeg) }));
 const sim = new MarswalkSim({ a: waypoints[0].local, b: waypoints[1].local }, SCENARIO);
 const camera = new Camera();
-const camera3d = create3dCamera({ targetXM: waypoints[0].local.x, targetYM: waypoints[0].local.y });
+const camera3d = create3dCamera({ targetXM: waypoints[0].local.x, targetYM: waypoints[0].local.y, distanceM: 42 });
 const registry = createDefaultSurfaceRegistry({ expectedFrame: MAP_FRAME, adapter, baseUrl: 'data' });
 const layers = { dtm: new UnavailableLayer(dtmBaseDescriptor(), 'Yükleniyor…'), ortho: null, selectionReport: null };
 let terrain = null;
@@ -28,6 +31,7 @@ let viewRequestId = 0;
 let renderer3d = null;
 let renderer3dError = null;
 let terrainMeshError = null;
+let terrainMeshBuildMs = null;
 
 const mapWrap = $('mapwrap');
 const canvas2d = $('map');
@@ -39,7 +43,8 @@ const viewNote = $('view-note');
 const viewStatus = $('view-status');
 
 try {
-  renderer3d = createTerrainRenderer(canvas3d);
+  if (forceWebgl2Failure) throw new Error('Test-only forced WebGL2 initialization failure');
+  renderer3d = createTerrainRenderer(canvas3d, { collectDiagnostics: debugEnabled });
 } catch (error) {
   renderer3dError = error;
   view3dBtn.disabled = true;
@@ -78,7 +83,13 @@ function build3dTerrainOnce() {
     referenceElevationM: (stats.min + stats.max) / 2,
     verticalScale: 3,
   };
-  const prepared = buildTerrainMesh(layers.dtm, displayConfig);
+  const buildStartedAt = performance.now();
+  let prepared;
+  try {
+    prepared = buildTerrainMesh(layers.dtm, displayConfig);
+  } finally {
+    terrainMeshBuildMs = performance.now() - buildStartedAt;
+  }
   if (!prepared.indices.length) throw new Error('DTM penceresinde çizilebilir geçerli terrain quad’ı bulunamadı.');
   terrainMesh = prepared;
   return terrainMesh;
@@ -247,7 +258,25 @@ updateHud();
 requestAnimationFrame(frame);
 
 // Debug/test handle is NEVER exposed during normal runs; only when explicitly enabled via ?debug=1 or __MARSWALK_ENABLE_DEBUG__.
-const debugEnabled = new URLSearchParams(window.location.search).get('debug') === '1' || window.__MARSWALK_ENABLE_DEBUG__ === true;
 if (debugEnabled) {
-  window.marswalk = { sim, camera, camera3d, adapter, registry, layers, waypoints, keys, updateHud, getSnapshot: () => lastSnapshot };
+  window.marswalk = {
+    sim, camera, camera3d, adapter, registry, layers, waypoints, keys, updateHud,
+    getSnapshot: () => lastSnapshot,
+    getDiagnostics: () => ({
+      activeView,
+      rendererAvailable: Boolean(renderer3d),
+      rendererError: renderer3dError?.message ?? null,
+      terrainMeshReady: Boolean(terrainMesh),
+      terrainMeshError: terrainMeshError?.message ?? null,
+      terrainMeshBuildMs,
+      terrainMeshCellCount: layers.dtm?.rows * layers.dtm?.cols || null,
+      terrainMeshProvenance: terrainMesh ? { ...terrainMesh.provenance } : null,
+      cameraDistanceM: camera3d.distanceM,
+      renderer: renderer3d?.getDiagnostics?.() ?? null,
+      snapshot: lastSnapshot ? {
+        elevationStatus: lastSnapshot.astronaut.elevationStatus,
+        zM: lastSnapshot.astronaut.zM,
+      } : null,
+    }),
+  };
 }

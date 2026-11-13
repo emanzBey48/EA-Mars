@@ -1,6 +1,6 @@
 ﻿# Marswalk — Proje Amacı ve İlerleme
 
-**Son güncelleme:** 12 Kasım 2026  
+**Son güncelleme:** 13 Kasım 2026
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Hedef uygulama:** `C:\Users\Erdem\OneDrive\Desktop\nasa space apps\Sim`
 
@@ -63,16 +63,16 @@ Güncel kodda `public/js/surface/registry.js` manifest alan doğrulayıcısı (`
 
 **Stage 6 tamam değil.** `Sim/data` içinde gerçek organizer verisi yok; desteklenen format şimdilik hazırlanmış `PDS3_PC_REAL_F32_WINDOW`. Registry gerçek yeni format parser’ı değildir; yeni candidate’ın loader’ı/CRS dönüşümü ayrıca yazılmalı. Kodun güncel statik incelemesinde dört fail-closed boşluğu göründü:
 
-1. `license`/usage koşulu manifestte zorunlu ve validate edilmiyor; yalnız source/attribution aranıyor.
+1. Manifestte `license`/usage alanı yok ve doğrulanmıyor; yalnız source/attribution aranıyor.
 2. Mekânsal kapsam sadece `coverage.description` metniyle kontrol ediliyor; sayısal footprint ve rota/dünya çerçevesiyle kesişim doğrulanmıyor.
 3. `verticalDatumVerified === false` `needs_review` yapıyor; bayrak yokken datum metni tek başına yeterli görülüp supported olabiliyor. Güvenli doğrulama için `true` açıkça aranmalı.
-4. `expectedFrame` argümanı verilmezse CRS/grid karşılaştırması atlanabiliyor. Her doğrulama çağrısında kanonik çerçeve zorunlu olmalı.
+4. `validateLayerManifest(manifest, expectedFrame)` fonksiyonunda `expectedFrame` opsiyonel; verilmezse CRS/grid karşılaştırması atlanabiliyor. Her doğrulama çağrısında kanonik çerçeve zorunlu olmalı.
 
 Ek olarak `transformVerified` boolean’ı insan/loader iddiasıdır; yeni CRS dönüşümünü matematiksel olarak kendiliğinden doğrulamaz. Dönüşüm parametreleri ve footprint kanıtı doğrulanmalı. Bu boşluklar kapatılana ve gerçek kaynak incelenene kadar bilinmeyen candidate örneklenmemeli.
 
-### I. Git ile ortak çalışma — yerel depo kuruldu; LFS push bekliyor
+### I. Git ile ortak çalışma — güncel dal bilgisi
 
-Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında kuruldu; `origin` ayarlı ve AI başlangıç commit’i `54747f7` yerelde. Kimlik doğrulama tamamlandı fakat push sırasında Git LFS’in `github-cloud.s3.amazonaws.com` TLS sertifikası doğrulanamadı; remote’daki branch doğrulanmadı. Büyük IMG/JP2 ve `.f32` LFS’te, proje kodu ve AI yönergeleri aynı depoda. Workspace OneDrive altında olduğundan `.git` eşitleme çatışması riski vardır.
+Bu incelemede çalışma dalı `docs/parallel-roadmap`, yerel HEAD `aae4830` olarak görüldü. Önceki devir notunda `aae4830` commit’inin `origin/docs/shared-code-boundaries` dalına push edildiği kayıtlıdır; remote ref bu oturumda ayrıca doğrulanmadı. IMG/JP2/F32 Git LFS’te izlenir; workspace OneDrive altında olduğundan `.git` eşitleme çatışması riski vardır.
 
 **AI commit kuralı:** Her önemli ve gözden geçirilebilir görev aşamasında yalnız ilgili dosyaları commit et; büyük işi tek commit’te biriktirme. Commit’ten önce staged diff’i gözden geçir. Görev branch’ini remote’a push et ki ekip arkadaşı değişiklikleri görebilsin. Push engellenirse commit hash’ini ve nedeni bildir, remote’a ulaştı iddiasında bulunma. AI kendi kimliğiyle commit etmeli; insanı taklit etmemeli.
 
@@ -84,9 +84,9 @@ Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında 
 | `public/js/geo/geo.js` | Equirectangular/PDS grid/local metre transformu, segment uzaklığı, saf Horn gradyanı |
 | `public/js/surface/layers.js` | `GridElevationLayer`, `UnavailableLayer`, `sampleSurface`, metadata ve no-data durumu |
 | `public/js/surface/registry.js` | Manifest validator, SurfaceProvider registration/factory/fallback; şu an HiRISE default |
-| `public/js/simulation/sim.js` | Hareket, saat, rota metrikleri, immutable `WorldSnapshot` |
+| `public/js/simulation/sim.js` | Hareket, saat, rota metrikleri, derin dondurulmuş `WorldSnapshot` |
 | `public/js/input/input.js` / `public/js/view/hud.js` | Girişler ve DOM HUD; HUD snapshot tüketir |
-| `public/js/view/render.js` | 2D Canvas kamera, görsel terrain asset’i ve snapshot çizimi |
+| `public/js/view/render.js` | 2D Canvas kamera, görsel terrain asset’i ve snapshot çizimi; `buildTerrainImage(layer)` asset’i önceden katmandan hazırlar |
 | `scripts/extract-dtm.mjs` | Kaynak DTM’den altküme/metadata çıkarımı ve JP2 başlık incelemesi |
 | `test/core.test.mjs` | Saf hesaplar, no-data, sim, snapshot ve registry birim kontrolleri |
 | `scripts/smoke-e2e.mjs` | Başsız tarayıcı etkileşim/kabul kontrolü ve `test-output/` screenshot’ları |
@@ -105,7 +105,7 @@ Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulum
 1. **Stage 6 doğrulamasını kapat:** Lisans/usage alanı, sayısal spatial bounds/intersection ve zorunlu doğrulanmış düşey datum alanlarını validator’a ekle; transform/frame kontrolünü açık kanıtla fail-closed yap; synthetic valid/invalid testleri güncelle. İlk bounded kodlama promptu hazırlanmıştı; registry’nin son hali ise promptun bazı kısımlarını içeriyor, tüm boşlukları değil. Bir sonraki AI kodlama adımında güncel kaynak incelensin.
 2. **Gerçek organizer dataset’i gelirse:** Önce dosya/label/SIS/provenance, format, CRS, birim/datum, zaman/kapsam, no-data, scaling/offset, lisans ve footprint doğrula. Uygun loader yoksa `UnavailableLayer`/HiRISE fallback kullan. Bilinmeyen CRS’i tahmin etme.
 3. **PLACES raw CSV’yi engelsiz ağdan al:** PDS Search API ile doğrulanmış aynı release/product’ı indir; coordinate frame ve label/SIS ile Sol 120–164 gerçek polyline’ı çıkar, DTM footprint/no-data’yı kontrol et. Erişim yine bloklanırsa mevcut simplified line ve görünür caveat kalır.
-4. **Demo freeze:** Etkinlik tarihleri 14–15 Kasım 2026 olduğu kullanıcı tarafından bildirildi; 12 Kasım itibarıyla yaklaşık iki gün var. İlk demo için özellik eklemeyi erken dondur, kullanıcı akışını ve attribution/fallback’i göster; son 4 saatte yalnız kritik hata düzelt.
+4. **Demo freeze:** Etkinlik tarihleri 14–15 Kasım 2026 olduğu kullanıcı tarafından bildirildi; 13 Kasım itibarıyla yaklaşık bir gün var. İlk demo için özellik eklemeyi erken dondur, kullanıcı akışını ve attribution/fallback’i göster; son 4 saatte yalnız kritik hata düzelt.
 5. **3D:** Etkinlik sonrasına ertelendi. Önce mevcut `WorldSnapshot` ve surface adapter korunarak renderer spike yap; Mars 2000 `zM` ile display vertical offset’i ayır. Yeni motor/ekonomi ancak açık kapsam ve zaman varsa.
 
 ## 5. Kaynaklar ve atıf

@@ -1,6 +1,6 @@
 # NASA Space Apps 2026 — Martian Map devir notu
 
-**Güncelleme:** 12 Kasım 2026  
+**Güncelleme:** 13 Kasım 2026
 **Proje bağlamı:** Kullanıcı kontrollü Marswalk; uygulama kodu bu klasöre eklenmez.
 
 **Durum notu:** Bu devir belgesi araştırma ve eski iş planı içerir. Güncel kod durumu için önce `Sim/README.md`, `Sim/public/js/` ve `Sim/İkinci Beyin İlerleme Notları.md` dosyalarını kontrol et. Ortak ürün/ajan kuralları `SYSTEM_PROMPT.md`, teknik plan ise `road map.md` içindedir.
@@ -53,9 +53,10 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 |---|---|---|
 | Kaynakta mevcut | HiRISE DTM penceresi, PDS grid dönüşümü, kullanıcı hareketi, saat, rota sapması/koridoru, DTM kotu ve Horn eğimi | Çalışan kod ve kabul davranışı için `Sim/README.md` ile kaynak/testleri esas al. DTM yoksa oyun açılmalı, katman unavailable kalmalı. |
 | Kaynakta mevcut | `SurfaceProvider`, manifest validator/registry, HiRISE default ve fallback, immutable `WorldSnapshot` | Registry genel yeni format parser’ı değildir. Stage 6 validator boşlukları aşağıda açıkça listelenmiştir. |
-| Açık | Stage 6 manifest doğrulamasını fail-closed tamamla | Lisans/usage, sayısal footprint ve route intersection, doğrulanmış vertical datum, zorunlu expectedFrame ve dönüşüm kanıtı; sentetik testler. |
-| Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; koordinat frame ve DTM kapsamı doğrulanmalı. Erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
-| Kuruldu; push bekliyor | Git ile iki kişilik paylaşım | Yerel `main`, `origin` ve başlangıç commit’i `54747f7` kurulu. Push sırasında LFS S3 sertifika doğrulaması başarısız oldu. IMG/JP2/F32 LFS’te; AI belgeleri ile kod aynı repoda. |
+| Kaynakta mevcut | Modül ayrımı ve snapshot/provider sözleşmesi | Dosya yolları için `Sim/README.md` ve `Sim/public/js/` esas alınır; registry ve `WorldSnapshot` kaynakta vardır. |
+| Açık | Stage 6 manifest doğrulamasını fail-closed tamamla | License/usage, sayısal footprint+kesişim, açıkça doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtı. |
+| Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
+| Kaydedilmiş Git durumu | İki kişilik paylaşım | `docs/shared-code-boundaries` dalındaki `aae4830` commit’inin remote’a push edildiği önceki notta kayıtlı; bu oturumda remote ayrıca sorgulanmadı. |
 
 ## Sıradaki somut işler
 
@@ -65,4 +66,4 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 
 ### Git başlangıç durumu
 
-Workspace kökünde `emanzBey48/EA-Mars` remote’u ayarlanmış, ilk AI commit’i `54747f7` yerelde oluşmuş durumda. LFS objeleri sertifika doğrulaması yüzünden GitHub’a ulaşmadı; bağlantı güvenli biçimde düzeldikten sonra push edilmeli. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; SSL doğrulaması kapatılmasın.
+Önceki devir kaydına göre `origin/docs/shared-code-boundaries` üzerinde `aae4830` var ve push edilmiş; mevcut dal `docs/parallel-roadmap`, son görülen HEAD `aae4830`. Bu oturumda remote durumu doğrulanmadı. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; TLS doğrulaması kapatılmasın.

@@ -1,6 +1,6 @@
 ﻿# Marswalk — İkinci Beyin İlerleme Notları
 
-**Güncelleme:** 12 Kasım 2026  
+**Güncelleme:** 13 Kasım 2026
 **Kapsam:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Notun amacı:** Doğrulanmış proje bağlamını, geçerli kararları ve sıradaki işi tek yerde tutmak.
 
@@ -55,12 +55,13 @@ Sıradaki dış doğrulama işi, internete kısıtsız bir ortamda PDS Search AP
 
 **[MEVCUT DOSYALARLA DOĞRULANDI]** Bağımlılıksız Node.js ≥20, vanilla tarayıcı ES modülleri ve Canvas 2D. `npm install` gerekmiyor.
 
-- `public/js/geo.js`: equirectangular/PDS dönüşümleri, yerel dünya–piksel eşlemesi, nokta-segment uzaklığı, saf Horn 3×3 gradyanı.
-- `public/js/layers.js`: metadata descriptor’ı, `GridElevationLayer`, kot/eğim örnekleme, no-data/out-of-bounds/unavailable durumları, DTM yükleme.
-- `public/js/sim.js`: kullanıcı hareketi, senaryo saati, faz, rota ilerlemesi/sapması.
-- `public/js/render.js`: kamera, terrain görseli ve Canvas çizimi.
-- `public/js/input.js`: klavye/fare ve kontrol bağlama.
-- `public/js/hud.js`: DOM panelleri ve göstergeler.
+- `public/js/geo/geo.js`: equirectangular/PDS dönüşümleri, yerel dünya–piksel eşlemesi, nokta-segment uzaklığı, saf Horn 3×3 gradyanı.
+- `public/js/surface/layers.js`: metadata descriptor’ı, `GridElevationLayer`, kot/eğim örnekleme, no-data/out-of-bounds/unavailable durumları, DTM yükleme.
+- `public/js/surface/registry.js`: manifest validator, provider registry ve HiRISE fallback.
+- `public/js/simulation/sim.js`: kullanıcı hareketi, senaryo saati, faz, rota ilerlemesi/sapması ve `WorldSnapshot`.
+- `public/js/view/render.js`: kamera ve Canvas çizimi; `render()` snapshot/kamera/hazır terrain asset’i tüketir. `buildTerrainImage(layer)` görsel asset’i raster katmanından önceden üretir.
+- `public/js/input/input.js`: klavye/fare ve kontrol bağlama.
+- `public/js/view/hud.js`: DOM panelleri ve göstergeler.
 - `public/js/main.js`: birleştirme noktası; `window.marswalk` yalnız `?debug=1` veya açık debug bayrağıyla açılır.
 - `scripts/extract-dtm.mjs`: üst klasördeki gerçek DTM’den uygulama alt kümesini ve metadata’yı üretir; JP2 başlığını inceler.
 
@@ -81,7 +82,7 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 - Başsız tarayıcı smoke testi: `npm run smoke` — README Node.js ≥22 ve yerel Edge/Chrome gerektiğini söyler; DevTools ile giriş ve arayüz kontrolleri yapıp `test-output/` ekran görüntüleri üretir.
 - Elle demo: WASD/ok, P/Space duraklat-devam, R yeniden başlat; koridor dışına çıkma/geri dönme; DTM kot/eğim ve katman durumunu izleme.
 
-**[KULLANICI BİLDİRDİ]** Alparslan uygulamayı yerel olarak test ettiğini söyledi. Başarılı/başarısız sonucu veya hangi kontrollerin tamamlandığı henüz bildirilmedi. Bu notta hiçbir test veya uygulama çalıştırılmadı.
+**[KULLANICI BİLDİRDİ]** Alparslan 12 Kasım’da regresyon kontrollerinin geçtiğini bildirdi. Bu oturumda testler yeniden çalıştırılmadı; bağımsız doğrulama değildir.
 
 ## Kararlar ve açık konular
 
@@ -95,7 +96,8 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 ### Açık konular
 
 - Yerel kullanıcı testinin sonucu ve demo öncesi kalan UX sorunları.
-- `SurfaceProvider → immutable WorldSnapshot/RenderFrame` refaktörünün başka AI tarafından uygulanıp uygulanmadığı; mevcut kaynakta henüz görünmüyor.
+- Stage 6 manifest validator boşluklarının kapatılması ve yalnız istenirse ilgili sentetik testlerin çalıştırılması.
+- Proje belgeleri `docs/parallel-roadmap` dalında güncellendi; çalışma ağacı değişiklikleri henüz commit edilmedi.
 - PLACES ham CSV’nin engelsiz ağdan alınması, etiket/SIS ve koordinat çerçevesinin doğrulanması.
 - DTM–JP2 yarım piksel kayıt farkının gerektiğinde piksel merkezi/köşesi düzeyinde bağımsız yeniden teyidi.
 
@@ -105,7 +107,17 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 ## Git çalışma kuralı
 
-Workspace kökündeki `emanzBey48/EA-Mars` için yerel `main`, `origin` ve `54747f7` başlangıç commit’i vardır. Git LFS push sertifika doğrulamasında başarısız oldu; remote durumu doğrulanmış değildir. AI’lar her önemli ve gözden geçirilebilir görev aşamasında ilgili değişiklikleri ayrı commit etsin; staged diff’i önceden incelesin ve paylaşım için branch’ini push etsin. Push başarısızsa commit hash’ini ve hatayı bildir, TLS doğrulamasını kapatma. Alparslan entegrasyon sahibi olarak PR/diff’i inceler. Testler yalnız kullanıcı istediğinde çalıştırılır.
+`emanzBey48/EA-Mars` remote’una erişim doğrulandı. `docs/shared-code-boundaries` dalındaki `aae4830` commit’i kod modüllerini alan klasörlerine taşıdı ve remote’a push edildi; bilinen son durumda `main`’e merge edilmemişti. LFS’deki 381 MB IMG, 34 MB JP2 ve 7.5 MB F32 dosyaları Git LFS ile izleniyor. Workspace OneDrive altında; iki kişinin aynı `.git` klasörünü eşzamanlı kullanması yerine ayrı clone veya worktree ve ayrı branch kullanması önerilir.
+
+AI’lar önemli ve gözden geçirilebilir aşamaları küçük commit’lere ayırsın; staged diff’i önceden incelesin ve görev branch’ini paylaşsın. Kullanıcı onayı bekleniyorsa commit/push yapma. Push başarısızsa commit hash’ini ve gerçek hatayı bildir; TLS doğrulamasını kapatma. Alparslan entegrasyon sahibi olarak PR/diff’i inceler. Testler yalnız kullanıcı istediğinde çalıştırılır.
 
 **Teammate:** Becerileri ve ilgisi öğrenilene kadar sabit kod görevi atanmadı. Uygunsa PLACES kaynak/koordinat doğrulaması veya demo QA ayrı koşullu paket olabilir.
+
+## 13 Kasım 2026 oturum özeti
+
+- **[KAYNAKTA TAMAMLANDI]** `Sim/public/js` modülleri alanlara göre düzenlendi: `geo/`, `surface/`, `simulation/`, `input/` ve `view/`. `main.js` ile `config.js` entegrasyon noktaları olarak kökte kaldı; `index.html` giriş yolu değişmedi.
+- **[MİMARİ KARAR]** Her modülün paylaşılan çalışma zamanı state’ini okuyacağı mutable global dosya oluşturulmadı. Ortak değişmeyen değerler `config.js`’te; çalışma zamanı bağımlılıkları parametre/callback ile aktarılıyor. `main.js`, `config.js` ve snapshot/provider sözleşmeleri koordine edilerek değiştirilmesi gereken sıcak noktalardır.
+- **[AÇIK]** Rota geometrisi ve metrikleri hâlâ `geo` ile `simulation` arasında dağılmıştır; henüz `route/` modülü yok. 3D renderer da yok; etkinlik öncesi ertelenmiş olup daha sonra `view/3d/` altında değerlendirilebilir.
+- **[GIT]** `aae4830 refactor: group simulation modules by domain` commit’i mevcut HEAD ve `docs/parallel-roadmap` dalının tabanıdır; önceki notta `origin/docs/shared-code-boundaries` dalına push edildiği kayıtlı, fakat bu oturumda remote doğrulanmadı. Roadmap ve bu notta henüz commit edilmemiş değişiklikler bulunuyordu; bu oturumda proje promptu ve devir belgeleri de eşitlendi. Uygulama koduna/testlere dokunulmadı.
+- **[DOĞRULAMA]** `git diff --check` temizdi. Bu oturumda test çalıştırılmadı.
 

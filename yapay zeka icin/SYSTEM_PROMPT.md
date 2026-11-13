@@ -2,7 +2,7 @@
 
 ## Son güncelleme / durum
 
-- **Güncelleme:** 12 Kasım 2026.
+- **Güncelleme:** 13 Kasım 2026.
 - **Durum:** Kullanıcı kontrollü 2D Canvas MVP, SurfaceProvider/immutable WorldSnapshot sınırı ve ilk manifest/provider registry kaynakta mevcut. Stage 6 validator’ı kısmen tamamlandı; aşağıda açıklanan license, numeric footprint ve fail-closed vertical datum boşlukları açık.
 - **Kullanıcı bildirimi:** Alparslan regresyon kontrollerinin geçtiğini söyledi. Bu promptu izleyen ajan bunları yeniden çalıştırmadıkça bağımsız doğrulama iddiasında bulunmamalı.
 - **Etkinlik tarihi:** 14–15 Kasım 2026 kullanıcı tarafından bildirildi; resmi takvim olarak bağımsız doğrulanmış gibi sunma.
@@ -64,7 +64,7 @@ Vanilla JS ES modules + Canvas 2D; package.json Node.js ≥20, bağımlılık yo
 - `public/js/simulation/sim.js`: hareket/saat/route metrics ve deeply frozen `createWorldSnapshot`.
 - `public/js/main.js`: provider seçer, her kare snapshot üretip renderer/HUD’a verir.
 - `public/js/view/hud.js`: snapshot ve layer metadata/status gösterir.
-- `public/js/view/render.js`: render() snapshot/camera/prepared terrain asset alır; `buildTerrainImage` halen layer’dan görsel asset hazırlar.
+- `public/js/view/render.js`: `render()` snapshot/camera/prepared terrain asset alır; `buildTerrainImage(layer)` görsel terrain asset’ini önceden layer’dan hazırlar. Renderer kare başına raster örneklemesi yapmaz.
 - `public/js/input/input.js`: kontroller.
 - `scripts/extract-dtm.mjs`: kaynak DTM’den altküme üretir, metadata doğrular ve orto header inceler.
 - `test/core.test.mjs`, `scripts/smoke-e2e.mjs`: unit/E2E kabul akışları.
@@ -73,13 +73,13 @@ Snapshot’taki `astronaut.zM` arşiv DTM’sinden gelen Mars 2000 yüzey kotudu
 
 ## Stage 6 mevcut durumu: kısmi manifest/provider intake
 
-`registry.js` şu an status’ları (`supported`, `needs_review`, `unavailable`, `invalid`), field-level CRS/unit/datum/grid/pixel registration/valueEncoding/no-data/time/access validation’ı, provider register/resolve/fallback’i uyguluyor. Main default olarak HiRISE provider’ı seçiyor ve UI selection/validation bilgisini gösterebiliyor. `SUPPORTED_FORMATS` şu an yalnız `PDS3_PC_REAL_F32_WINDOW`; organizer verisi `Sim/data` içinde yok. Bu, generic parser veya gerçek yeni data adapter’ı olduğu anlamına gelmez. Yeni format/CRS için gerçek kaynak ve özel loader gerekir.
+`registry.js` şu an status’ları (`supported`, `needs_review`, `unavailable`, `invalid`), alan bazlı kimlik/provenance/body/time/unit/datum/CRS/grid/valueEncoding/access kontrollerini, provider register/resolve/fallback’i uyguluyor. Main default olarak HiRISE provider’ı seçiyor ve UI selection/validation bilgisini gösterebiliyor. `SUPPORTED_FORMATS` şu an yalnız `PDS3_PC_REAL_F32_WINDOW`; organizer verisi `Sim/data` içinde yok. Bu, generic parser veya gerçek yeni data adapter’ı olduğu anlamına gelmez. Yeni format/CRS için gerçek kaynak ve özel loader gerekir.
 
 Güncel statik incelemede şu eksikler var; validator’a yeni verified manifestleri geçirmekten önce kapat:
-1. Manifest `license`/usage terms zorunlu değil ve doğrulanmıyor; attribution tek başına kullanım hakkı bilgisinin yerine geçmez.
+1. Manifestte `license`/usage alanı yok ve doğrulanmıyor; attribution tek başına kullanım hakkı bilgisinin yerine geçmez.
 2. `coverage.description` metni aranıyor ama sayısal bounds/footprint ve route/canonical-world intersection doğrulanmıyor.
 3. `verticalDatumVerified === false` review yapıyor; alanın eksik olması supported olmayı engellemiyor. Açık `true` ve kaynak dayanağı iste; aksi halde `needs_review`.
-4. `crs.transformVerified` bir metadata bayrağıdır, dönüşümün kendisini hesaplayıp doğrulamaz. `expectedFrame` her kullanımda zorunlu olmalı; dönüşüm parametreleri/footprint kanıtı kontrol edilmeden active sampling açma.
+4. `validateLayerManifest(manifest, expectedFrame)` içindeki çerçeve karşılaştırmaları `expectedFrame` verilirse çalışıyor; argüman şu an opsiyonel. `crs.transformVerified` yalnız metadata bayrağıdır, dönüşümün kendisini hesaplayıp doğrulamaz. `expectedFrame` her kullanımda zorunlu olmalı; dönüşüm parametreleri/footprint kanıtı kontrol edilmeden active sampling açma.
 
 Bu boşluklar için sentetik validator testleri ekle. Gerçek organizer verisi yoksa format uydurma; hiRISE default ve fallback aynı kalmalı. Sim/render çekirdeğini candidate formatına göre değiştirme. Registry’nin programmatic `register()` API’si vardır; main bugün gerçek competition entry kaydetmiyor/otomatik data discovery yapmıyor.
 

@@ -1,6 +1,6 @@
 ﻿# Marswalk — Tam Proje Yol Haritası
 
-**Son güncelleme:** 12 Kasım 2026  
+**Son güncelleme:** 13 Kasım 2026
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Bu belge:** Kodlama planı ve karar kaydıdır; uygulama/test çalıştırma kaydı değildir.
 
@@ -12,7 +12,7 @@
 - **BEKLEMEDE:** Bağımlılık/etkinlik zamanı gelene kadar ertelendi.
 - **KULLANICI BİLDİRDİ:** Kullanıcı tarafından iletilen tarih/test bilgisi; bağımsız doğrulama değildir.
 
-**[KULLANICI BİLDİRDİ]** Etkinlik tarihleri 14–15 Kasım 2026; bugün 12 Kasım olduğundan hazırlık için yaklaşık iki gün var. Bu yol haritası tarih bilgisini resmi takvimden yeniden doğrulamış sayılmaz.
+**[KULLANICI BİLDİRDİ]** Etkinlik tarihleri 14–15 Kasım 2026 olarak bildirildi; bu yol haritasının 13 Kasım güncellemesi itibarıyla yaklaşık bir gün kaldı. Bu tarih bilgisi resmi takvimden bağımsız doğrulanmış değildir.
 
 **[KULLANICI BİLDİRDİ]** Alparslan regresyon kontrollerinin tümünün geçtiğini söyledi. Bu notu hazırlayan ajan uygulamayı/testleri yeniden çalıştırmadı ve sonuçlara ilişkin kullanıcıdan ayrıntılı log alınmadı.
 
@@ -85,7 +85,7 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 ### 4. Hesaplama/veri/render ayrımı ve snapshot sözleşmesi — TAMAMLANDI (kaynakta)
 
 - **Amaç:** Bilimsel hesapları UI/render durumundan ayırıp ileride başka renderer’a geçişi ucuzlatmak.
-- **Çıktı:** `geo.js` koordinat ve Horn saf fonksiyonları; `layers.js` SurfaceProvider rolü; `sim.js` derin dondurulmuş `WorldSnapshot`; HUD ve render aynı snapshot’ı tüketir; debug yalnız opt-in.
+- **Çıktı:** `public/js/geo/geo.js` koordinat ve Horn saf fonksiyonları; `public/js/surface/layers.js` SurfaceProvider rolü; `public/js/simulation/sim.js` derin dondurulmuş `WorldSnapshot`; HUD ve render aynı snapshot’ı tüketir; debug yalnız opt-in.
 - **Sahip:** Alparslan.
 - **Bağımlılık:** 2D MVP.
 - **Kabul:** Snapshot kopyalanıp derin dondurulmuş; `zM` Mars 2000 kotu, datum/status ile; no-data/unavailable `zM:null`; HUD örnekleme yapmıyor; renderer canlı sim/layer/adapter almıyor.
@@ -107,7 +107,7 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 - **Açık çıktı:** Mevcut registry’yi aşağıdaki fail-closed koşullarıyla tamamlamak ve sentetik testlerle sınamak; yeni yarışma verisi veya format adapter’ı uydurmamak.
 - **Sahip:** Alparslan (factory/entegrasyon). Takım arkadaşı becerileri uygunsa ayrı manifest/atıf denetimi veya test QA paketi alabilir.
 - **Bağımlılık:** Aşama 4 SurfaceProvider/WorldSnapshot. Gerçek organizer dataset’i henüz `Sim/data` içinde yok.
-- **Mevcut açıklar:** (1) license/usage terms zorunlu değil; (2) coverage metinsel, sayısal footprint ve rota/dünya kesişimi doğrulanmıyor; (3) `verticalDatumVerified` yokken manifest supported olabilir; (4) `expectedFrame` verilmesi zorunlu değil ve `transformVerified` bayrağı dönüşümü matematiksel olarak doğrulamıyor.
+- **Mevcut açıklar:** (1) license/usage alanı yok ve doğrulanmıyor; (2) coverage yalnız `description` metniyle denetleniyor, sayısal footprint ve rota/dünya kesişimi doğrulanmıyor; (3) `verticalDatumVerified` yalnız `false` iken review oluşturuyor, alan yokken manifest supported olabilir; (4) `expectedFrame` `validateLayerManifest()` için opsiyonel ve verilmezse CRS/grid karşılaştırmaları atlanıyor; `transformVerified` bayrağı dönüşümü matematiksel olarak doğrulamıyor.
 - **Kabul:** Açıklar fail-closed kapanır; HiRISE çıktısı/snapshot alanları ve fallback davranışı korunur; bilinmeyen format/CRS aktif örnekleme açmaz; UI durumları görünür kalır. Dönüşüm ve footprint kanıtı yalnız manifest bayrağı olarak kalmayıp doğrulanabilir girdilerle sınanır.
 - **Tahmin:** Kodun yeni denetiminden önce süre tahmini verilmesin. Gerçek format geldiğinde adapter kapsamı o verinin label/SIS ve dönüşümüne göre ayrıca belirlenir.
 - **Kesme çizgisi:** Bilinmeyen format/CRS’i “otomatik algılama” ile içeri alma; event sırasında veri geldiğinde ilk 60–90 dakikada metadata/erişim doğrulanamazsa yerel HiRISE fixture’a dön.
@@ -141,19 +141,30 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 - **Kabul:** 3D yalnız arşiv/hesaplanan veriyi doğru provenance ile sunar; display vertical offset scientific `zM`’yi değiştirmez; no-data yüzeyleri boş/işaretli kalır; mevcut snapshot ve sim kuralları aynı kalır.
 - **Tahmin:** 4–8 saat yalnız renderer spike; tam oynanabilir 3D dikey dilim 2–5 odaklı gün (framework ve asset seçimine göre). Hackathon son iki gününde başlama; süre aşılırsa 2D’ye dön.
 
-## Ekip ve çalışma akışı
+## Paralel çalışma şeritleri ve dosya sınırları
 
-- Alparslan uygulama ve entegrasyon sahibidir.
-- Takım arkadaşının becerileri bilinmediği için rol sabitlenmemiştir. Uygunluğuna göre koşullu paketler: PDS label/atıf doğrulama, veri manifest QA, duman testi/demo akışı, sunum görselleri.
-- Kodlamada yalnız tek bir sonraki dikey dilim aç; mevcut çalışır demo ve `Sim/data` girdilerini koru. Doğrulanmamış dış veri, ekstra katman veya 3D motoru kritik yolu kesmemeli.
+İki kişilik ekipte teknik sahipliği önceden sabitleme; takım arkadaşının becerileri öğrenildikçe bu şeritlerden uygun olanı seçin. Her bağımsız iş bir kabul ölçütü ve belirli bir dosya kümesiyle tanımlansın. Aynı dosya kümesini aynı anda yalnız bir kişi/AI değiştirsin; bağımsız şeritler ayrı branch ve commit'lerle ilerleyebilir.
 
-## Git paylaşımı — 12 Kasım 2026 denetim durumu
+| Şerit | Ana klasör | Bağımsız iş örnekleri ve sınır |
+|---|---|---|
+| Geometri (`geo`) | `Sim/public/js/geo/` | PDS koordinat dönüşümünü veya saf geometri fonksiyonlarını incelemek; dönüşüm varsayımlarını belgelemek. Veri yükleyicisini veya simülasyon state'ini değiştirmez. |
+| Yüzey/veri (`surface`) | `Sim/public/js/surface/` | Manifest/atıf/lisans metadata QA’sı veya yeni validator kuralının sınırlı uygulaması. Gerçek dataset, label ve kullanım koşulu doğrulanmadan adapter/format uydurulmaz. |
+| Simülasyon (`simulation`) | `Sim/public/js/simulation/` | Hareket, saat, faz ve rota metriği kurallarını incelemek; UI/DOM veya Canvas koduna dokunmamak. |
+| Girdi (`input`) | `Sim/public/js/input/` | Klavye ve kontrol erişilebilirliği/olay eşlemesini iyileştirmek; simülasyon kuralını bu dosyalara taşımamak. |
+| Görünüm (`view`) | `Sim/public/js/view/` | HUD okunabilirliği, 2D Canvas sunumu ve görsel varlıkların sunumunu geliştirmek; bilimsel örnekleme veya rota hesabını görünüm katmanına eklememek. |
 
-- Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında kuruldu ve `origin` ayarlandı. Başlangıç commit’i `54747f7` yerelde. Push, Git LFS nesnelerini `github-cloud.s3.amazonaws.com` adresine yüklerken sertifika doğrulama hatası verdi; uzak dal doğrulanmış değil.
+Ek bağımsız işler olarak PLACES kaynak/koordinat doğrulaması, attribution/manifest QA, demo anlatısı ve görsel inceleme alınabilir; bunlar belirli bir takım arkadaşına ancak beceri ve ilgi alanı öğrenilince verilsin. `public/js/main.js`, `config.js` ve snapshot/provider sözleşmeleri entegrasyon sıcak noktalarıdır: entegrasyon sahibi bunları koordine eder ve aynı anda yalnız bir sahibi değiştirir. Rota hesabı halen `geo` ile `simulation` arasında dağılmıştır; bu aşamada yeni `route/` modülü oluşturmayın. 3D renderer mevcut değildir ve etkinlik öncesi ertelenmiştir; ileride aynı snapshot sözleşmesini tüketen bir `view/3d/` uzantısı olarak değerlendirilebilir.
+
+Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi clone’unu kullanmalı; aynı makinede çalışıyorlarsa OneDrive dışında ayrı clone veya ayrı Git worktree tercih edilmeli. Aynı OneDrive klasöründeki ortak `.git` checkout’unda iki kişinin/AI’nın paralel dosya ve Git işlemleri güvenli değildir. Entegrasyon sahibi branch/PR diff’lerini gözden geçirip birleştirir. Kodlamada yalnız tek bir sonraki dikey dilim aç; mevcut çalışır demo ve `Sim/data` girdilerini koru. Doğrulanmamış dış veri, ekstra katman veya 3D motoru kritik yolu kesmemeli.
+
+## Git paylaşımı — 13 Kasım 2026 durum kaydı
+
+- Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu ve `origin` ayarlı. `docs/shared-code-boundaries` branch’indeki `aae4830` commit’inin `origin/docs/shared-code-boundaries`’a push edildiği biliniyor. Mevcut bilgiye göre bu commit `main`’e birleştirilmiş değil.
+- Bu yol haritası görevi `docs/parallel-roadmap` branch’inde yürütülüyor; bu güncelleme henüz commit edilmedi veya push edilmedi. Uzak branch durumu ayrıca sorgulanmadı.
 - `yapay zeka icin` yönergeleri ile `Sim` kodu aynı repo kökündedir. 381 MB IMG, 34 MB JP2 ve 7.5 MB F32 `.gitattributes` ile Git LFS üzerinden izlenir; normal Git’e eklenmez.
-- Workspace OneDrive altında olduğundan, Git working copy’yi OneDrive senkronizasyonunun dışına almak daha güvenlidir. Takım arkadaşları ayrı clone kullansın; OneDrive `.git` senkronizasyonu ortak Git yöntemi olmasın.
+- Workspace OneDrive altında olduğundan, Git çalışma kopyasını OneDrive senkronizasyonunun dışına almak daha güvenlidir. Takım üyeleri ayrı clone/worktree kullansın; OneDrive `.git` senkronizasyonu ortak Git yöntemi olmasın.
 - `Sim/.gitignore` `dtm_subset.f32`, `dtm_subset.json` ve `ortho_inspection.json` dosyalarını izlemeye alır; F32 LFS üzerinden klonlanır. Mevcut `test-output` ekran görüntüleri de ilk importta eklendi.
-- AI’lar her önemli, gözden geçirilebilir görev aşamasında ilgili değişiklikleri ayrı commit etsin; büyük işleri tek commit’e yığmasın. Commit öncesi `git status` ve staged diff kontrol edilsin; ilgisiz kullanıcı değişiklikleri eklenmesin. Görev branch’i remote’a push edilsin; push başarısızsa hash ve engel raporlansın. Güvenlik/sertifika doğrulaması kapatılmasın.
+- AI’lar her önemli, gözden geçirilebilir görev aşamasında ilgili değişiklikleri ayrı commit etsin; büyük işleri tek commit’e yığmasın. Commit öncesi `git status` ve staged diff kontrol edilsin; ilgisiz kullanıcı değişiklikleri eklenmesin. Kullanıcı onayı gereken durumda onay olmadan commit/push yapılmasın. Push başarısızsa hash ve engel raporlansın. Güvenlik/sertifika doğrulaması kapatılmasın.
 - Commit author kimliği AI’yı belirtmeli ve bir insanı taklit etmemeli. Ana dal entegrasyon sahibi tarafından PR/diff incelemesiyle birleştirilmeli. Testler yalnız kullanıcı istediğinde çalıştırılmalı; çalıştırılmayan test başarılıymış gibi raporlanmamalı.
 
 ## Şu anki en iyi sonraki adım

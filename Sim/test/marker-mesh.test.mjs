@@ -165,6 +165,34 @@ test('marker-mesh: strict no-data handling — unknown elevations are omitted, N
   assert.equal(emptyMesh.indices.length, 0);
 });
 
+test('marker-mesh: explicit non-ok status rejects stale elevation before sampler fallback', () => {
+  let samplerCalls = 0;
+  const stalePoint = {
+    id: 'sol164-roubion',
+    xM: 100,
+    yM: 0,
+    zM: -2572.8,
+    elevationM: -2572.8,
+    elevationStatus: 'no_data',
+  };
+
+  const mesh = buildMarkerMeshes({
+    waypoints: [stalePoint],
+    displayConfig: DISPLAY_CONFIG,
+    sampleElevation: () => {
+      samplerCalls++;
+      return { status: 'ok', value: -2572.8 };
+    },
+  });
+
+  assert.equal(samplerCalls, 0, 'an explicit non-ok status must stop before sampler fallback');
+  assert.equal(mesh.metadata.beaconCount, 0);
+  assert.equal(mesh.metadata.omittedCount, 1);
+  assert.equal(mesh.metadata.waypoints[0].elevationStatus, 'no_data');
+  assert.equal(mesh.metadata.waypoints[0].elevationM, null);
+  assert.equal(mesh.positions.length, 0);
+});
+
 test('marker-mesh: corridor posts reflect corridorHalfWidth changes and route geometry', () => {
   const waypoints = [
     { id: 'sol120-wb1', xM: 0, yM: 0, zM: -2560 },

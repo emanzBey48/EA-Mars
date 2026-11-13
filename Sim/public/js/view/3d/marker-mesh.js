@@ -314,6 +314,9 @@ class MeshBuilder {
 }
 
 function resolveElevation(point, sampleElevationFn) {
+  if (point?.elevationStatus !== undefined && point.elevationStatus !== 'ok') {
+    return { status: point.elevationStatus, value: null };
+  }
   if (Number.isFinite(point.zM)) return { status: 'ok', value: point.zM };
   if (Number.isFinite(point.elevationM)) return { status: 'ok', value: point.elevationM };
   if (typeof sampleElevationFn === 'function') {

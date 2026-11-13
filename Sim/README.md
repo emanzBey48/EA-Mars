@@ -21,7 +21,11 @@ npm run smoke          # isteğe bağlı: yerel Edge/Chrome ile başsız uçtan 
 
 ## Kontroller
 
-WASD / ok tuşları: hareket · P / Space: duraklat-devam · R: yeniden başlat · + / − / tekerlek: yakınlaştırma (yalnız görünüm).
+- **2D:** WASD / ok tuşları hareket eder; P veya Space duraklatır/devam ettirir.
+- **3D:** WASD / ok tuşları kamera yönüne göre hareket eder; Space küçük bir simülasyon sıçraması yapar; P duraklatır/devam ettirir. Sahneye tıklamak fare bakışını açar; Esc fare kilidini bırakır.
+- **Her iki görünümde:** R yeniden başlatır; + / − / fare tekerleği yalnız görünümü yakınlaştırır.
+
+3D görünümünü doğrudan açmak için sunucuyu başlattıktan sonra `http://127.0.0.1:8080/?view=3d` adresini kullanın. Bu seçim, doğrulanmış HiRISE DTM ve WebGL2 kullanılabilir, başlangıç konumunda kot biliniyorsa uygulanır; aksi durumda 2D görünüm açık kalır.
 
 ## Yapı
 
@@ -44,7 +48,7 @@ WASD / ok tuşları: hareket · P / Space: duraklat-devam · R: yeniden başlat 
 
 Mevcut kaynakta 2D Canvas MVP'ye ek olarak WebGL2 terrain viewer, göz hizası first-person kamera ve CPU mesh builder bulunur. FPS burada keşif kamerası/kontrolüdür; shooter değildir. Başlangıç verisi doğrulanmış yerel HiRISE DTM fixture'ıdır; yeni veri seti gerekmez.
 
-- **Mevcut 3D paket:** `public/js/view/3d/renderer.js`, `camera.js`, `terrain-mesh.js`, `astronaut-rig.js` ve `main.js` entegrasyonu. Renderer, rig'in değişmez parça şablonunu ve snapshot'tan üretilen pozu WebGL2'ye aktarır.
+- **Mevcut 3D paket:** `public/js/view/3d/renderer.js`, `camera.js`, `terrain-mesh.js`, `astronaut-rig.js`, `marker-mesh.js` ve `main.js` entegrasyonu. `marker-mesh.js`, Sol 120 / WB1 ve Sol 164 / Roubion beacon’larıyla basitleştirilmiş rota zemin kılavuzlarını ve senaryo koridoru işaretçilerini üretir; renderer bunları 3D sahnede çizer. Bu rota gerçek Perseverance/PLACES traverse geometrisi değildir ve koridor güvenlik sınırı değildir. Renderer ayrıca rig'in değişmez parça şablonunu ve snapshot'tan üretilen pozu WebGL2'ye aktarır.
 - **Mesh sözleşmesi:** `positions: Float32Array` (local X/Y metre ve sunum Z), `normals: Float32Array`, `indices: Uint32Array`, özgün Mars 2000 kotu için `sourceElevationsM`, yerel bounds ve kaynak/datum/çözünürlük ile valid/atlanan hücre sayısını içeren metadata. Görsel Z, `referenceElevationM` ve `verticalScale` ile hesaplanır; kaynak `zM` değişmez.
 - **No-data/fallback:** No-data/invalid köşeli quad üçgenlenmez; sıfırla doldurma veya boşluk üzerinden köprü kurma yoktur. 2D HiRISE fallback korunur. Stage 9 runtime kabulinde 2D↔3D, WebGL/mesh fallback, unknown elevation ve ilk mesh açılış maliyeti tarayıcıda doğrulanmalı.
 - **Kontroller:** 3D’de WASD/oklar kamera yönüne göre hareket eder; sahneye tıklamak fare bakışını pointer lock ile açar, Esc bırakır; Space kısa simülasyon sıçramasını, P duraklatmayı yapar. 2D’de Space duraklat/devam olarak kalır. R yeniden başlatır.

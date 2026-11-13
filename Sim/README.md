@@ -40,15 +40,16 @@ WASD / ok tuşları: hareket · P / Space: duraklat-devam · R: yeniden başlat 
 | `scripts/smoke-e2e.mjs` | DevTools protokolüyle gerçek tuş basışlı kabul testi (normal çalıştırmada `window.marswalk` olmadığını doğrular, ardından `?debug=1` ile testleri yürütür) |
 | `server.mjs` | Node standart kütüphanesiyle statik sunucu (127.0.0.1) |
 
-## Sonraki geliştirme dilimi: paralel 3D terrain paketi
+## Mevcut 3D viewer ve sonraki FPS dilimi
 
-Bu bölüm yol haritasıdır; aşağıdaki 3D modüller mevcut kaynakta henüz yoktur. Şu anki çalışan uygulama 2D Canvas MVP’dir. Yarışma verisi gelene kadar ilk 3D dikey dilim doğrulanmış yerel HiRISE DTM fixture’ını kullanır; bu ilk dilim için ek veri seti gerekmez.
+Mevcut kaynakta 2D Canvas MVP'ye ek olarak WebGL2 terrain viewer, orbit kamera ve CPU mesh builder bulunur. Bu ilk 3D teknik dilimidir; kullanıcının istediği birinci şahıs Mars keşif deneyimi henüz uygulanmamıştır. FPS burada first-person kamera/kontrol demektir; shooter değildir. Başlangıç verisi doğrulanmış yerel HiRISE DTM fixture'ıdır; bu iş için yeni veri seti gerekmez.
 
-- **Alparslan / entegrasyon sahibi:** Renderer runtime’ını (Three.js veya WebGL2) seçer; `public/js/view/3d/renderer.js`, `camera.js` ve `public/js/main.js` entegrasyonunu yürütür. `config.js` ve snapshot/provider sözleşmelerinde tek koordinasyon sahibidir.
-- **Takım arkadaşı / paralel kod paketi:** Yeni `public/js/view/3d/terrain-mesh.js` içinde `GridElevationLayer` girdisinden runtime bağımsız CPU mesh asset’i üretir. Hücre geçerliliği için `cellState()` ve grid koordinatları için mevcut dönüşümleri kullanır; 3D kütüphane deneyimi önkoşul değildir. Bu dosya ve kendine özel yardımcılar dışındaki entegrasyon dosyalarına dokunmaz.
-- **Asset sözleşmesi:** `positions: Float32Array` (local X/Y metre ve sunum Z), `normals: Float32Array`, `indices: Uint32Array`, vertex başına özgün Mars 2000 kotunu taşıyan `sourceElevationsM`, yerel bounds ve kaynak/datum/çözünürlük ile valid/atlanan hücre sayısını içeren provenance/display metadata. Görsel Z, açık `referenceElevationM` ve `verticalScale` ile hesaplanır; kaynak `zM` değiştirilmez.
-- **No-data ve sınırlar:** No-data/invalid köşe içeren grid quad’ı üçgenlenmez; değer sıfırla doldurulmaz ve boşluk üzerinden yüzey köprüsü kurulmaz. Builder Three.js/WebGL nesnesi döndürmez, kare başına çağrılmaz ve CRS/datum dönüşümü uydurmaz. Renderer her karede immutable `WorldSnapshot`, kamera ve hazır mesh asset’i tüketir; 2D fallback korunur.
-- **Çalışma şekli:** İki kişi ayrı clone/worktree ve branch kullanır; aynı OneDrive checkout’unda eşzamanlı Git işlemi yapmaz. Mesh görevi test dosyası değiştirmez/test çalıştırmaz; test kapsamı ayrıca istenirse açılır. Stage 6 manifest/adapter intake’i gerçek yarışma verisi gelince ayrı iş olarak başlar ve ilk 3D dilimi bloke etmez.
+- **Mevcut 3D paket:** `public/js/view/3d/renderer.js`, `camera.js`, `terrain-mesh.js` ve `main.js` entegrasyonu. Alparslan runtime/kamera/entegrasyon ve `config.js`/snapshot/provider sözleşmelerinde tek sahibidir; Efe'nin renderer bağımsız mesh builder'ı tamamlandı.
+- **Mesh sözleşmesi:** `positions: Float32Array` (local X/Y metre ve sunum Z), `normals: Float32Array`, `indices: Uint32Array`, özgün Mars 2000 kotu için `sourceElevationsM`, yerel bounds ve kaynak/datum/çözünürlük ile valid/atlanan hücre sayısını içeren metadata. Görsel Z, `referenceElevationM` ve `verticalScale` ile hesaplanır; kaynak `zM` değişmez.
+- **No-data/fallback:** No-data/invalid köşeli quad üçgenlenmez; sıfırla doldurma veya boşluk üzerinden köprü kurma yoktur. 2D HiRISE fallback korunur. Stage 9 runtime kabulinde 2D↔3D, WebGL/mesh fallback, unknown elevation ve ilk mesh açılış maliyeti tarayıcıda doğrulanmalı.
+- **Sıradaki ürün dilimi:** Birinci şahıs kamera, kamera yönlü WASD, DTM yüzey teması ve kaynaklı Mars yerçekimi. Hareket kuralları `simulation/`, input eşlemesi `input/`, kamera/render sunumu `view/3d/` içinde kalır; `main.js` tek entegrasyon sahibinde olur. Atmosfer basıncı/yoğunluğu genel veya mevsimsel kaynak değeri olarak etiketlenir; Jezero anlık ölçümü ve gerçek suit/insan aerodinamiği gibi sunulmaz. Gerekli suit/drag parametreleri yoksa karakter yürüyüşüne atmosfer kuvveti eklenmez.
+
+**Ortogörüntü uyarısı:** JPEG 2000 çözücü olmadığı için `ESP_046060_1985_RED_C_01_ORTHO.JP2` uygulamada gösterilmez; mevcut zemin DTM'den türetilmiş hillshade + kot renklendirmesidir, orto değildir. Decoder/lisans ve JP2 `PixelIsArea` ile PDS piksel merkezi arasındaki yaklaşık yarım-piksel hizalama sorunu ayrı, bloke etmeyen iştir; hizalama doğrulanmadan orto overlay'i yapılmamalıdır.
 
 Görev kabul ölçütleri ve daha ayrıntılı render/snapshot sözleşmesi depo kökündeki `yapay zeka icin/road map.md` ve `AGENTS.md` dosyalarındadır.
 

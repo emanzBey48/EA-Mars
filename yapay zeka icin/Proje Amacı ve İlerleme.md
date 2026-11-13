@@ -8,11 +8,13 @@ Bu belge, projeyi devralan kişi veya başka bir yapay zekâ için adım adım d
 
 ## 1. Ürün vaadi ve sınırlar
 
-Marswalk’ın nihai amacı, kullanıcının astronotu Mars yüzeyinde yönettiği ayrıntılı bir 3D keşif simülasyonu oluşturmaktır. Şu anki Jezero 2D Canvas uygulaması oynanabilir ara MVP’dir; ürün vizyonunu değiştirmez. MVP rota ve koridor ilişkisini, arşiv DTM kotunu ve DTM’den türetilen eğimi kaynak/birim/yöntem bilgileriyle gösterir. Challenge adı *Interplanetary Survival Guide: Martian Map*.
+Marswalk’ın nihai amacı, kullanıcının astronotu Mars yüzeyinde **birinci şahıs bakışla keşif için** yönettiği ayrıntılı bir 3D simülasyon oluşturmaktır. Kullanıcının “FPS” ifadesi first-person keşif/kamera anlamındadır; silah/çatışma oyunu değildir. Şu anki Jezero 2D Canvas uygulaması oynanabilir ara MVP, kaynakta bulunan WebGL2 terrain viewer ise ilk teknik 3D dilimidir; hiçbiri nihai FPS deneyimi değildir. MVP rota ve koridor ilişkisini, arşiv DTM kotunu ve DTM’den türetilen eğimi kaynak/birim/yöntem bilgileriyle gösterir. Challenge adı *Interplanetary Survival Guide: Martian Map*.
 
-Ürün genel Mars fizik motoru, canlı NASA telemetrisi, gerçek rover kontrolü veya güvenlik/karar destek sistemi değildir. Rota sapması sadece seçilmiş senaryo çizgisine uzaklığı gösterir. 10 m/yan koridor uygulama varsayımıdır; güvenlik sınırı değildir. Bilimsel ölçüm, veri setinden hesaplanan sonuç, senaryo varsayımı ve UI değeri ayrı etiketlenmelidir.
+Ürün doğrulanmış genel Mars fizik motoru, canlı NASA telemetrisi, gerçek rover kontrolü veya güvenlik/karar destek sistemi değildir. Yeni first-person hareket Mars yerçekimi ve atmosferini kaynaklı, kapsamı açık parametrelerle dikkate almalıdır. NASA Planet Compare yüzey yerçekimini 3.71 m/s², NSSDC Mars Fact Sheet yaklaşık 3.73 m/s² olarak verir; kaynak/yuvarlama farkı belirtilmelidir. NSSDC ortalama basıncı 6.36 mbar (mevsimsel 4.0–8.7 mbar), yoğunluğu yaklaşık 0.016 ± 0.006 kg/m³ olarak verir. Bunlar Jezero’da belirli tarih/sol için ölçüm değildir. Suit/insan kütlesi, aerodinamik kesit/drag katsayısı ve yerel koşullar kaynaksızsa atmosferin karakter hareketine etkisini fiziksel gerçek gibi uydurma. Rota sapması sadece seçilmiş senaryo çizgisine uzaklığı gösterir. 10 m/yan koridor uygulama varsayımıdır; güvenlik sınırı değildir. Bilimsel ölçüm, veri setinden hesaplanan sonuç, senaryo varsayımı ve UI değeri ayrı etiketlenmelidir.
 
-**Kullanıcı etkileşimi:** WASD/oklarla astronot hareketi; P/Space duraklat/devam; R yeniden başlat; yakınlaştırma yalnız görünüm. Beklenen demo akışı 60–90 saniyedir.
+**Kullanıcı etkileşimi:** Mevcut simülasyon WASD/okları x/y düzleminde sabit hızlı senaryo hareketi için kullanır; bu henüz first-person fizik değildir. Nihai hedef göz hizası kamera, kamera yönüne göre hareket, DTM üzerinde yüzey teması ve kaynaklı yerçekimiyle düşey hareket içerir. P/Space duraklat/devam ve R yeniden başlat korunur. Beklenen demo akışı 60–90 saniyedir.
+
+**[KULLANICI BİLDİRDİ — 13 Kasım 2026]** Simülasyon açılıyor; arayüzde “Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor)” uyarısı görülüyor ve mevcut 3D görünüm istenen FPS deneyimine yakın değil. Bu kullanıcı gözlemidir; bağımsız runtime kabul raporu değildir. JPEG 2000 çözücü bulunmadığı için mevcut zemin DTM’den türetilmiş hillshade’dir, ortogörüntü değildir. JP2 decoder ve half-pixel kayıt/alignment doğrulaması ayrı ve first-person hareketten bağımsız iştir.
 
 ## 2. Çalışmanın kronolojisi ve her aşamanın amacı
 
@@ -102,11 +104,12 @@ Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulum
 
 ## 4. Kalan işler ve öncelik
 
-1. **Öncelik — 3D dikey dilim:** Yarışma verisi gelene kadar yerel HiRISE fixture ile 3D terrain ve astronot-kamera deneyimini kur. Renderer sözleşmesi dokümana işlendi; iki ayrı dosya kümesi aynı anda geliştirilebilir.
-2. **İş bölümü:** Alparslan ayrı clone/worktree ve branch’te renderer runtime (Three.js/WebGL2) kararını versin, `view/3d/renderer.js`, `camera.js`, `main.js` entegrasyonunu ve `config.js`/snapshot/provider değişikliklerini sahiplensin. Takım arkadaşı ayrı clone/worktree ve branch’te renderer’dan bağımsız `view/3d/terrain-mesh.js` CPU builder’ını kodlasın; bu görev belirli bir 3D deneyimi varsaymaz. Ortak API typed positions/normals/indices, kaynak vertex kotları, yerel bounds ve provenance metadata’sıdır. No-data içeren quad üçgenlenmez; sıfır ikamesi/boşluk köprüsü yoktur. Avatar, input, HUD ve rota sunumu entegrasyondan sonraki aşamadır.
-3. **Yarışma verisi gelince:** Önce dosya/label/SIS/provenance, lisans, format, CRS, birim/datum, zaman/kapsam, no-data ve footprint’i doğrula; Stage 6 registry boşluklarını kapatıp yalnız kanıtlanan formatı bağla. HiRISE fallback’ini koru.
-4. **PLACES ayrı dış veri işi:** Aynı PDS release/product, label/SIS ve koordinat referansıyla Sol 120–164 gerçek polyline’ını doğrula; erişim yoksa sadeleştirilmiş hat caveat’ı kalır.
-5. **Etkinlik takvimi:** 14–15 Kasım 2026 kullanıcı bildirimidir. Tarih yaklaşmış olsa da mevcut öncelik kullanıcı yönlendirmesiyle 3D dikey dilimdir; teslim kapsamını ve demoyu entegrasyon sahibi belirlesin.
+1. **Stage 9 — 3D viewer runtime kabulü:** İlk WebGL2 terrain diliminin kodu mevcut. QA ajanı 2D testlerinin geçtiğini bildirdi; 3D toggle/fallback ve ilk açılış performansı tarayıcıda tam doğrulanmadı. Kullanıcı uygulamanın açıldığını, mevcut 3D'nin hedefe uzak olduğunu bildirdi.
+2. **Stage 10 — first-person keşif:** Alparslan entegrasyon sahibi olarak göz hizası kamera, kamera yönlü WASD, DTM zemin teması ve Mars yerçekimini içeren küçük bir hareket dilimini planlasın. `simulation/`, `input/`, `view/3d/` sorumlulukları ayrık; `main.js`, `config.js` ve snapshot/provider sözleşmeleri tek sahibinde kalır. `zM` kaynak kotu ve görsel Z ayrımı ile no-data fallback korunur. Efor henüz belirlenmedi.
+3. **Atmosfer/kuvvet modeli:** NASA ortalama/seasonal değerlerini referans ve senaryo girdisi olarak açıkça etiketle. Belirli Jezero hava koşulu veya gerçek uzay giysisi modeli olduğunu ileri sürme; gerekli kütle/drag/wind parametreleri kaynaklandırılmadan karakter hareketine atmosfer kuvveti uydurma.
+4. **Ortogörüntü ayrı işi:** JP2 çözme kütüphanesi/lisansı ve `PixelIsArea` ile PDS pixel-center yarım piksel farkı araştırılsın; hizalama doğrulanmadan görsel bindirme iddiası kurma. FPS hareketin önkoşulu değildir.
+5. **Yarışma verisi/PLACES:** Gerçek veri gelince Stage 6 intake’i kanıtla aç; gerçek PLACES traverse ise erişilebilir aynı birincil PDS ürünüyle ayrı doğrulansın. HiRISE fallback’i ve rota caveat’ı korunur.
+6. **Stage 8 demo dondurma:** Ürün yönü gösterilebilir olduğunda 60–90 sn demo akışını ve kapsamı kararlaştır. Önceki efor tahmini yeni FPS/physics yönünü kapsamaz.
 
 ## 5. Kaynaklar ve atıf
 
@@ -115,5 +118,7 @@ Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulum
 - [Mars 2020 PDS Initial Reports](https://pds-geosciences.wustl.edu/missions/mars2020/Mars%202020%20Initial%20Reports%201-4%20April%202022.pdf)
 - [PDS PLACES](https://pds-geosciences.wustl.edu/missions/mars2020/places.htm)
 - [NASA PDS Search API kılavuzu](https://nasa-pds.github.io/pds-api/guides/search/endpoints.html)
+- [NASA Solar System Exploration — Mars yerçekimi](https://solarsystem.nasa.gov/planet-compare/?intent=121)
+- [NASA NSSDC Mars Fact Sheet — yerçekimi ve atmosfer ortalamaları/aralıkları](https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html)
 
 Kaynak rasterın ölçüm/ürün değeri, bu uygulamanın türettiği profil/eğim, senaryo koridoru ve görsel sunum ayrı tutulmalı. Ürün atfını göster; lisans/usage koşulu bulunmadan şart uydurma.

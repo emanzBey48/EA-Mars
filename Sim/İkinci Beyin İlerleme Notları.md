@@ -1,6 +1,6 @@
 ﻿# Marswalk — İkinci Beyin İlerleme Notları
 
-**Güncelleme:** 13 Kasım 2026 — Stage 9 birleşik regresyonu ve Stage 10 first-person/rig entegrasyonu güncellendi
+**Güncelleme:** 13 Kasım 2026 — Stage 8 demo ve Stage 11 marker-mesh tamamlandı; Stage 12 (Mars zıplama fiziği) ve Stage 13 (EVA loping kinematiği) yeni paralel görevler olarak atandı
 **Kapsam:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Notun amacı:** Doğrulanmış proje bağlamını, geçerli kararları ve sıradaki işi tek yerde tutmak.
 
@@ -16,7 +16,7 @@
 
 **[DOSYA/KAYNAKLA DOĞRULANDI]** İlk oynanabilir MVP 2D kanvas haritasıdır: WASD/ok tuşlarıyla hareket, senaryo saati, duraklat/devam, yeniden başlat, rota sapması ve koridor, DTM kotu ile 3×3 Horn eğimi. HiRISE’den türetilmiş gölgeli kabartma görsel amaçlıdır; ortogörüntü değildir.
 
-**[GÜNCEL DURUM — KOD/TESTLE DOĞRULANDI]** Stage 9 mesh optimizasyonu sonrası regresyon ve Stage 10 first-person hareket/kamera/yüzey teması ile astronot rig renderer entegrasyonu `fbc623f` kod commit’inde tamamlandı. Bağımsız denetimin son turunda `npm test` 18/18 ve `npm run smoke` 32/32 geçti; ilk audit smoke turundaki iki mevcut 2D timing kontrolü hemen tekrar çalıştırmada geçti. Efe’nin bağımsız rig modülü ve Alparslan’ın movement/camera/render entegrasyonu tamamlandı. Yarışma verisi gelene kadar yerel HiRISE fixture’ı yeterlidir. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; snapshot’lar kopyalanmış ve değiştirilemez olmalı.
+**[GÜNCEL DURUM — KOD/TESTLE DOĞRULANDI]** Stage 9 mesh optimizasyonu ve Stage 10 first-person hareket/kamera/yüzey teması (`fbc623f`), Stage 11 3D waypoint beacon’ları ve rota kılavuz geometrisi (`8054b1a`) ile Stage 8 first-person demo akışı ve HUD entegrasyonu (`f5259d2`) tamamlandı. Bağımsız denetimde `npm test` 24/24 ve `npm run smoke` 32/32 (60.4 FPS) geçti. Sıradaki geliştirme adımı, yarışma öncesi animasyon ve simülasyon gerçekçiliğini artırmak üzere Stage 12 (Alparslan: Mars zıplama fiziği ve kamera dinamiği) ve Stage 13 (Efe: Düşük yerçekimi EVA loping ve sıçrama/iniş kinematiği) bağımsız paralel çalışma paketleridir. Yarışma verisi gelene kadar yerel HiRISE fixture’ı yeterlidir. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; snapshot’lar kopyalanmış ve değiştirilemez olmalı.
 
 ## Yerel HiRISE verileri ve hizalama
 
@@ -89,6 +89,8 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 **[STAGE 9 REGRESYONU + STAGE 10 — BAĞIMSIZ SON DOĞRULAMA, 13 KASIM]** Mesh bellek optimizasyonu, first-person movement/camera/contact ve astronot rig renderer entegrasyonunu içeren `fbc623f` kod HEAD’i bağımsız denetlendi: `npm test` 18/18, son `npm run smoke` 32/32 geçti. İlk audit smoke turunda iki mevcut 2D timing kontrolü geçici başarısız oldu; hemen tekrarında tüm 32 smoke kontrolü geçti. Smoke 3D geçişi, first-person rig görünürlüğü/heading, gait/pause, bilinmeyen temas ile devam eden jump ayrımı, 2D kontrolleri ve WebGL2 fallback’i kapsadı.
 
+**[STAGE 11 VE STAGE 8 — BAĞIMSIZ DOĞRULAMA, 13 KASIM]** Efe'nin 3D waypoint beacon ve rota kılavuz geometrisi `8054b1a` ile tamamlandı. Alparslan'ın Stage 8 first-person demo akışı, nişangah (`#fp-reticle`), kontrol kapsülü (`#fp-hud-hint`) ve Sol 164 Roubion varış rozeti entegrasyonu `f5259d2` ile tamamlandı. Bağımsız doğrulamada `npm test` 24/24, `npm run smoke` 32/32 geçti (60.4 FPS).
+
 ## Kararlar ve açık konular
 
 ### Kararlar
@@ -100,17 +102,18 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 ### Açık konular
 
-- Stage 8 demo kapsamı ve 60–90 saniyelik gösterim akışı; first-person dilimi demo’da yer alacak mı, hangi HUD/uyarılar gösterilecek?
-- Stage 10 ilk ürün/UX gözden geçirmesi: geometrik low-poly rig ve lower-frame view-model gösterimi yeterince okunabilir mi; gerekiyorsa yeni, ayrı kabul ölçütlü iyileştirme paketi tanımlansın.
+- Stage 12 (Alparslan): Mars 3.71 m/s² yerçekimi altında astronot zıplama mekaniği (~1.3 s uçuş, balistik momentum korunumu, iniş darbe sönümleme süresi / `landingRecovery`), birinci şahıs adım kafa salınımı (head-bobbing) ve iniş kamera esnemesi (landing camera dip).
+- Stage 13 (Efe): `view/3d/astronaut-rig.js` içinde düşük yerçekimi EVA loping yürüyüşü, apex balance pose, landing squash & recover ve first-person view-model kollarda nefes/adım salınımı. Efe diğer dosyalara dokunmaz.
 - JP2 JPEG 2000 decoder/lisansı ve PixelIsArea/PDS yarım-piksel hizalama araştırması; FPS işinden bağımsızdır.
-- Yerel kullanıcı gözden geçirmesinden sonra demo öncesi kalan UX sorunları.
-- Yarışma verisi ulaşınca Stage 6 validator boşlukları ve veri adapter intake’i ayrı iş olarak açılmalı; şimdilik bu 3D ana iş hattını bloke etmez.
 - PLACES ham CSV’nin engelsiz ağdan alınması, etiket/SIS ve koordinat çerçevesinin doğrulanması.
-- DTM–JP2 yarım piksel kayıt farkının gerektiğinde piksel merkezi/köşesi düzeyinde bağımsız yeniden teyidi.
+- Yarışma verisi ulaşınca Stage 6 validator boşlukları ve veri adapter intake’i ayrı iş olarak açılmalı; şimdilik bu 3D ana iş hattını bloke etmez.
 
 ## Önerilen sonraki somut adım
 
-**Şu anki adım:** Stage 8 demo kapsamı için ürün kararı ver: first-person Stage 10 dilimi demoya girsin mi; hangi başlangıç/son koşulu, HUD ve açık sınırlamalarla 60–90 saniyede gösterilsin? Karar ve kısa UX incelemesi sonrası yeni kod paketi belirle. JP2 decode/alignment bağımsız ve bloke etmeyen iştir; PLACES doğrulaması engelsiz PDS erişimine bağlıdır; Stage 6 organizer-data intake’i gerçek yarışma dataset’i ve label/SIS gelene kadar bekler. No-data, provenance ve 2D fallback politikaları değişmez.
+**Şu anki adım:** Alparslan ve Efe paralel olarak Stage 12 ve Stage 13 geliştirme paketlerini yürütür:
+- Alparslan (`sim.js`, `config.js`, `camera.js`, `main.js`): Mars yerçekimi zıplama balistiği, havada yatay momentumun korunumu, iniş darbe sönümlemesi ve kamerada adım kafa salınımı ile iniş esnemesini tamamlar; snapshot hareket API'sinde Efe için gerekli alanları (`timeS`, `horizontalSpeedMps`, `verticalSpeedMps`, `grounded`, `airborne`, `phase`, `landingRecovery`) yayınlar.
+- Efe (`view/3d/astronaut-rig.js` ve birim testleri): Alparslan'ın movement API girdilerine göre Apollo/Mars EVA araştırmalarındaki deterministik loping yürüyüş kinematiği, apex balance pose, landing squash & recover ve view-model kollarda nefes/adım salınımını üretir. Efe simülasyon, kamera, renderer ve main dosyalarına dokunmaz.
+JP2 decode/alignment bağımsız ve bloke etmeyen iştir; PLACES doğrulaması engelsiz PDS erişimine bağlıdır; Stage 6 organizer-data intake’i gerçek yarışma dataset’i ve label/SIS gelene kadar bekler. No-data, provenance ve 2D fallback politikaları değişmez.
 
 ## Git çalışma kuralı
 
@@ -118,7 +121,7 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 AI’lar önemli ve gözden geçirilebilir aşamaları küçük commit’lere ayırsın; staged diff’i önceden incelesin ve görev branch’ini paylaşsın. Kullanıcı onayı bekleniyorsa commit/push yapma. Push başarısızsa commit hash’ini ve gerçek hatayı bildir; TLS doğrulamasını kapatma. Alparslan entegrasyon sahibi olarak PR/diff’i inceler. Testler yalnız kullanıcı istediğinde çalıştırılır.
 
-**Efe’nin görev durumu:** CPU mesh builder (`3600563`), mesh bellek optimizasyonu (`661d9c7`) ve renderer’dan bağımsız astronot rig/poz üreticisi (`view/3d/astronaut-rig.js`) tamamlandı. Alparslan movement/camera/surface-contact ve rig renderer entegrasyonunu `fbc623f` içinde tamamladı. Efe'nin sıradaki paralel kod görevi, `Sim/public/js/view/3d/marker-mesh.js` içinde renderer'dan bağımsız 3D waypoint (Sol 120 / Sol 164) beacon'ları ile basitleştirilmiş rota ve koridor kılavuz vertex geometrisi üretimidir. Efe `renderer.js`, `camera.js`, `main.js`, `config.js`, `simulation/`, `input/` ve snapshot sözleşmelerine dokunmaz; entegrasyon Alparslan'dadır.
+**Efe’nin görev durumu:** CPU mesh builder (`3600563`), mesh bellek optimizasyonu (`661d9c7`), astronot rig/poz üreticisi (`fbc623f`) ve 3D marker-mesh modülü (`8054b1a`) tamamlandı. Efe'nin yeni paralel kod görevi Stage 13'tür: `Sim/public/js/view/3d/astronaut-rig.js` ve buna ait birim testlerinde renderer'dan bağımsız düşük yerçekimi EVA loping yürüyüş kinematiği, apex balance, landing squash & recover ve view-model salınımı üretmektir. Efe `renderer.js`, `camera.js`, `main.js`, `config.js`, `simulation/`, `input/` ve snapshot sözleşmelerine dokunmaz; entegrasyon Alparslan'dadır.
 
 ## Tarihsel not — Stage 10 entegrasyonu öncesi (13 Kasım 2026)
 
@@ -128,11 +131,12 @@ AI’lar önemli ve gözden geçirilebilir aşamaları küçük commit’lere ay
 - **[GIT]** Güncel görev bölümü ve belge eşitlemesi `d6a1189 docs: align 3D roadmap for parallel work` commit’iyle `origin/docs/parallel-roadmap` dalına push edildi. Önceki `aae4830` modül düzenleme commit’i `docs/shared-code-boundaries` dalındadır. Bu işte uygulama koduna/testlere dokunulmadı.
 - **[O ZAMANKİ GIT/DOĞRULAMA DURUMU]** Bu notun ilk yazıldığı sırada entegrasyon dalı `codex/stage9-acceptance-fixes`, son kod commit’i `643026b` idi; mesh optimizasyonu sonrası regresyon tekrarlanmamıştı. Bu kayıt Stage 10 entegrasyonundan önceki durumu anlatır.
 
-## Güncel durum — Stage 10 tamamlanması (13 Kasım 2026)
+## Güncel durum — Stage 8 ve Stage 11 tamamlanması; Stage 12 ve Stage 13 başlangıcı (13 Kasım 2026)
 
-- **Kod HEAD:** `fbc623f feat: integrate astronaut rig into first-person renderer`, `codex/astronaut-rig-renderer-integration` dalında origin’e push edildi.
-- **Sahiplik:** Efe’nin renderer-bağımsız rig/pose modülü tamamlandı; Alparslan movement/camera/surface-contact, `grounded`/`airborne`/`groundContactStatus` snapshot sözleşmesi ve renderer entegrasyonunu tamamladı.
-- **Bağımsız QA:** `npm test` 18/18 ve `npm run smoke` 32/32 geçti. Audit’in ilk smoke turunda iki mevcut 2D timing kontrolü geçici başarısız oldu; hemen tekrarında 32/32 geçti.
-- **No-data davranışı:** Temas bilinmiyorsa tek başına yerçekimi düşüşü/airborne pozu başlatılmaz; önceden başlamış jump yörüngesi sürer. World rig gizlenir; geçerli retained kamera pozu varsa first-person torso/kollar sunum view-model’i kalabilir. `zM` yine `null`/bilinmiyor kalır ve 2D fallback korunur.
-- **Sıradaki ürün kararı:** Stage 8 demo kapsamı ve 60–90 saniyelik gösterim akışı. JP2 decode/alignment bloke etmeyen ayrı iş; Stage 6 intake ve gerçek PLACES izi veri/erişim koşulludur.
+- **Kod HEAD:** `f5259d2 feat: complete Stage 8 first-person demo experience and presentation flow`, `alparslan/stage8-demo-orchestration` dalında.
+- **Tamamlanan Aşamalar:** Stage 8 first-person demo akışı ve HUD entegrasyonu (`f5259d2`), Stage 11 3D waypoint beacon'ları ve rota kılavuz geometrisi (`8054b1a`), Stage 10 first-person hareket/temas ve astronot rig renderer entegrasyonu (`fbc623f`), Stage 9 mesh optimizasyon regresyonu. Bağımsız QA: `npm test` 24/24, `npm run smoke` 32/32 geçti (60.4 FPS).
+- **Yeni Paralel Görevler:**
+  - **Stage 12 (Alparslan):** Mars Düşük Yerçekimi Zıplama Fiziği, Balistik İntikal ve Kamera Dinamiği (`Sim/public/js/simulation/sim.js`, `Sim/public/js/config.js`, `Sim/public/js/view/3d/camera.js`, `Sim/public/js/main.js`). 3.71 m/s² NASA referansı korunur, kaynaksız atmosfer sürüklemesi eklenmez; zıplama balistiği (~1.3 s uçuş süresi, havada momentum korunumu), iniş darbe sönümleme süresi (`landingRecovery`), kamerada adım kafa salınımı (head-bobbing) ve iniş kamera esnemesi (landing camera dip) geliştirilir; snapshot sözleşmesinde durum alanları (`timeS`, `horizontalSpeedMps`, `verticalSpeedMps`, `grounded`, `airborne`, `phase`, `landingRecovery`) yayınlanır.
+  - **Stage 13 (Efe):** Düşük Yerçekimi EVA Loping Yürüyüşü ve Sıçrama/İniş Poz Kinematiği (`Sim/public/js/view/3d/astronaut-rig.js` ve buna ait birim testleri). Efe `renderer.js`, `camera.js`, `main.js`, `config.js`, `simulation/`, `input/` ve snapshot sözleşmelerine DOKUNMAZ; Alparslan'ın movement API girdilerine göre Apollo/Mars EVA araştırmalarındaki loping gait, apex balance pose, landing squash & recover ve view-model kollarda nefes/adım salınımı üretir.
+- **Sıradaki ürün kararı:** Stage 12 ve Stage 13 geliştirmelerinin tamamlanmasının ardından yarışma öncesi animasyon ve simülasyon deneyiminin gözden geçirilmesi. JP2 decode/alignment bloke etmeyen ayrı iş; Stage 6 intake ve gerçek PLACES izi veri/erişim koşulludur.
 

@@ -8,7 +8,7 @@ Bu belge, projeyi devralan kişi veya başka bir yapay zekâ için adım adım d
 
 ## 1. Ürün vaadi ve sınırlar
 
-Marswalk, kullanıcının Jezero haritasında astronotu klavyeyle yönettiği kısa, oynanabilir bir Mars yürüyüş deneyimidir. Kullanıcı rota çizgisi ve koridorla ilişkisini görür; konumundaki arşiv DTM kotu ve DTM’den hesaplanan eğim, kaynak/birim/yöntem bilgileriyle gösterilir. Challenge adı *Interplanetary Survival Guide: Martian Map*.
+Marswalk’ın nihai amacı, kullanıcının astronotu Mars yüzeyinde yönettiği ayrıntılı bir 3D keşif simülasyonu oluşturmaktır. Şu anki Jezero 2D Canvas uygulaması oynanabilir ara MVP’dir; ürün vizyonunu değiştirmez. MVP rota ve koridor ilişkisini, arşiv DTM kotunu ve DTM’den türetilen eğimi kaynak/birim/yöntem bilgileriyle gösterir. Challenge adı *Interplanetary Survival Guide: Martian Map*.
 
 Ürün genel Mars fizik motoru, canlı NASA telemetrisi, gerçek rover kontrolü veya güvenlik/karar destek sistemi değildir. Rota sapması sadece seçilmiş senaryo çizgisine uzaklığı gösterir. 10 m/yan koridor uygulama varsayımıdır; güvenlik sınırı değildir. Bilimsel ölçüm, veri setinden hesaplanan sonuç, senaryo varsayımı ve UI değeri ayrı etiketlenmelidir.
 
@@ -45,9 +45,9 @@ PDS Search API metadata’sı PLACES release 16.0 içindeki `best_interp.csv` ü
 
 Bunlar **basitleştirilmiş waypoint çizgisi boyunca arşiv DTM’den örneklenmiş/türetilmiş** değerlerdir; gerçek rover izi, saha ölçümü, geçilebilirlik veya güvenlik puanı değildir. 10 m/yan koridor senaryo varsayımıdır. Yerel equirectangular projeksiyon ~18.4° enlemde doğu-batı mesafesini yaklaşık %1.8 fazla gösterebilir.
 
-### E. Kapsamı küçültme ve 2D oynanabilir MVP
+### E. 3D ürün vizyonuna giden 2D oynanabilir MVP
 
-Proje kapsamı kullanıcı kontrollü tek bir kısa harita deneyimi olarak sabitlendi. Node.js ≥20, bağımlılıksız vanilla JavaScript ES modules ve Canvas 2D ile `Sim` içinde uygulandı. Kullanıcı hareketi/saat/rota sapmasıyla DTM kot/eğim değerleri ve metadata paneli birleştirildi. DTM yoksa oyun açılabilir; katman unavailable olarak işaretlenir. Orto çözücü olmadığı için DTM’den türetilmiş hillshade kullanılır ve ortogörüntü diye adlandırılmaz.
+Etkinlik öncesi oynanabilir kapsam kullanıcı kontrollü tek bir kısa 2D harita deneyimine indirildi; bu, nihai 3D ürün hedefinden vazgeçildiği anlamına gelmez. Node.js ≥20, bağımlılıksız vanilla JavaScript ES modules ve Canvas 2D ile `Sim` içinde uygulandı. Kullanıcı hareketi/saat/rota sapmasıyla DTM kot/eğim değerleri ve metadata paneli birleştirildi. DTM yoksa oyun açılabilir; katman unavailable olarak işaretlenir. Orto çözücü olmadığı için DTM’den türetilmiş hillshade kullanılır ve ortogörüntü diye adlandırılmaz.
 
 ### F. Hesaplama, veri ve render ayrımı
 
@@ -106,7 +106,7 @@ Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulum
 2. **Gerçek organizer dataset’i gelirse:** Önce dosya/label/SIS/provenance, format, CRS, birim/datum, zaman/kapsam, no-data, scaling/offset, lisans ve footprint doğrula. Uygun loader yoksa `UnavailableLayer`/HiRISE fallback kullan. Bilinmeyen CRS’i tahmin etme.
 3. **PLACES raw CSV’yi engelsiz ağdan al:** PDS Search API ile doğrulanmış aynı release/product’ı indir; coordinate frame ve label/SIS ile Sol 120–164 gerçek polyline’ı çıkar, DTM footprint/no-data’yı kontrol et. Erişim yine bloklanırsa mevcut simplified line ve görünür caveat kalır.
 4. **Demo freeze:** Etkinlik tarihleri 14–15 Kasım 2026 olduğu kullanıcı tarafından bildirildi; 13 Kasım itibarıyla yaklaşık bir gün var. İlk demo için özellik eklemeyi erken dondur, kullanıcı akışını ve attribution/fallback’i göster; son 4 saatte yalnız kritik hata düzelt.
-5. **3D:** Etkinlik sonrasına ertelendi. Önce mevcut `WorldSnapshot` ve surface adapter korunarak renderer spike yap; Mars 2000 `zM` ile display vertical offset’i ayır. Yeni motor/ekonomi ancak açık kapsam ve zaman varsa.
+5. **3D ana ürün hedefi:** Ayrıntılı 3D Mars simülasyonu etkinlik sonrası ana ürün yönüdür. Aşamaları belirle; mevcut `WorldSnapshot` ve surface adapter’ı koruyarak renderer spike ile başla, Mars 2000 `zM` ile display vertical offset’i ayır. Fiziksel gerçekçilik ve çevresel davranışları yalnız kaynak/kanıt ve açık kabul ölçütleriyle ekle.
 
 ## 5. Kaynaklar ve atıf
 

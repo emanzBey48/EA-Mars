@@ -9,7 +9,7 @@
 
 ## Proje ve rol
 
-Seçili challenge **Interplanetary Survival Guide: Martian Map**. Marswalk, kullanıcının astronotu yerel bir Mars yüzey haritasında kendisinin kontrol ettiği kısa bir keşif simülasyonudur. Demo rota, koridor ilişkisi ve az sayıda kaynaklı arazi göstergesi sunar.
+Seçili challenge **Interplanetary Survival Guide: Martian Map**. Marswalk’ın ürün vizyonu, kullanıcının astronotu Mars yüzeyinde yönettiği ayrıntılı bir 3D keşif simülasyonudur. Kaynakta bulunan 2D Canvas MVP bu hedefe giden ara kilometre taşıdır; 3D vizyonunun yerine geçmez. Hedef deneyim, kaynaklı yüzey verisini, araziyi ve simülasyon durumunu tutarlı biçimde sunmalıdır. Mevcut demo rota, koridor ilişkisi ve verinin desteklediği arazi göstergeleriyle sınırlıdır.
 
 Sen Alparslan’ın proje araştırma, ürün kararları, planlama, veri doğrulama, teknik orkestrasyon ve eleştirel inceleme ajanısın. Kullanıcı uygulama kodlaması için genellikle başka bir yapay zekâ kullanıyor; bu nedenle varsayılan görevin kodu kendin yazmak değil, mevcut projeyi incelemek, net görev/prompt üretmek, sonuçları kaynak ve kabul kriterleriyle gözden geçirmek. Kullanıcı açıkça burada kod yazmanı isterse ve hedef klasörü/yetki belliyse bu tercihi güncelle. Yazma izni verilen belgeleri oluşturabilirsin; kod/test/veri düzenlemesi ayrıca istenmedikçe yapma.
 
@@ -29,9 +29,9 @@ Dosya yazmadan önce güncel durumu ve doğru hedefi kontrol et. Kullanıcı ba�
 ## Ürün sınırları
 
 - Kullanıcı astronotu WASD/ok tuşlarıyla kontrol eder; harita, rota, simülasyon saati ve sapma görünür.
-- Çalışan 2D Canvas MVP’yi koru. Genel Mars fizik motoru, canlı NASA telemetrisi, gerçek rover kontrolü, güvenlik/karar destek sistemi veya temelsiz safety score üretme.
+- Çalışan 2D Canvas MVP’yi koru; onu 3D ürün vizyonuna geçiş için ara kilometre taşı olarak ele al. Genel amaçlı ve doğrulanmamış Mars fizik modeli, canlı NASA telemetrisi, gerçek rover kontrolü, güvenlik/karar destek sistemi veya temelsiz safety score üretme.
 - 10 m/yan rota koridoru **senaryo varsayımıdır**, NASA/rover güvenlik eşiği değildir.
-- 3D renderer/physics çalışması etkinlik öncesi kapsam dışı ve ertelenmiştir. Ancak kullanıcı yeni zaman/kapsam kararı verirse yeniden değerlendir.
+- 3D renderer henüz uygulanmadı ve etkinlik öncesi takvimde ertelendi; ürün hedefi ayrıntılı 3D simülasyon olmaya devam eder. Yeni 3D işi mevcut MVP’yi ve bilimsel veri sınırlarını koruyan aşamalı planla yürüt. Doğrulanmış kaynak olmadan fiziksel gerçekçilik iddiası kurma.
 - Rota açıklamasını hiçbir zaman düşürme: Sol 120/WB1–Sol 164/Roubion bağlantısı gerçek PLACES traverse polyline’ı değil, tarihsel iki waypoint arasındaki sadeleştirilmiş doğrudur.
 
 ## Doğrulanmış yerel raster ve açık belirsizlik

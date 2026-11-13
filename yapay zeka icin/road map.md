@@ -18,9 +18,9 @@
 
 ## Ürün hedefi ve kapsam sınırları
 
-Marswalk, kullanıcının Mars yüzey haritasında astronotu kendisinin yönettiği kısa bir keşif simülasyonudur. Kullanıcı hareket ettikçe rota, koridor sapması ve seçili bilimsel göstergeler güncellenir. Seçili resmi challenge: *Interplanetary Survival Guide: Martian Map*.
+Marswalk’ın nihai ürün vizyonu, astronotun Mars yüzeyini keşfettiği ayrıntılı ve kullanıcı kontrollü bir 3D simülasyondur. Şu an çalışan 2D Canvas deneyimi bu hedefe giden MVP/ara kilometre taşıdır; ürün amacı olarak 3D’nin yerini almaz. Seçili resmi challenge: *Interplanetary Survival Guide: Martian Map*.
 
-**Kapsam dışı:** Genel Mars fizik motoru, canlı NASA telemetrisi izlenimi, gerçek rover karar desteği, güvenli/güvensiz rota kararı veya veriyle desteklenmeyen risk/güvenlik skoru. 3D bu etkinlik öncesi MVP’nin parçası değildir.
+**Mevcut etkinlik MVP’sinin sınırı:** Genel amaçlı ve doğrulanmamış Mars fizik modeli, canlı NASA telemetrisi izlenimi, gerçek rover karar desteği, güvenli/güvensiz rota kararı veya veriyle desteklenmeyen risk/güvenlik skoru. 3D renderer ürün vizyonunun parçasıdır; etkinlik öncesi zaman sınırı nedeniyle MVP’ye alınmamış ve sonraki aşamaya ertelenmiştir.
 
 ## Bilimsel veri zemini ve kurallar
 
@@ -132,14 +132,14 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 - **Kabul:** Yeni makinede README adımları; WASD, duraklat, koridor dışı/geri dönüş ve katman unavailable durumu denenmiş; gerçek PLACES değil ve güvenlik aracı değil açıklaması gözle görünür; attribution okunabilir.
 - **Tahmin:** Hazırlıkta 2–3 odaklı saat; etkinlikte ilk demo için 3–5 saat. Gösterim/teslimden 4 saat önce özellik eklemeyi dondur, yalnız kritik hata düzelt.
 
-### 9. 3D renderer/terrain sunumu — BEKLEMEDE, etkinlik sonrası
+### 9. Ayrıntılı 3D simülasyon — ÜRÜN HEDEFİ; uygulama aşaması etkinlik sonrası beklemede
 
-- **Amaç:** Aynı simülasyon, veri adaptörü ve WorldSnapshot’ı kullanarak 3D sunum olanağını araştırmak.
-- **Çıktı:** Önce küçük teknik spike/prototip; ayrı camera/render asset katmanı; düşey ölçek ve Mars 2000 datum dönüşüm kararı yazılı; 2D renderer fallback’i korunmuş.
+- **Amaç:** Ürünün ana vizyonu olan ayrıntılı, kullanıcı kontrollü Mars yüzeyi 3D simülasyonunu mevcut 2D MVP ve kaynaklı veri sözleşmeleri üzerine inşa etmek.
+- **Çıktı:** Önce küçük teknik spike/prototip; ardından kapsamlı 3D sahne/terrain ve etkileşim planı. Ayrı camera/render asset katmanı; düşey ölçek ve Mars 2000 datum dönüşüm kararı yazılı; 2D renderer ara sürüm/fallback olarak korunmuş.
 - **Sahip:** Alparslan; 3D/graphics deneyimi olan teammate varsa spike ortak sahiplenebilir.
 - **Bağımlılık:** Aşama 4 regression kapısı, demo freeze, uygun zaman; organizer verisi kullanılacaksa aşama 6 validasyonu.
 - **Kabul:** 3D yalnız arşiv/hesaplanan veriyi doğru provenance ile sunar; display vertical offset scientific `zM`’yi değiştirmez; no-data yüzeyleri boş/işaretli kalır; mevcut snapshot ve sim kuralları aynı kalır.
-- **Tahmin:** 4–8 saat yalnız renderer spike; tam oynanabilir 3D dikey dilim 2–5 odaklı gün (framework ve asset seçimine göre). Hackathon son iki gününde başlama; süre aşılırsa 2D’ye dön.
+- **Tahmin:** 4–8 saat yalnız renderer spike; ayrıntılı ve tamamlanmış 3D ürün ek kapsam ve zaman planı gerektirir. Etkinlik öncesi son iki günde başlama; 2D MVP’yi geçici demo olarak kullan.
 
 ## Paralel çalışma şeritleri ve dosya sınırları
 
@@ -153,9 +153,9 @@ Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik e
 | Girdi (`input`) | `Sim/public/js/input/` | Klavye ve kontrol erişilebilirliği/olay eşlemesini iyileştirmek; simülasyon kuralını bu dosyalara taşımamak. |
 | Görünüm (`view`) | `Sim/public/js/view/` | HUD okunabilirliği, 2D Canvas sunumu ve görsel varlıkların sunumunu geliştirmek; bilimsel örnekleme veya rota hesabını görünüm katmanına eklememek. |
 
-Ek bağımsız işler olarak PLACES kaynak/koordinat doğrulaması, attribution/manifest QA, demo anlatısı ve görsel inceleme alınabilir; bunlar belirli bir takım arkadaşına ancak beceri ve ilgi alanı öğrenilince verilsin. `public/js/main.js`, `config.js` ve snapshot/provider sözleşmeleri entegrasyon sıcak noktalarıdır: entegrasyon sahibi bunları koordine eder ve aynı anda yalnız bir sahibi değiştirir. Rota hesabı halen `geo` ile `simulation` arasında dağılmıştır; bu aşamada yeni `route/` modülü oluşturmayın. 3D renderer mevcut değildir ve etkinlik öncesi ertelenmiştir; ileride aynı snapshot sözleşmesini tüketen bir `view/3d/` uzantısı olarak değerlendirilebilir.
+Ek bağımsız işler olarak PLACES kaynak/koordinat doğrulaması, attribution/manifest QA, demo anlatısı ve görsel inceleme alınabilir; bunlar belirli bir takım arkadaşına ancak beceri ve ilgi alanı öğrenilince verilsin. `public/js/main.js`, `config.js` ve snapshot/provider sözleşmeleri entegrasyon sıcak noktalarıdır: entegrasyon sahibi bunları koordine eder ve aynı anda yalnız bir sahibi değiştirir. Rota hesabı halen `geo` ile `simulation` arasında dağılmıştır; bu aşamada yeni `route/` modülü oluşturmayın. 3D renderer henüz kaynakta yoktur, ancak nihai ürün hedefidir; mevcut zaman planında etkinlik sonrasına bırakılmıştır ve aynı snapshot sözleşmesini tüketen ayrı bir `view/3d/` katmanı olarak tasarlanmalıdır.
 
-Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi clone’unu kullanmalı; aynı makinede çalışıyorlarsa OneDrive dışında ayrı clone veya ayrı Git worktree tercih edilmeli. Aynı OneDrive klasöründeki ortak `.git` checkout’unda iki kişinin/AI’nın paralel dosya ve Git işlemleri güvenli değildir. Entegrasyon sahibi branch/PR diff’lerini gözden geçirip birleştirir. Kodlamada yalnız tek bir sonraki dikey dilim aç; mevcut çalışır demo ve `Sim/data` girdilerini koru. Doğrulanmamış dış veri, ekstra katman veya 3D motoru kritik yolu kesmemeli.
+Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi clone’unu kullanmalı; aynı makinede çalışıyorlarsa OneDrive dışında ayrı clone veya ayrı Git worktree tercih edilmeli. Aynı OneDrive klasöründeki ortak `.git` checkout’unda iki kişinin/AI’nın paralel dosya ve Git işlemleri güvenli değildir. Entegrasyon sahibi branch/PR diff’lerini gözden geçirip birleştirir. Kodlamada yalnız tek bir sonraki dikey dilim aç; mevcut çalışır 2D MVP ve `Sim/data` girdilerini koru. Doğrulanmamış dış veri veya ekstra katman kritik yolu kesmemeli; 3D ertelenmiş nihai ürün hedefi olarak planlı aşamalarda ele alınmalı.
 
 ## Git paylaşımı — 13 Kasım 2026 durum kaydı
 

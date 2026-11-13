@@ -12,11 +12,11 @@
 
 ## Ürün hedefi ve kapsam
 
-**[KARAR]** Challenge, *Interplanetary Survival Guide: Martian Map*. Kullanıcı Marswalk’ta astronotu kendisi kontrol eder; rota üzerindeki ilerleme, koridor dışına çıkma ve az sayıda kaynaklı arazi göstergesi anlaşılır biçimde sunulur. Bu, genel Mars fizik motoru veya güvenlik/karar destek sistemi değildir.
+**[ÜRÜN VİZYONU]** Challenge, *Interplanetary Survival Guide: Martian Map*. Nihai amaç, kullanıcının astronotu Mars yüzeyinde yönettiği ayrıntılı bir 3D keşif simülasyonudur. Mevcut 2D Canvas MVP, bu hedefe giden etkinlik öncesi ara kilometre taşıdır. Simülasyon ve çevre ayrıntısı kaynakla doğrulanmalı; ürün canlı telemetri veya rover güvenlik/karar destek sistemi iddiası taşımaz.
 
 **[DOSYA/KAYNAKLA DOĞRULANDI]** İlk oynanabilir MVP 2D kanvas haritasıdır: WASD/ok tuşlarıyla hareket, senaryo saati, duraklat/devam, yeniden başlat, rota sapması ve koridor, DTM kotu ile 3×3 Horn eğimi. HiRISE’den türetilmiş gölgeli kabartma görsel amaçlıdır; ortogörüntü değildir.
 
-**[YÖN/KARAR]** İleride 3D’ye geçiş düşünülebilir; henüz 3D uygulama yok. Geçişten önce jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı. Fizik ve veri hesapları saf/deterministik kalmalı; renderer kamera, sprite, animasyon ve etiketleri yönetmeli. Veri örnekleri/snapshot’lar kopyalanmış ve değiştirilemez olmalı.
+**[YÖN/KARAR]** 3D nihai ürün yönüdür; henüz uygulama yok ve etkinlik öncesi takvimde ertelendi. Geçişten önce jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı. Fizik ve veri hesapları saf/deterministik kalmalı; renderer kamera, sprite, animasyon ve etiketleri yönetmeli. Veri örnekleri/snapshot’lar kopyalanmış ve değiştirilemez olmalı.
 
 ## Yerel HiRISE verileri ve hizalama
 
@@ -88,7 +88,7 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 ### Kararlar
 
-1. Kullanıcı kontrollü 2D Marswalk MVP korunur; 3D şimdilik kapsam dışıdır.
+1. Kullanıcı kontrollü 2D Marswalk MVP mevcut demo için korunur; ayrıntılı 3D simülasyon nihai ürün hedefidir ve sonraki aşamada yürütülür.
 2. PLACES polylinesi alınana kadar rota düz çizgisi açıkça “basitleştirilmiş waypoint bağlantısı” olarak etiketlenir.
 3. DTM kotu arşiv ürününden örneklenen değer; eğim DTM’den hesaplanan değer; oyuncu konumu/saat/hız/koridor senaryo/UI değeridir.
 4. No-data ve unavailable değerleri sıfıra çevrilmez; güvenlik iddiası veya skor üretilmez.
@@ -97,7 +97,7 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 - Yerel kullanıcı testinin sonucu ve demo öncesi kalan UX sorunları.
 - Stage 6 manifest validator boşluklarının kapatılması ve yalnız istenirse ilgili sentetik testlerin çalıştırılması.
-- Proje belgeleri `docs/parallel-roadmap` dalında güncellendi; çalışma ağacı değişiklikleri henüz commit edilmedi.
+- Ayrıntılı 3D hedef için sahne/terrain, etkileşim ve kaynaklı simülasyon kapsamı ayrı kabul ölçütleriyle planlanmalı; mevcut kaynakta 3D renderer yok.
 - PLACES ham CSV’nin engelsiz ağdan alınması, etiket/SIS ve koordinat çerçevesinin doğrulanması.
 - DTM–JP2 yarım piksel kayıt farkının gerektiğinde piksel merkezi/köşesi düzeyinde bağımsız yeniden teyidi.
 
@@ -117,7 +117,7 @@ AI’lar önemli ve gözden geçirilebilir aşamaları küçük commit’lere ay
 
 - **[KAYNAKTA TAMAMLANDI]** `Sim/public/js` modülleri alanlara göre düzenlendi: `geo/`, `surface/`, `simulation/`, `input/` ve `view/`. `main.js` ile `config.js` entegrasyon noktaları olarak kökte kaldı; `index.html` giriş yolu değişmedi.
 - **[MİMARİ KARAR]** Her modülün paylaşılan çalışma zamanı state’ini okuyacağı mutable global dosya oluşturulmadı. Ortak değişmeyen değerler `config.js`’te; çalışma zamanı bağımlılıkları parametre/callback ile aktarılıyor. `main.js`, `config.js` ve snapshot/provider sözleşmeleri koordine edilerek değiştirilmesi gereken sıcak noktalardır.
-- **[AÇIK]** Rota geometrisi ve metrikleri hâlâ `geo` ile `simulation` arasında dağılmıştır; henüz `route/` modülü yok. 3D renderer da yok; etkinlik öncesi ertelenmiş olup daha sonra `view/3d/` altında değerlendirilebilir.
+- **[AÇIK]** Rota geometrisi ve metrikleri hâlâ `geo` ile `simulation` arasında dağılmıştır; henüz `route/` modülü yok. 3D renderer da yok; nihai ürün hedefi olarak etkinlik sonrası `view/3d/` altında planlanmalıdır.
 - **[GIT]** `docs/parallel-roadmap` dalındaki belge eşitlemesi `3060829 docs: align Marswalk project notes with current code` commit’iyle `origin/docs/parallel-roadmap` dalına push edildi. Önceki `aae4830` modül düzenleme commit’i `docs/shared-code-boundaries` dalındadır. Bu oturumda uygulama koduna/testlere dokunulmadı.
 - **[DOĞRULAMA]** `git diff --check` temizdi. Bu oturumda test çalıştırılmadı.
 

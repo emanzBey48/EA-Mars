@@ -3,6 +3,8 @@
 **Güncelleme:** 13 Kasım 2026
 **Proje bağlamı:** Kullanıcı kontrollü Marswalk; uygulama kodu bu klasöre eklenmez.
 
+**Ürün yönü:** Nihai hedef ayrıntılı kullanıcı kontrollü 3D Mars simülasyonudur. `Sim` içindeki 2D Canvas deneyimi etkinlik öncesi oynanabilir ara MVP’dir; sonraki planlar 3D hedefini sürdürmelidir.
+
 **Durum notu:** Bu devir belgesi araştırma ve eski iş planı içerir. Güncel kod durumu için önce `Sim/README.md`, `Sim/public/js/` ve `Sim/İkinci Beyin İlerleme Notları.md` dosyalarını kontrol et. Ortak ürün/ajan kuralları `SYSTEM_PROMPT.md`, teknik plan ise `road map.md` içindedir.
 
 ## Doğrulanan yerel veriler

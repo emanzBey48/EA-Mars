@@ -7,6 +7,8 @@
  * Coordinate system: X is astronaut-left/right, Y is horizontal depth, Z is up. The astronaut faces
  * local -Y. `geometry.positions` contains a reusable unit box centered at the origin; each part's
  * `size`, `center`, `pivot`, and `colorRgb` are plain arrays a renderer can use to instance it.
+ * Simulation `headingRad` is measured from +X; with the renderer's standard +Z yaw, use
+ * `headingRad + metadata.forwardHeadingOffsetRad` to align the local -Y forward axis to that heading.
  */
 export const ASTRONAUT_RIG = deepFreeze({
   metadata: {
@@ -14,6 +16,7 @@ export const ASTRONAUT_RIG = deepFreeze({
     units: 'local model units; dimensions and stride are visual choices, not suit/body measurements',
     axes: { x: 'left/right', y: 'horizontal depth', z: 'up' },
     forward: '-Y',
+    forwardHeadingOffsetRad: Math.PI / 2,
     geometryDescription: 'Low-poly cuboids; no physical or suit-biomechanics claim',
     presentationStrideLengthM: 1.25,
   },

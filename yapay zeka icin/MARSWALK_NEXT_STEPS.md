@@ -63,9 +63,9 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 
 ## Sıradaki somut işler
 
-1. **3D arayüzünü kilitle — Alparslan:** Renderer’ın alacağı snapshot, hazırlanmış terrain varlığı, `zM`→görsel Z kuralı ve no-data davranışını kabul ölçütleriyle yaz; `main.js`/`config.js`/snapshot sözleşmeleri tek sahipte kalsın.
+1. **3D arayüzü kilitlendi — Alparslan:** `buildTerrainMesh(layer, displayConfig)` kurulumda hazır mesh asset’i üretir; kare başına renderer yalnız immutable `WorldSnapshot`, camera ve mesh asset’i tüketir, canlı sim/layer/provider örneklemez. Görsel Z açık `referenceElevationM` ve `verticalScale` ile hesaplanır; kaynak `zM` değişmez ve WB1 offset’i hardcode edilmez. No-data quad’ları boş kalır; `zM=null` iken avatar dünyada gizlenip yatay konum/yükseklik bilinmiyor HUD’da gösterilir. `main.js`/`config.js`/snapshot sözleşmeleri tek sahipte kalır.
 2. **Terrain modülü — takım arkadaşı:** 3D deneyimi varsa sadece yeni `view/3d/terrain.js` ve özel yardımcılarında HiRISE fixture’ından mesh üret. Deneyimi yoksa bağımsız 3D etkileşim, HUD ve asset gereksinimleri araştırması/wireframe kabul listesi ver. Aynı anda aynı dosyalara girmeyin.
-3. **Sıralı avatar-kamera entegrasyonu — Alparslan:** Terrain arayüzü sabitlenince ayrı `view/3d/` modüllerinde avatar/kamera işini bağla; mevcut 2D seçeneğini koru.
+3. **Sıralı avatar-kamera entegrasyonu — Alparslan:** Terrain arayüzü sabitlenince ayrı `view/3d/` modüllerinde avatar/kamera işini bağla; yalnız `zM` geçerliyken avatarı terrain kotuna yerleştir, yükseklik bilinmiyorsa HUD durumunu kullan; mevcut 2D seçeneğini koru.
 4. **Yarışma verisi geldiğinde Stage 6:** Registry mevcut; lisans/usage, sayısal coverage+kesişim, verified vertical datum, zorunlu expectedFrame ve transform kanıtını fail-closed doğrula. PLACES gerçek izi ayrıca PDS kaynağına erişim varsa ele alınır.
 
 ### Git başlangıç durumu

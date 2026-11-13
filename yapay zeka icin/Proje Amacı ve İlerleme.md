@@ -104,12 +104,12 @@ Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulum
 
 ## 4. Kalan işler ve öncelik
 
-1. **Stage 9 — 3D viewer runtime kabulü:** İlk WebGL2 terrain diliminin kodu mevcut. QA ajanı 2D testlerinin geçtiğini bildirdi; 3D toggle/fallback ve ilk açılış performansı tarayıcıda tam doğrulanmadı. Kullanıcı uygulamanın açıldığını, mevcut 3D'nin hedefe uzak olduğunu bildirdi.
-2. **Stage 10 — first-person keşif:** Alparslan entegrasyon sahibi olarak göz hizası kamera, kamera yönlü WASD, DTM zemin teması ve Mars yerçekimini içeren küçük bir hareket dilimini planlasın. `simulation/`, `input/`, `view/3d/` sorumlulukları ayrık; `main.js`, `config.js` ve snapshot/provider sözleşmeleri tek sahibinde kalır. `zM` kaynak kotu ve görsel Z ayrımı ile no-data fallback korunur. Efor henüz belirlenmedi.
+1. **Stage 9 — 3D viewer runtime kabulü:** `d471d6a` üzerindeki düzeltmelerle tarayıcı kabulü yapıldı; `npm test` 13/13 ve `npm run smoke` 26/26 geçti. 3D geçişi, avatar görünürlüğü, bilinmeyen kotta avatar gizleme ve WebGL2 fallback gözlendi. İlk mesh CPU hazırlığı 1.93 sn, toplam geçiş 3.21 sn; başsız smoke 29.1 FPS ölçtü (ortama duyarlı, GPU belleği ölçülmedi). Efe’nin `661d9c7` mesh bellek optimizasyonu sonradan `643026b` ile eklendi; bu birleşik HEAD üzerinde regresyon smoke’u yeniden çalıştırılmalı.
+2. **Stage 10 — first-person keşif:** Sıradaki ana uygulama Alparslan’da: göz hizası kamera, kamera yönlü hareket, DTM zemin teması ve kaynaklı Mars yerçekimi. `simulation/`, `input/`, `view/3d/camera.js` Alparslan’da; `main.js`, `config.js` ve snapshot/provider sözleşmesi entegrasyon sahibinde tek kalır. Ayrı Efe paketi yeni `view/3d/astronaut-rig.js` içinde sunum amaçlı astronot parça geometrisi ve durum/zaman tabanlı poz üretimidir. Alparslan hareket durumu arayüzünü (`timeS`, yatay/düşey hız, `grounded`, `phase`) teyit eder; Efe renderer/camera/main/simulation/input/snapshot dosyalarını değiştirmez, entegrasyonu Alparslan yapar. `zM`/görsel Z ve no-data fallback’i korunur.
 3. **Atmosfer/kuvvet modeli:** NASA ortalama/seasonal değerlerini referans ve senaryo girdisi olarak açıkça etiketle. Belirli Jezero hava koşulu veya gerçek uzay giysisi modeli olduğunu ileri sürme; gerekli kütle/drag/wind parametreleri kaynaklandırılmadan karakter hareketine atmosfer kuvveti uydurma.
 4. **Ortogörüntü ayrı işi:** JP2 çözme kütüphanesi/lisansı ve `PixelIsArea` ile PDS pixel-center yarım piksel farkı araştırılsın; hizalama doğrulanmadan görsel bindirme iddiası kurma. FPS hareketin önkoşulu değildir.
 5. **Yarışma verisi/PLACES:** Gerçek veri gelince Stage 6 intake’i kanıtla aç; gerçek PLACES traverse ise erişilebilir aynı birincil PDS ürünüyle ayrı doğrulansın. HiRISE fallback’i ve rota caveat’ı korunur.
-6. **Stage 8 demo dondurma:** Ürün yönü gösterilebilir olduğunda 60–90 sn demo akışını ve kapsamı kararlaştır. Önceki efor tahmini yeni FPS/physics yönünü kapsamaz.
+6. **Stage 8 demo dondurma:** First-person ve astronot pozu gösterilebilir olduğunda 60–90 sn demo akışını ve kapsamı kararlaştır. Önceki efor tahmini yeni FPS/physics yönünü kapsamaz.
 
 ## 5. Kaynaklar ve atıf
 

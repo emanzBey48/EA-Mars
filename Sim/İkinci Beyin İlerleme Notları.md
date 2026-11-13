@@ -1,6 +1,6 @@
 ﻿# Marswalk — İkinci Beyin İlerleme Notları
 
-**Güncelleme:** 13 Kasım 2026
+**Güncelleme:** 13 Kasım 2026 — Stage 9 kabul turu, mesh optimizasyonu ve Stage 10 görev paylaşımı güncellendi
 **Kapsam:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Notun amacı:** Doğrulanmış proje bağlamını, geçerli kararları ve sıradaki işi tek yerde tutmak.
 
@@ -12,11 +12,11 @@
 
 ## Ürün hedefi ve kapsam
 
-**[ÜRÜN VİZYONU]** Challenge, *Interplanetary Survival Guide: Martian Map*. Nihai amaç, kullanıcının astronotu Mars yüzeyinde yönettiği ayrıntılı bir 3D keşif simülasyonudur. Mevcut 2D Canvas MVP, bu hedefe giden etkinlik öncesi ara kilometre taşıdır. Simülasyon ve çevre ayrıntısı kaynakla doğrulanmalı; ürün canlı telemetri veya rover güvenlik/karar destek sistemi iddiası taşımaz.
+**[ÜRÜN VİZYONU]** Challenge, *Interplanetary Survival Guide: Martian Map*. Nihai amaç, kullanıcının astronotu Mars yüzeyinde **birinci şahıs keşif kamerasıyla** yönettiği ayrıntılı 3D simülasyondur. “FPS” first-person keşif/kontrol anlamındadır; shooter değildir. Mevcut 2D Canvas MVP ve WebGL2 orbit-camera viewer ara kilometre taşlarıdır. Simülasyon ve çevre ayrıntısı kaynakla doğrulanmalı; ürün canlı telemetri veya rover güvenlik/karar destek sistemi iddiası taşımaz.
 
 **[DOSYA/KAYNAKLA DOĞRULANDI]** İlk oynanabilir MVP 2D kanvas haritasıdır: WASD/ok tuşlarıyla hareket, senaryo saati, duraklat/devam, yeniden başlat, rota sapması ve koridor, DTM kotu ile 3×3 Horn eğimi. HiRISE’den türetilmiş gölgeli kabartma görsel amaçlıdır; ortogörüntü değildir.
 
-**[YÖN/KARAR]** 3D nihai ürün yönüdür; henüz uygulama yok ve şimdi ana geliştirme odağıdır. İlk terrain dilimi için ek veri seti gerekmez; yarışma verisi gelene kadar yerel HiRISE fixture’ı kullanılır. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; veri örnekleri/snapshot’lar kopyalanmış ve değiştirilemez olmalı.
+**[YÖN/KARAR]** Terrain viewer’ın ilk WebGL2 dilimi mevcut; first-person hareket, DTM zemin teması ve karakter rig/animasyonu henüz uygulanmadı. Stage 9’un ilk runtime kabul turu `d471d6a` üzerinde tamamlandı. Efe’nin mesh bellek optimizasyonu `661d9c7` `643026b` ile sonradan entegre edildi; birleşik HEAD’de regresyon smoke’u tekrar edilmelidir. Yarışma verisi gelene kadar yerel HiRISE fixture’ı terrain, kamera, hareket ve rig prototipi için yeterlidir. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; snapshot’lar kopyalanmış ve değiştirilemez olmalı.
 
 ## Yerel HiRISE verileri ve hizalama
 
@@ -60,6 +60,9 @@ Sıradaki dış doğrulama işi, internete kısıtsız bir ortamda PDS Search AP
 - `public/js/surface/registry.js`: manifest validator, provider registry ve HiRISE fallback.
 - `public/js/simulation/sim.js`: kullanıcı hareketi, senaryo saati, faz, rota ilerlemesi/sapması ve `WorldSnapshot`.
 - `public/js/view/render.js`: kamera ve Canvas çizimi; `render()` snapshot/kamera/hazır terrain asset’i tüketir. `buildTerrainImage(layer)` görsel asset’i raster katmanından önceden üretir.
+- `public/js/view/3d/terrain-mesh.js`: renderer’dan bağımsız CPU terrain mesh üretimi; `positions`, `normals`, `indices`, kaynak kotlar, bounds ve provenance döndürür. No-data quad’ları atlar.
+- `public/js/view/3d/renderer.js`, `camera.js`: WebGL2 terrain renderer ve orbit-camera. Kamera açısı/etkileşimi henüz first-person kontrol değildir.
+- `public/js/view/3d/astronaut-rig.js`: roadmap’te Efe için ayrılmış yeni, henüz oluşturulmamış renderer-bağımsız rig/poz modülü.
 - `public/js/input/input.js`: klavye/fare ve kontrol bağlama.
 - `public/js/view/hud.js`: DOM panelleri ve göstergeler.
 - `public/js/main.js`: birleştirme noktası; `window.marswalk` yalnız `?debug=1` veya açık debug bayrağıyla açılır.
@@ -82,28 +85,31 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 - Başsız tarayıcı smoke testi: `npm run smoke` — README Node.js ≥22 ve yerel Edge/Chrome gerektiğini söyler; DevTools ile giriş ve arayüz kontrolleri yapıp `test-output/` ekran görüntüleri üretir.
 - Elle demo: WASD/ok, P/Space duraklat-devam, R yeniden başlat; koridor dışına çıkma/geri dönme; DTM kot/eğim ve katman durumunu izleme.
 
-**[KULLANICI BİLDİRDİ]** Alparslan 12 Kasım’da regresyon kontrollerinin geçtiğini bildirdi. Bu oturumda testler yeniden çalıştırılmadı; bağımsız doğrulama değildir.
+**[STAGE 9 RUNTIME KABULİ — DOĞRULANDI, 13 KASIM]** `d471d6a` commit’inde `npm test` 13/13, `npm run smoke` 26/26 geçti. Smoke 2D↔3D geçişini, görünür astronotu, bilinmeyen kotta avatar gizlemeyi ve WebGL2 hatasında 2D fallback’i kontrol etti. 1,884,301 hücreli mesh CPU hazırlığı 1.93 sn, ilk 3D geçişi 3.21 sn; bu başsız çalıştırmada yaklaşık 29.1 FPS ölçüldü. FPS ortama duyarlıdır; GPU belleği ölçülmedi. **Sonraki `661d9c7` mesh bellek optimizasyonu `643026b` ile eklendikten sonra bu birleşik HEAD’de regresyon smoke’u henüz çalıştırılmadı.**
 
 ## Kararlar ve açık konular
 
 ### Kararlar
 
-1. Kullanıcı kontrollü 2D Marswalk MVP korunur; ayrıntılı 3D simülasyon nihai ürün hedefidir ve şu an ana geliştirme odağıdır.
+1. Kullanıcı kontrollü 2D Marswalk MVP korunur; nihai ürün hedefi first-person 3D keşiftir. Mevcut orbit-camera terrain görüntüsü ara kilometre taşıdır.
 2. PLACES polylinesi alınana kadar rota düz çizgisi açıkça “basitleştirilmiş waypoint bağlantısı” olarak etiketlenir.
 3. DTM kotu arşiv ürününden örneklenen değer; eğim DTM’den hesaplanan değer; oyuncu konumu/saat/hız/koridor senaryo/UI değeridir.
 4. No-data ve unavailable değerleri sıfıra çevrilmez; güvenlik iddiası veya skor üretilmez.
 
 ### Açık konular
 
-- Yerel kullanıcı testinin sonucu ve demo öncesi kalan UX sorunları.
-- Yarışma verisi gelene kadar yerel HiRISE DTM ile 3D dikey dilim: terrain mesh, avatar/kamera ve WorldSnapshot entegrasyonu. Mevcut kaynakta 3D renderer yok.
+- `643026b` birleşik HEAD üzerinde Stage 9 smoke/regresyon tekrarının sonucu.
+- Stage 10: Alparslan movement state sözleşmesi, first-person kamera/bakış, kamera yönlü hareket, DTM yüzey teması ve kaynaklı yerçekimi.
+- Efe’nin yeni kod paketi: Alparslan’ın hareket arayüzü netleşince `view/3d/astronaut-rig.js` içinde renderer-bağımsız sunum rig’i ve idle/walk/stop/airborne poz üretimi. Efe `renderer.js`, `camera.js`, `main.js`, `simulation/`, `input/`, `config.js` veya snapshot/provider entegrasyonuna dokunmaz; renderer entegrasyonu Alparslan’da kalır.
+- JP2 JPEG 2000 decoder/lisansı ve PixelIsArea/PDS yarım-piksel hizalama araştırması; FPS işinden bağımsızdır.
+- Yerel kullanıcı gözden geçirmesinden sonra demo öncesi kalan UX sorunları.
 - Yarışma verisi ulaşınca Stage 6 validator boşlukları ve veri adapter intake’i ayrı iş olarak açılmalı; şimdilik bu 3D ana iş hattını bloke etmez.
 - PLACES ham CSV’nin engelsiz ağdan alınması, etiket/SIS ve koordinat çerçevesinin doğrulanması.
 - DTM–JP2 yarım piksel kayıt farkının gerektiğinde piksel merkezi/köşesi düzeyinde bağımsız yeniden teyidi.
 
 ## Önerilen sonraki somut adım
 
-**Şu anki ana adım — eşzamanlı 3D dikey dilim:** Alparslan ayrı clone/worktree ve branch’te runtime (Three.js/WebGL2) kararını verip `view/3d/renderer.js`, `camera.js` ve `main.js` entegrasyonunu geliştirir. Takım arkadaşı ayrı clone/worktree ve branch’te renderer’dan bağımsız `view/3d/terrain-mesh.js` CPU builder’ını üretir; belirli 3D deneyimi önkoşul değildir. Ortak API: typed positions/normals/indices, kaynak vertex kotları, yerel bounds ve provenance/display metadata; no-data içeren quad üçgenlenmez ve boşluk üzerinden köprü kurulmaz. Avatar/input/HUD işi entegrasyondan sonraki dalgadır. Yarışma verisi gelince Stage 6 intake’i ayrı aç; veri veya PLACES izi uydurma.
+**Şu anki adım:** Önce `643026b` birleşik sürümde Stage 9 regresyon smoke’unu tekrarla ve sonucu kaydet. Sonra Alparslan Stage 10 hareket durum arayüzü ile first-person kamera/movement/yüzey teması paketini yürütür; `main.js`, `config.js` ve snapshot/provider bağlantısı onda kalır. Efe, bu arayüze göre yeni `view/3d/astronaut-rig.js` modülünü ayrı branch’te üretir; renderer entegrasyonunu Alparslan yapar. Animasyon sunum amaçlıdır, gerçek suit biyomekaniği değildir. Yarışma verisi gerektirmeyen bağımsız işler arasında JP2 decode/alignment araştırması ve erişim olursa PLACES doğrulaması da vardır. Stage 6 organizer intake’i gerçek yarışma verisi geldiğinde açılır; veri veya PLACES izi uydurulmaz.
 
 ## Git çalışma kuralı
 
@@ -111,13 +117,13 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 AI’lar önemli ve gözden geçirilebilir aşamaları küçük commit’lere ayırsın; staged diff’i önceden incelesin ve görev branch’ini paylaşsın. Kullanıcı onayı bekleniyorsa commit/push yapma. Push başarısızsa commit hash’ini ve gerçek hatayı bildir; TLS doğrulamasını kapatma. Alparslan entegrasyon sahibi olarak PR/diff’i inceler. Testler yalnız kullanıcı istediğinde çalıştırılır.
 
-**Takım arkadaşı:** İlk somut kod paketi `terrain-mesh.js` CPU builder’dır ve beceri/ilgi tahminine bağlı değildir. Sonraki PLACES kaynak doğrulaması veya demo QA işleri kapasite ve ilgiye göre ayrıca atanabilir.
+**Efe’nin görev durumu:** CPU mesh builder (`3600563`) ve mesh bellek optimizasyonu (`661d9c7`) tamamlanıp `643026b` ile entegrasyon dalına geldi. Yeni görev astronot rig/poz üreticisidir (`view/3d/astronaut-rig.js`); hareket alanlarını Alparslan netleştirince başlatılır. Branch commit metadata’sı Codex AI adını gösterdiğinden optimizasyon commit’inin Efe tarafından kişisel olarak yazıldığını metadata üzerinden doğrulayamıyoruz.
 
 ## 13 Kasım 2026 oturum özeti
 
 - **[KAYNAKTA TAMAMLANDI]** `Sim/public/js` modülleri alanlara göre düzenlendi: `geo/`, `surface/`, `simulation/`, `input/` ve `view/`. `main.js` ile `config.js` entegrasyon noktaları olarak kökte kaldı; `index.html` giriş yolu değişmedi.
 - **[MİMARİ KARAR]** Her modülün paylaşılan çalışma zamanı state’ini okuyacağı mutable global dosya oluşturulmadı. Ortak değişmeyen değerler `config.js`’te; çalışma zamanı bağımlılıkları parametre/callback ile aktarılıyor. `main.js`, `config.js` ve snapshot/provider sözleşmeleri koordine edilerek değiştirilmesi gereken sıcak noktalardır.
-- **[AÇIK]** Rota geometrisi ve metrikleri hâlâ `geo` ile `simulation` arasında dağılmıştır; henüz `route/` modülü yok. 3D renderer da yok; ana iş olarak bağımsız `view/3d/` katmanında geliştirilecek.
+- **[DURUM]** Rota geometrisi ve metrikleri hâlâ `geo` ile `simulation` arasında dağılmıştır; yeni `route/` modülü yok. WebGL2 renderer, kamera ve CPU mesh builder artık mevcut; bunlar first-person deneyimi tamamlanmış olduğu anlamına gelmez.
 - **[GIT]** Güncel görev bölümü ve belge eşitlemesi `d6a1189 docs: align 3D roadmap for parallel work` commit’iyle `origin/docs/parallel-roadmap` dalına push edildi. Önceki `aae4830` modül düzenleme commit’i `docs/shared-code-boundaries` dalındadır. Bu işte uygulama koduna/testlere dokunulmadı.
-- **[DOĞRULAMA]** `git diff --check` temizdi. Bu oturumda test çalıştırılmadı.
+- **[GIT/DOĞRULAMA — SON DURUM]** Entegrasyon dalı `codex/stage9-acceptance-fixes`; son kod entegrasyonu `643026b`. Stage 9 testleri `d471d6a` üzerinde geçti; son mesh optimizasyonundan sonraki regresyon henüz tekrar edilmedi. Bu not güncellenirken test çalıştırılmadı.
 

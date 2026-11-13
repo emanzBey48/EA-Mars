@@ -102,10 +102,17 @@ try {
     `active=${diag3d?.activeView}, mesh=${diag3d?.terrainMeshReady}, hücre=${diag3d?.terrainMeshCellCount}, CPU build=${diag3d?.terrainMeshBuildMs?.toFixed(1)} ms, ilk geçiş=${first3dWallMs} ms`);
   const fpPose = await evaluate(`(() => { const m=window.marswalk,c=m.camera3d,s=m.getSnapshot(); const d=m.getDiagnostics();
     return {mode:c.mode,eyeHeightM:c.eyeHeightM,eyeZ:c.zDisplay,bodyZ:s.astronaut.bodyWorldZM,
-      avatarDrawn:d.renderer?.avatarDrawn,triangles:d.renderer?.terrainTriangles}; })()`);
+      avatarDrawn:d.renderer?.avatarDrawn,worldRigDrawn:d.renderer?.worldRigDrawn,viewModelDrawn:d.renderer?.firstPersonViewModelDrawn,triangles:d.renderer?.terrainTriangles,
+      pose:d.renderer?.rigPose,parts:d.renderer?.rigPartsDrawn,visible:d.renderer?.firstPersonVisibleParts,
+      rigHeading:d.renderer?.rigHeadingRad,yaw:c.yawRad,contact:d.renderer?.surfaceContactStatus}; })()`);
   check('6b Göz hizası first-person pozu geçerli DTM sahnesine bağlı', fpPose.mode === 'first-person' && fpPose.eyeHeightM > 0 &&
     Number.isFinite(fpPose.eyeZ) && Number.isFinite(fpPose.bodyZ) && fpPose.triangles > 0,
     `mode=${fpPose.mode}, eye=${fpPose.eyeHeightM} m, bodyWorldZM=${fpPose.bodyZ}, terrain triangles=${fpPose.triangles}`);
+  check('6i Rig torso/kolları çizim listesinde ve parça merkezleri frustum içinde; heading rig ekseniyle hizalı',
+    ['torso','leftArm','rightArm'].every((part) => fpPose.parts?.includes(part) && fpPose.visible?.includes(part)) &&
+      Math.abs(fpPose.rigHeading - (fpPose.yaw + Math.PI / 2)) < 1e-6 && fpPose.contact === 'ok' &&
+      fpPose.worldRigDrawn === false && fpPose.viewModelDrawn === true,
+    `poz=${fpPose.pose}, çizilen=${fpPose.parts?.join(',')}, frustum içi=${fpPose.visible?.join(',')}, yaw=${fpPose.yaw}, rig heading=${fpPose.rigHeading}`);
   await shot('05-stage9-3d.png');
   const heapAfter = await send('Runtime.getHeapUsage').then((r) => r.result?.usedSize ?? null);
   const fps = await evaluate(`new Promise(resolve => { let n=0, start=performance.now(); function tick(t){ n++; if(t-start>=2500) resolve({frames:n,elapsedMs:t-start,fps:n*1000/(t-start)}); else requestAnimationFrame(tick); } requestAnimationFrame(tick); })`);
@@ -116,7 +123,10 @@ try {
     `heap ${heapBefore ?? 'n/a'} → ${heapAfter ?? 'n/a'} bytes (Δ ${Number.isFinite(heapBefore) && Number.isFinite(heapAfter) ? heapAfter - heapBefore : 'n/a'}); GPU memory API yok`);
   await press('KeyP', 'p');
   const fpBefore = await evaluate(`(() => { const m=window.marswalk; return {x:m.sim.pos.x,y:m.sim.pos.y,yaw:m.camera3d.yawRad}; })()`);
-  await keyEvt('keyDown', 'KeyW', 'w'); await sleep(450); await keyEvt('keyUp', 'KeyW', 'w'); await sleep(100);
+  await keyEvt('keyDown', 'KeyW', 'w'); await sleep(350);
+  const gaitDuringMove = await evaluate(`(() => { const d=window.marswalk.getDiagnostics(); return {pose:d.renderer?.rigPose,
+    frequency:d.renderer?.rigGaitFrequencyHz,phase:d.renderer?.rigGaitPhaseRad,speed:d.movement.horizontalSpeedMps}; })()`);
+  await sleep(100); await keyEvt('keyUp', 'KeyW', 'w'); await sleep(100);
   const fpAfter = await evaluate(`(() => { const m=window.marswalk,s=m.getSnapshot(),d=m.getDiagnostics(); return {x:m.sim.pos.x,y:m.sim.pos.y,
     yaw:m.camera3d.yawRad,mode:d.cameraMode,grounded:s.astronaut.movement.grounded,status:s.astronaut.elevationStatus,
     cameraX:m.camera3d.xM,cameraY:m.camera3d.yM}; })()`);
@@ -126,21 +136,45 @@ try {
     fpAfter.mode === 'first-person' && fpAlong > 0.5 && fpAfter.grounded && fpAfter.status === 'ok' &&
       Math.abs(fpAfter.cameraX - fpAfter.x) < 1e-6 && Math.abs(fpAfter.cameraY - fpAfter.y) < 1e-6,
     `kamera yönündeki ilerleme=${fpAlong.toFixed(2)} m, grounded=${fpAfter.grounded}, sample=${fpAfter.status}`);
+  await press('KeyP', 'p');
+  const pauseRigA = await evaluate(`(() => { const d=window.marswalk.getDiagnostics(); return {time:d.movement.timeS,pose:d.renderer?.rigPose,gait:d.renderer?.rigGaitPhaseRad}; })()`);
+  await sleep(400);
+  const pauseRigB = await evaluate(`(() => { const d=window.marswalk.getDiagnostics(); return {time:d.movement.timeS,pose:d.renderer?.rigPose,gait:d.renderer?.rigGaitPhaseRad}; })()`);
+  check('6j Pause rig pozunu ve gait fazını donduruyor', pauseRigA.time === pauseRigB.time && pauseRigA.pose === pauseRigB.pose && pauseRigA.gait === pauseRigB.gait,
+    `saat ${pauseRigA.time}→${pauseRigB.time}, poz ${pauseRigA.pose}→${pauseRigB.pose}, gait ${pauseRigA.gait}→${pauseRigB.gait}`);
+  await press('KeyP', 'p');
+  check('6l WASD hareketi snapshot hızından deterministik yürüyüş gait üretir', gaitDuringMove.pose === 'walk' && gaitDuringMove.frequency > 0 &&
+    gaitDuringMove.speed > 0,
+    `rig=${gaitDuringMove.pose}, hız=${gaitDuringMove.speed}, frekans=${gaitDuringMove.frequency}, faz=${gaitDuringMove.phase}`);
   await evaluate(`document.getElementById('btn-view-2d').click()`); await sleep(100);
   const back2d = await evaluate(`({active:window.marswalk.getDiagnostics().activeView, hidden:document.getElementById('map').hidden})`);
   await evaluate(`document.getElementById('btn-view-3d').click()`); await sleep(150);
   const back3d = await evaluate(`window.marswalk.getDiagnostics()`);
   check('6e 3D→2D→3D tekrar geçişi çalışıyor', back2d.active === '2d' && !back2d.hidden && back3d.activeView === '3d',
     `2D=${back2d.active}, yeniden 3D=${back3d.activeView}`);
-  const unknown = await evaluate(`(() => { const m=window.marswalk, L=m.layers.dtm, original=L.sampleSurface; L.sampleSurface=()=>({
+  const unknown = await evaluate(`(() => { const m=window.marswalk, L=m.layers.dtm, original=L.sampleSurface, originalElevation=L.sampleElevation;
+    m.__testOriginalElevation=(x,y)=>originalElevation.call(L,x,y);
+    L.sampleElevation=()=>({status:'unavailable',value:null,unit:'m',verticalDatum:null,source:null,method:null,cell:null,reason:'test-only unknown elevation'});
+    L.sampleSurface=()=>({
     elevation:{status:'unavailable',value:null,unit:'m',verticalDatum:null,source:null,method:null,cell:null,reason:'test-only unknown elevation'},
     slope:{status:'unavailable',value:null,unit:'°',verticalDatum:null,source:null,method:null,window:'3×3',cell:null,reason:'test-only unknown elevation'},zM:null,status:'unavailable'});
-    m.updateHud(); return {original: typeof original}; })()`);
+    m.updateHud(); return {original: typeof original,originalElevation:typeof originalElevation}; })()`);
   await sleep(150);
   const unknownState = await evaluate(`(() => { const m=window.marswalk,d=m.getDiagnostics(),s=m.getSnapshot(); return {zM:s.astronaut.zM,status:s.astronaut.elevationStatus,
-    hud:document.getElementById('v-elev').textContent,avatarDrawn:d.renderer?.avatarDrawn,active:d.activeView}; })()`);
-  check('6f Unknown elevation HUD açık, kot null ve avatar çizilmemiş', unknown.original === 'function' && unknownState.zM === null && unknownState.status === 'unavailable' && unknownState.hud.includes('Yükseklik bilinmiyor') && unknownState.avatarDrawn === false,
-    `zM=${unknownState.zM}, status=${unknownState.status}, avatarDrawn=${unknownState.avatarDrawn}`);
+    hud:document.getElementById('v-elev').textContent,avatarDrawn:d.renderer?.avatarDrawn,worldRigDrawn:d.renderer?.worldRigDrawn,
+    viewModelDrawn:d.renderer?.firstPersonViewModelDrawn,active:d.activeView,
+    grounded:s.astronaut.movement.grounded,airborne:s.astronaut.movement.airborne,pose:d.renderer?.rigPose,contact:d.renderer?.surfaceContactStatus}; })()`);
+  check('6f Unknown kot HUD açık; nötr FP view-model yalnızca retained pozda, world rig çizilmemiş', unknown.original === 'function' && unknown.originalElevation === 'function' && unknownState.zM === null && unknownState.status === 'unavailable' && unknownState.hud.includes('Yükseklik bilinmiyor') && unknownState.grounded === false && unknownState.airborne === false && unknownState.pose === 'unknown' && unknownState.contact === 'unavailable' && unknownState.worldRigDrawn === false && unknownState.viewModelDrawn === true,
+    `zM=${unknownState.zM}, status=${unknownState.status}, grounded=${unknownState.grounded}, airborne=${unknownState.airborne}, rig=${unknownState.pose}, worldRig=${unknownState.worldRigDrawn}, viewModel=${unknownState.viewModelDrawn}, contact=${unknownState.contact}`);
+  const jumpUnknown = await evaluate(`(() => { const m=window.marswalk, sim=m.sim; sim.phase='running';
+    const known=m.__testOriginalElevation(sim.pos.x,sim.pos.y); sim.resolveSurfaceContact(known); sim.stepFirstPerson(0.025,{jump:true},known);
+    return {airborne:sim.airborne,verticalSpeed:sim.verticalSpeedMps,grounded:sim.grounded,phase:sim.phase,knownStatus:known.status}; })()`);
+  await sleep(100);
+  const jumpUnknownState = await evaluate(`(() => { const s=window.marswalk.getSnapshot(),d=window.marswalk.getDiagnostics();
+    return {zM:s.astronaut.zM,contact:s.astronaut.movement.groundContactStatus,airborne:s.astronaut.movement.airborne,pose:d.renderer?.rigPose}; })()`);
+  check('6m Bilinmeyen temas açık kalırken önceden başlamış jump yörüngesi korunuyor', jumpUnknown.airborne &&
+    jumpUnknownState.zM === null && jumpUnknownState.contact === 'unavailable' && jumpUnknownState.airborne && jumpUnknownState.pose === 'airborne',
+    `known=${jumpUnknown.knownStatus}, grounded=${jumpUnknown.grounded}, başlangıç v=${jumpUnknown.verticalSpeed}, zM=${jumpUnknownState.zM}, temas=${jumpUnknownState.contact}, airborne=${jumpUnknownState.airborne}, rig=${jumpUnknownState.pose}`);
   await evaluate(`location.reload()`);
   for (let i = 0; i < 100; i++) { const ok = await evaluate('!!(window.marswalk && window.marswalk.layers.dtm.available)').catch(() => false); if (ok) break; await sleep(200); }
   await sleep(300);

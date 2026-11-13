@@ -44,7 +44,10 @@ const PRESENTATION_STRIDE_LENGTH_M = ASTRONAUT_RIG.metadata.presentationStrideLe
  *
  * The caller supplies the current motion state. `phase` may be an animation intent (`idle`, `walk`,
  * `stop`, `airborne`, or `paused`) or a simulation lifecycle phase (`ready`, `running`, `arrived`).
- * Airborne has precedence when either `grounded` is false or `phase` is `airborne`. Explicit `stop`
+ * If `groundContactStatus` is supplied, only a valid `ok` sample can classify an ungrounded body as
+ * airborne. `airborne` is the explicit jump/trajectory intent; unknown contact alone never starts
+ * that pose and produces a static `unknown` neutral pose. This presentation state makes no contact
+ * claim. When contact status is omitted, the legacy `grounded` behavior is retained. Explicit `stop`
  * or lifecycle `arrived` selects the settled stop pose; `running` with zero horizontal speed is
  * idle, since a stateless input cannot infer that a stop transition just occurred. `paused` is not
  * a separate body pose: retain the motion state and freeze `timeS` while paused, and the exact same
@@ -56,18 +59,21 @@ const PRESENTATION_STRIDE_LENGTH_M = ASTRONAUT_RIG.metadata.presentationStrideLe
  * A renderer may then apply the whole-rig world transform (including heading) separately.
  *
  * @param {{timeS:number, horizontalSpeedMps:number, verticalSpeedMps:number,
- *   grounded:boolean, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
- * @returns {{pose:'idle'|'walk'|'stop'|'airborne', gaitPhaseRad:number, gaitFrequencyHz:number,
+ *   grounded:boolean, airborne?:boolean, groundContactStatus?:string, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
+ * @returns {{pose:'idle'|'walk'|'stop'|'airborne'|'unknown', gaitPhaseRad:number, gaitFrequencyHz:number,
  *   rootOffset:[number,number,number], rootRotationRad:[number,number,number],
  *   parts:Record<string,{offset:[number,number,number],rotationRad:[number,number,number]} >}}
  */
 export function poseAstronautRig(state) {
   assertMotionState(state);
 
-  const { timeS, horizontalSpeedMps: speed, verticalSpeedMps, grounded, phase } = state;
+  const { timeS, horizontalSpeedMps: speed, verticalSpeedMps, grounded, groundContactStatus, phase } = state;
+  const contactKnown = groundContactStatus === undefined || groundContactStatus === 'ok';
   let pose;
-  if (!grounded || phase === 'airborne') {
+  if (phase === 'airborne' || state.airborne === true || (contactKnown && !grounded)) {
     pose = 'airborne';
+  } else if (!contactKnown) {
+    pose = 'unknown';
   } else if (phase === 'stop' || phase === 'arrived') {
     pose = 'stop';
   } else if (speed > MOVING_SPEED_EPSILON_MPS && phase !== 'idle' && phase !== 'ready') {
@@ -105,6 +111,10 @@ export function poseAstronautRig(state) {
     parts.rightBoot = hingedPart('rightBoot', -0.12 * verticalSign);
   } else if (pose === 'stop') {
     // Fixed settled stance: no hidden previous-pose state or transition clock is required.
+    parts.leftArm = hingedPart('leftArm', -0.035);
+    parts.rightArm = hingedPart('rightArm', -0.035);
+  } else if (pose === 'unknown') {
+    // Static neutral presentation: unknown contact is not visually asserted as ground or flight.
     parts.leftArm = hingedPart('leftArm', -0.035);
     parts.rightArm = hingedPart('rightArm', -0.035);
   } else {
@@ -147,7 +157,8 @@ function fixedPart() {
 function assertMotionState(state) {
   if (!state || !Number.isFinite(state.timeS) || state.timeS < 0 ||
       !Number.isFinite(state.horizontalSpeedMps) || state.horizontalSpeedMps < 0 ||
-      !Number.isFinite(state.verticalSpeedMps) || typeof state.grounded !== 'boolean') {
+      !Number.isFinite(state.verticalSpeedMps) || typeof state.grounded !== 'boolean' ||
+      (state.airborne !== undefined && typeof state.airborne !== 'boolean')) {
     throw new TypeError('state requires finite timeS, non-negative horizontalSpeedMps, finite verticalSpeedMps, and boolean grounded');
   }
   const phases = ['idle', 'walk', 'stop', 'airborne', 'paused', 'ready', 'running', 'arrived'];

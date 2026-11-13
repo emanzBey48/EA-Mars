@@ -29,6 +29,7 @@ export class MarswalkSim {
     this.distanceWalkedM = 0;
     this.verticalSpeedMps = 0;
     this.grounded = false;
+    this.airborne = false; // explicit jump trajectory; separate from whether current DTM contact is known
     this.bodyWorldZReferenceM = null;
     this.heightAboveReferenceM = 0;
     this.horizontalVelocityXMps = 0;
@@ -114,9 +115,10 @@ export class MarswalkSim {
     if (input.jump && this.grounded && sampleKnown && this.bodyWorldZReferenceM !== null) {
       this.verticalSpeedMps = this.scenario.jumpImpulseMps;
       this.grounded = false;
+      this.airborne = true;
     }
 
-    if (!this.grounded && this.bodyWorldZReferenceM !== null && dtSim > 0) {
+    if (this.airborne && this.bodyWorldZReferenceM !== null && dtSim > 0) {
       const previousVerticalSpeedMps = this.verticalSpeedMps;
       this.verticalSpeedMps -= this.scenario.marsGravityMps2 * dtSim;
       this.heightAboveReferenceM += (previousVerticalSpeedMps + this.verticalSpeedMps) * 0.5 * dtSim;
@@ -124,6 +126,7 @@ export class MarswalkSim {
         this.heightAboveReferenceM = 0;
         this.verticalSpeedMps = 0;
         this.grounded = true;
+        this.airborne = false;
       }
     }
 
@@ -160,9 +163,11 @@ export class MarswalkSim {
         this.bodyWorldZReferenceM = surface.value;
         this.heightAboveReferenceM = 0;
         this.grounded = true;
+        this.airborne = false;
       } else if (this.grounded) {
         this.bodyWorldZReferenceM = surface.value;
         this.heightAboveReferenceM = 0;
+        this.airborne = false;
       } else {
         const bodyWorldZM = this.bodyWorldZReferenceM + this.heightAboveReferenceM;
         this.bodyWorldZReferenceM = surface.value;
@@ -171,6 +176,7 @@ export class MarswalkSim {
           this.heightAboveReferenceM = 0;
           this.verticalSpeedMps = 0;
           this.grounded = true;
+          this.airborne = false;
         }
       }
       return true;
@@ -272,6 +278,7 @@ export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints =
         horizontalSpeedMps: sim.horizontalSpeedMps,
         verticalSpeedMps: sim.verticalSpeedMps,
         grounded: sim.grounded,
+        airborne: sim.airborne,
         phase: sim.phase,
         groundContactStatus: elevation.status,
       },

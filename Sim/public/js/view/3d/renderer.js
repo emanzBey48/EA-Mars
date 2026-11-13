@@ -4,6 +4,7 @@
 // This keeps deployment simple; the tradeoff is that shaders and GPU resource lifecycle live here.
 
 import { getViewProjectionMatrix } from './camera.js';
+import { ASTRONAUT_RIG, poseAstronautRig } from './astronaut-rig.js';
 
 const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
@@ -15,16 +16,34 @@ uniform vec3 uObjectOffset;
 uniform vec3 uBaseColor;
 uniform float uHeadingRad;
 uniform float uVerticalScale;
+uniform vec3 uPartSize;
+uniform vec3 uPartCenter;
+uniform vec3 uPartOffset;
+uniform vec3 uPartRotationRad;
+uniform vec3 uRootOffset;
+uniform vec3 uRootRotationRad;
 out float vLighting;
 out vec3 vColor;
+vec3 rotateEuler(vec3 p, vec3 r) {
+  float cx = cos(r.x), sx = sin(r.x);
+  p = vec3(p.x, cx * p.y - sx * p.z, sx * p.y + cx * p.z);
+  float cy = cos(r.y), sy = sin(r.y);
+  p = vec3(cy * p.x + sy * p.z, p.y, -sy * p.x + cy * p.z);
+  float cz = cos(r.z), sz = sin(r.z);
+  return vec3(cz * p.x - sz * p.y, sz * p.x + cz * p.y, p.z);
+}
 void main() {
   float c = cos(uHeadingRad);
   float s = sin(uHeadingRad);
-  vec2 rotatedXY = vec2(c * aPosition.x - s * aPosition.y, s * aPosition.x + c * aPosition.y);
-  vec3 localPosition = vec3(rotatedXY, aPosition.z * uVerticalScale);
-  vec3 worldPosition = localPosition + uObjectOffset;
-  vec3 localNormal = vec3(aNormal.x, aNormal.y, aNormal.z / uVerticalScale);
+  vec3 partPosition = rotateEuler(aPosition * uPartSize, uPartRotationRad) + uPartCenter + uPartOffset;
+  vec3 rootPosition = rotateEuler(partPosition + uRootOffset, uRootRotationRad);
+  vec2 rotatedXY = vec2(c * rootPosition.x - s * rootPosition.y, s * rootPosition.x + c * rootPosition.y);
+  vec3 worldPosition = vec3(rotatedXY, rootPosition.z * uVerticalScale) + uObjectOffset;
+  vec3 localNormal = aNormal / uPartSize;
+  localNormal = rotateEuler(localNormal, uPartRotationRad);
+  localNormal = rotateEuler(localNormal, uRootRotationRad);
   vec3 rotatedNormal = vec3(c * localNormal.x - s * localNormal.y, s * localNormal.x + c * localNormal.y, localNormal.z);
+  rotatedNormal.z /= uVerticalScale;
   vec3 normal = normalize(rotatedNormal);
   vLighting = 0.28 + 0.72 * max(dot(normal, normalize(uLightDirection)), 0.0);
   vColor = aColor;
@@ -91,75 +110,63 @@ function assertMeshAsset(mesh) {
   for (const index of mesh.indices) if (index >= vertexCount) throw new RangeError('terrainMesh.indices contains an out-of-range vertex');
 }
 
-function createAstronautGeometry() {
-  const positions = [];
-  const normals = [];
-  const colors = [];
-  const indices = [];
-  const faces = [
-    { normal: [1, 0, 0], corners: [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]] },
-    { normal: [-1, 0, 0], corners: [[-1, 1, -1], [-1, -1, -1], [-1, -1, 1], [-1, 1, 1]] },
-    { normal: [0, 1, 0], corners: [[1, 1, -1], [-1, 1, -1], [-1, 1, 1], [1, 1, 1]] },
-    { normal: [0, -1, 0], corners: [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]] },
-    { normal: [0, 0, 1], corners: [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]] },
-    { normal: [0, 0, -1], corners: [[-1, 1, -1], [1, 1, -1], [1, -1, -1], [-1, -1, -1]] },
-  ];
-  function appendBox(cx, cy, cz, hx, hy, hz, color) {
-    for (const face of faces) {
-      const first = positions.length / 3;
-      for (const [x, y, z] of face.corners) {
-        positions.push(cx + x * hx, cy + y * hy, cz + z * hz);
-        normals.push(...face.normal);
-        colors.push(...color);
-      }
-      indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
-    }
-  }
-  // High-contrast, presentation-only astronaut silhouette in local metres; not a physical body model.
-  const suit = [1.0, 0.48, 0.08];
-  const helmet = [0.92, 0.96, 1.0];
-  const visor = [0.035, 0.12, 0.22];
-  const boots = [0.12, 0.18, 0.24];
-  const pack = [0.08, 0.58, 0.98];
-  appendBox(0, 0, 0.94, 0.24, 0.17, 0.29, suit); // torso
-  appendBox(0, 0, 1.34, 0.18, 0.17, 0.17, helmet); // helmet
-  appendBox(0, -0.176, 1.34, 0.12, 0.025, 0.095, visor); // front visor
-  appendBox(0, 0.21, 0.96, 0.24, 0.13, 0.3, pack); // backpack
-  appendBox(-0.16, 0, 0.38, 0.09, 0.12, 0.36, suit); // left leg
-  appendBox(0.16, 0, 0.38, 0.09, 0.12, 0.36, suit); // right leg
-  appendBox(-0.16, 0, 0.09, 0.105, 0.14, 0.09, boots); // left boot
-  appendBox(0.16, 0, 0.09, 0.105, 0.14, 0.09, boots); // right boot
-  appendBox(-0.43, 0, 0.91, 0.1, 0.12, 0.29, suit); // left arm
-  appendBox(0.43, 0, 0.91, 0.1, 0.12, 0.29, suit); // right arm
-  return { positions: new Float32Array(positions), normals: new Float32Array(normals), colors: new Float32Array(colors), indices: new Uint16Array(indices) };
-}
-
 function createAstronautBuffers(gl, locations) {
-  const geometry = createAstronautGeometry();
+  const geometry = ASTRONAUT_RIG.geometry;
+  const positions = new Float32Array(geometry.positions);
+  const normals = new Float32Array(geometry.normals);
+  const indices = new Uint16Array(geometry.indices);
   const vao = gl.createVertexArray();
   const positionBuffer = gl.createBuffer();
   const normalBuffer = gl.createBuffer();
-  const colorBuffer = gl.createBuffer();
   const indexBuffer = gl.createBuffer();
-  if (!vao || !positionBuffer || !normalBuffer || !colorBuffer || !indexBuffer) throw new Error('WebGL2 astronaut buffer allocation failed');
+  if (!vao || !positionBuffer || !normalBuffer || !indexBuffer) throw new Error('WebGL2 astronaut buffer allocation failed');
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, geometry.positions, gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(locations.position);
   gl.vertexAttribPointer(locations.position, 3, gl.FLOAT, false, 0, 0);
   gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, geometry.normals, gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(locations.normal);
   gl.vertexAttribPointer(locations.normal, 3, gl.FLOAT, false, 0, 0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, geometry.colors, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(locations.color);
-  gl.vertexAttribPointer(locations.color, 3, gl.FLOAT, false, 0, 0);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.indices, gl.STATIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return { vao, positionBuffer, normalBuffer, colorBuffer, indexBuffer, indexCount: geometry.indices.length };
+  return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: indices.length };
+}
+
+const FIRST_PERSON_RIG_PARTS = ['torso', 'leftArm', 'rightArm'];
+const FIRST_PERSON_RIG_FORWARD_M = 1.6;
+const FIRST_PERSON_RIG_ROOT_BELOW_EYE_M = 1.34;
+
+function rotateEuler([x, y, z], [rx, ry, rz]) {
+  const cx = Math.cos(rx), sx = Math.sin(rx);
+  [y, z] = [cx * y - sx * z, sx * y + cx * z];
+  const cy = Math.cos(ry), sy = Math.sin(ry);
+  [x, z] = [cy * x + sy * z, -sy * x + cy * z];
+  const cz = Math.cos(rz), sz = Math.sin(rz);
+  return [cz * x - sz * y, sz * x + cz * y, z];
+}
+
+function rigPartWorldCenter(part, partPose, pose, objectOffset, headingRad, verticalScale) {
+  let point = part.center.map((value, i) => value + partPose.offset[i]);
+  point = rotateEuler(point.map((value, i) => value + pose.rootOffset[i]), pose.rootRotationRad);
+  const c = Math.cos(headingRad), s = Math.sin(headingRad);
+  return [
+    objectOffset[0] + c * point[0] - s * point[1],
+    objectOffset[1] + s * point[0] + c * point[1],
+    objectOffset[2] + point[2] * verticalScale,
+  ];
+}
+
+function pointInClip(point, viewProjection) {
+  const [x, y, z] = point;
+  const cx = viewProjection[0] * x + viewProjection[4] * y + viewProjection[8] * z + viewProjection[12];
+  const cy = viewProjection[1] * x + viewProjection[5] * y + viewProjection[9] * z + viewProjection[13];
+  const cz = viewProjection[2] * x + viewProjection[6] * y + viewProjection[10] * z + viewProjection[14];
+  const cw = viewProjection[3] * x + viewProjection[7] * y + viewProjection[11] * z + viewProjection[15];
+  return cw > 0 && Math.abs(cx) <= cw && Math.abs(cy) <= cw && cz >= -cw && cz <= cw;
 }
 
 /**
@@ -167,8 +174,9 @@ function createAstronautBuffers(gl, locations) {
  * The prepared terrain asset owns all terrain vertices/indices; omitted no-data quads remain omitted.
  * This module never samples a layer or changes source zM.
  *
- * `renderFrame({ snapshot, camera, terrainMesh })` is the frame contract. The astronaut is drawn
- * only when snapshot elevation is known; its display Z is derived from the asset's explicit displayConfig.
+ * `renderFrame({ snapshot, camera, terrainMesh })` is the frame contract. Rig pose comes only from
+ * immutable snapshot movement state; world Z comes from bodyWorldZM, while sampled zM remains the
+ * current-contact validity signal. The first-person arms/torso are a view model, not another body.
  */
 export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075], lightDirection = [-0.45, -0.35, 1], collectDiagnostics = false } = {}) {
   if (!canvas || typeof canvas.getContext !== 'function') throw new TypeError('A canvas element is required');
@@ -186,9 +194,17 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     baseColor: gl.getUniformLocation(program, 'uBaseColor'),
     headingRad: gl.getUniformLocation(program, 'uHeadingRad'),
     verticalScale: gl.getUniformLocation(program, 'uVerticalScale'),
+    partSize: gl.getUniformLocation(program, 'uPartSize'),
+    partCenter: gl.getUniformLocation(program, 'uPartCenter'),
+    partOffset: gl.getUniformLocation(program, 'uPartOffset'),
+    partRotationRad: gl.getUniformLocation(program, 'uPartRotationRad'),
+    rootOffset: gl.getUniformLocation(program, 'uRootOffset'),
+    rootRotationRad: gl.getUniformLocation(program, 'uRootRotationRad'),
   };
   if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || !locations.viewProjection || !locations.lightDirection ||
-      !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale) {
+      !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
+      !locations.partSize || !locations.partCenter || !locations.partOffset || !locations.partRotationRad ||
+      !locations.rootOffset || !locations.rootRotationRad) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
   }
@@ -280,6 +296,12 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.uniform3f(locations.objectOffset, 0, 0, 0);
       gl.uniform1f(locations.headingRad, 0);
       gl.uniform1f(locations.verticalScale, 1);
+      gl.uniform3f(locations.partSize, 1, 1, 1);
+      gl.uniform3f(locations.partCenter, 0, 0, 0);
+      gl.uniform3f(locations.partOffset, 0, 0, 0);
+      gl.uniform3f(locations.partRotationRad, 0, 0, 0);
+      gl.uniform3f(locations.rootOffset, 0, 0, 0);
+      gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
       gl.uniform3f(locations.baseColor, 0.78, 0.43, 0.25);
       gl.disableVertexAttribArray(locations.color);
       gl.vertexAttrib3f(locations.color, 1, 1, 1);
@@ -290,17 +312,60 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
       const elevationKnown = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
       let avatarDrawn = false;
-      if (elevationKnown && Number.isFinite(player.bodyWorldZM)) {
-        const zDisplay = (player.bodyWorldZM - referenceElevationM) * verticalScale;
-        if (Number.isFinite(zDisplay)) {
-          gl.uniform3f(locations.objectOffset, player.xM, player.yM, zDisplay);
-          gl.uniform1f(locations.headingRad, Number.isFinite(player.headingRad) ? player.headingRad : 0);
-          gl.uniform1f(locations.verticalScale, verticalScale);
-          gl.uniform3f(locations.baseColor, 1, 1, 1);
-          gl.bindVertexArray(astronaut.vao);
-          gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
-          avatarDrawn = true;
+      let firstPersonViewModelDrawn = false;
+      let rigPose = null;
+      let rigPartsDrawn = [];
+      let firstPersonVisibleParts = [];
+      let rigPresentation = 'world';
+      const movement = player.movement;
+      const firstPerson = camera.mode === 'first-person';
+      const hasPoseAnchor = Number.isFinite(player.bodyWorldZM);
+      const canDrawRig = movement && hasPoseAnchor && (firstPerson || elevationKnown);
+      if (canDrawRig) {
+        rigPose = poseAstronautRig(movement);
+        rigPresentation = firstPerson ? 'first-person-view-model' : 'world';
+        const headingRad = (firstPerson && Number.isFinite(camera.yawRad)
+          ? camera.yawRad
+          : (Number.isFinite(player.headingRad) ? player.headingRad : 0)) + ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad;
+        let objectOffset;
+        if (firstPerson) {
+          // Presentation-only view model: forward and slightly above the body-world anchor so
+          // arms/torso enter the lower frame. It is not a second physical/world body position.
+          const forwardX = Math.cos(camera.yawRad), forwardY = Math.sin(camera.yawRad);
+          objectOffset = [
+            camera.xM + forwardX * FIRST_PERSON_RIG_FORWARD_M,
+            camera.yM + forwardY * FIRST_PERSON_RIG_FORWARD_M,
+            camera.zDisplay - FIRST_PERSON_RIG_ROOT_BELOW_EYE_M * verticalScale,
+          ];
+        } else {
+          objectOffset = [player.xM, player.yM, (player.bodyWorldZM - referenceElevationM) * verticalScale];
         }
+        const partIds = firstPerson ? FIRST_PERSON_RIG_PARTS : Object.keys(ASTRONAUT_RIG.parts);
+        gl.uniform3fv(locations.objectOffset, objectOffset);
+        gl.uniform1f(locations.headingRad, headingRad);
+        gl.uniform1f(locations.verticalScale, verticalScale);
+        gl.uniform3f(locations.baseColor, 1, 1, 1);
+        gl.bindVertexArray(astronaut.vao);
+        gl.disableVertexAttribArray(locations.color);
+        if (firstPerson) gl.disable(gl.DEPTH_TEST); // Deliberate lower-frame suit overlay; terrain cannot hide it.
+        for (const id of partIds) {
+          const part = ASTRONAUT_RIG.parts[id];
+          const partPose = rigPose.parts[id];
+          gl.uniform3fv(locations.partSize, part.size);
+          gl.uniform3fv(locations.partCenter, part.center);
+          gl.uniform3fv(locations.partOffset, partPose.offset);
+          gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
+          gl.uniform3fv(locations.rootOffset, rigPose.rootOffset);
+          gl.uniform3fv(locations.rootRotationRad, rigPose.rootRotationRad);
+          gl.vertexAttrib3fv(locations.color, part.colorRgb);
+          gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+          rigPartsDrawn.push(id);
+          const worldCenter = rigPartWorldCenter(part, partPose, rigPose, objectOffset, headingRad, verticalScale);
+          if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
+        }
+        if (firstPerson) gl.enable(gl.DEPTH_TEST);
+        firstPersonViewModelDrawn = firstPerson && rigPartsDrawn.length > 0;
+        avatarDrawn = !firstPerson && rigPartsDrawn.length > 0;
       }
       gl.bindVertexArray(null);
       if (collectDiagnostics) {
@@ -308,6 +373,17 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           frameRenderMs: performance.now() - frameStartedAt,
           terrainTriangles: uploadedMesh.indexCount / 3,
           avatarDrawn,
+          worldRigDrawn: avatarDrawn,
+          firstPersonViewModelDrawn,
+          rigPose: rigPose?.pose ?? null,
+          rigPresentation,
+          rigPartsDrawn,
+          firstPersonVisibleParts: rigPresentation === 'first-person-view-model' ? firstPersonVisibleParts : [],
+          rigGaitPhaseRad: rigPose?.gaitPhaseRad ?? null,
+          rigGaitFrequencyHz: rigPose?.gaitFrequencyHz ?? null,
+          rigHeadingRad: rigPose ? ((Number.isFinite(camera.yawRad) ? camera.yawRad : player.headingRad) + ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad) : null,
+          surfaceContactStatus: movement?.groundContactStatus ?? null,
+          sampledElevationKnown: elevationKnown,
         };
       }
     },
@@ -320,7 +396,6 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.deleteVertexArray(astronaut.vao);
       gl.deleteBuffer(astronaut.positionBuffer);
       gl.deleteBuffer(astronaut.normalBuffer);
-      gl.deleteBuffer(astronaut.colorBuffer);
       gl.deleteBuffer(astronaut.indexBuffer);
       gl.deleteProgram(program);
       disposed = true;

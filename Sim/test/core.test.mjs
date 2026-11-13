@@ -15,6 +15,7 @@ import {
 } from '../public/js/surface/registry.js';
 import { MarswalkSim, PHASE, createWorldSnapshot } from '../public/js/simulation/sim.js';
 import { cameraRelativeMovement, createFirstPersonCamera, getViewProjectionMatrix, lookCamera, setFirstPersonPose } from '../public/js/view/3d/camera.js';
+import { ASTRONAUT_RIG, poseAstronautRig } from '../public/js/view/3d/astronaut-rig.js';
 import { MAP_FRAME, WAYPOINTS, SCENARIO, ROUTE_ORIGIN_NOTE } from '../public/js/config.js';
 
 const adapter = adapterFromLabel(MAP_FRAME, WAYPOINTS[0]);
@@ -340,6 +341,23 @@ test('first-person camera: camera-relative input is normalized and look/pose rem
   assert.ok([...getViewProjectionMatrix(camera, 16 / 9)].every(Number.isFinite));
 });
 
+test('astronaut rig: deterministic gait and explicit contact/airborne presentation', () => {
+  assert.equal(ASTRONAUT_RIG.metadata.forward, '-Y');
+  assert.equal(ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad, Math.PI / 2);
+  const moving = { timeS: 1, horizontalSpeedMps: 1, verticalSpeedMps: 0, grounded: true, airborne: false, groundContactStatus: STATUS.OK, phase: 'running' };
+  const gait = poseAstronautRig(moving);
+  assert.deepEqual(poseAstronautRig(moving), gait);
+  assert.equal(gait.pose, 'walk');
+  assert.ok(gait.gaitFrequencyHz > 0);
+  assert.deepEqual(poseAstronautRig({ ...moving, phase: 'paused' }), gait, 'same frozen snapshot yields same pose');
+  const unknown = poseAstronautRig({ ...moving, grounded: false, verticalSpeedMps: -0.3, groundContactStatus: STATUS.NO_DATA });
+  assert.equal(unknown.pose, 'unknown', 'unknown contact and a velocity value alone do not assert flight');
+  assert.equal(unknown.gaitFrequencyHz, 0);
+  assert.equal(poseAstronautRig({ ...moving, grounded: false, airborne: true, groundContactStatus: STATUS.NO_DATA }).pose, 'airborne');
+  assert.equal(poseAstronautRig({ ...moving, grounded: false, airborne: false, groundContactStatus: STATUS.OK }).pose, 'airborne');
+  assert.equal(poseAstronautRig({ ...moving, grounded: false, groundContactStatus: undefined }).pose, 'airborne', 'legacy callers retain grounded semantics');
+});
+
 test('first-person sim: time-step-stable horizontal input, Mars gravity, contact and explicit unknown terrain', () => {
   const wholeStep = new MarswalkSim({ a: A, b: B }, SCENARIO);
   const splitStep = new MarswalkSim({ a: A, b: B }, SCENARIO);
@@ -358,6 +376,7 @@ test('first-person sim: time-step-stable horizontal input, Mars gravity, contact
   jump.stepFirstPerson(0, {}, known);
   jump.stepFirstPerson(0.025, { jump: true }, known);
   assert.equal(jump.grounded, false);
+  assert.equal(jump.airborne, true);
   assert.ok(jump.bodyWorldZM > known.value);
   assert.ok(jump.verticalSpeedMps > 0);
   const unknown = { status: STATUS.NO_DATA, value: null };
@@ -376,6 +395,7 @@ test('first-person sim: time-step-stable horizontal input, Mars gravity, contact
   assert.equal(snapshot.astronaut.zM, null);
   assert.equal(snapshot.astronaut.elevationStatus, STATUS.NO_DATA);
   assert.equal(snapshot.astronaut.movement.grounded, false);
+  assert.equal(snapshot.astronaut.movement.airborne, true, 'an active jump remains an explicit trajectory through unknown contact');
   assert.equal(snapshot.astronaut.movement.groundContactStatus, STATUS.NO_DATA);
   assert.ok(Number.isFinite(snapshot.astronaut.bodyWorldZM), 'retained world-Z pose anchor is separate from sampled surface zM');
   assert.equal(Object.isFrozen(snapshot.astronaut.movement), true);
@@ -391,6 +411,29 @@ test('first-person sim: unknown initial terrain never seeds world Z, ground cont
   assert.equal(sim.bodyWorldZM, null);
   assert.equal(sim.bodyWorldZReferenceM, null);
   assert.equal(sim.grounded, false);
+  assert.equal(sim.airborne, false);
   assert.equal(sim.verticalSpeedMps, 0);
   assert.equal(sim.heightAboveReferenceM, 0);
+});
+
+test('first-person sim: unknown contact does not start gravity, while a prior jump remains airborne', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const known = { status: STATUS.OK, value: -2500 };
+  const unknown = { status: STATUS.UNAVAILABLE, value: null };
+  sim.resolveSurfaceContact(known);
+  sim.stepFirstPerson(0.05, { moveX: 1 }, known);
+  const bodyBeforeUnknown = sim.bodyWorldZM;
+  sim.stepFirstPerson(0.05, { moveX: 1 }, unknown);
+  assert.equal(sim.grounded, false, 'unknown contact is not grounded');
+  assert.equal(sim.airborne, false, 'unknown contact alone does not create a jump trajectory');
+  assert.equal(sim.verticalSpeedMps, 0, 'unknown contact alone does not start gravity');
+  assert.equal(sim.bodyWorldZM, bodyBeforeUnknown, 'retained body coordinate does not become fabricated ground');
+
+  const jumper = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  jumper.resolveSurfaceContact(known);
+  jumper.stepFirstPerson(0.025, { jump: true }, known);
+  const vBeforeUnknown = jumper.verticalSpeedMps;
+  jumper.stepFirstPerson(0.025, {}, unknown);
+  assert.equal(jumper.airborne, true);
+  assert.ok(jumper.verticalSpeedMps < vBeforeUnknown, 'gravity continues only for the already active jump trajectory');
 });

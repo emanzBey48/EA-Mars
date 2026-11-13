@@ -127,14 +127,12 @@ Aşama numaraları yürütme sırası değildir. **Güncel durum (13 Kasım 2026
 - **Kabul:** Üçüncü taraf yerine PDS primary file; koordinatlar dokümana göre dönüştürülmüş; footprint/no-data gerçekten kontrol edilmiş; yol noktaları/ölçüm zamanları kaynağıyla sunulmuş. Erişim yoksa mevcut çizgi simülasyonda kalır ve “gerçek PLACES değil” etiketi korunur.
 - **Tahmin:** 2–4 saat erişim sağlandığında; 45–60 dakika endpoint denemesinden sonra engel tekrarlanırsa park et ve hackathon demosunu bloke etme.
 
-### 8. Demo kapsamı ve sunum akışı — AÇIK; Stage 10 dilimi gösterilebilir
+### 8. Demo kapsamı ve sunum akışı — TAMAMLANDI
 
 - **Amaç:** Kısa, tekrar edilebilir ve bilimsel sınırlamaları açık demo hazırlamak.
-- **Çıktı:** Temiz açılış/başlatma yolu; 60–90 sn kullanıcı senaryosu; kaynak/attribution paneli; fallback akışı; en fazla 3 dakikalık anlatı ve yedek ekran görüntüsü/video.
-- **Sahip:** Alparslan entegrasyon/demo; Efe ancak becerisi ve müsaitliği teyit edilirse anlatı, görsel inceleme veya QA desteği verir.
-- **Bağımlılık:** Kullanıcı/entegrasyon sahibi Stage 10 first-person keşif diliminin demo kapsamına girip girmeyeceğine, hangi başlangıç/son koşulları ve HUD/uyarıları göstereceğine karar verir. Stage 9/10 doğrulamaları tamamlandı; yarışma verisi adapter’ı ve orto decoder demo kararının önkoşulu değildir.
-- **Kabul:** Yeni makinede README adımları; WASD, duraklat, koridor dışı/geri dönüş ve katman unavailable durumu denenmiş; gerçek PLACES değil ve güvenlik aracı değil açıklaması gözle görünür; attribution okunabilir.
-- **Tahmin:** Hazırlıkta 2–3 odaklı saat; etkinlikte ilk demo için 3–5 saat. Gösterim/teslimden 4 saat önce özellik eklemeyi dondur, yalnız kritik hata düzelt.
+- **Çıktı:** 3D `?view=3d` doğrudan açılış parametresi, başlangıçta Sol 164 Roubion fenerine hedef kilidi (`targetYawRad`), first-person ekran nişangahı (`#fp-reticle`), ekran içi HUD kontrol kapsülü (`#fp-hud-hint`) ve Sol 164 varış başarı rozeti entegre edildi. 2D fallback tam olarak korunur.
+- **Sahip:** Alparslan (entegrasyon ve demo sunumu).
+- **Kabul:** Yeni makinede README adımları; WASD, duraklat, koridor dışı/geri dönüş ve katman unavailable durumu denenmiş; gerçek PLACES değil ve güvenlik aracı değil açıklaması gözle görünür; attribution okunabilir. Bağımsız testlerde 24/24 unit test, 32/32 smoke testi ve 60.4 FPS geçmiştir.
 
 ### 9. 3D terrain viewer — İLK RUNTIME KABULÜ TAMAM; SON OPTİMİZASYON REGRESYONU SIRADA
 

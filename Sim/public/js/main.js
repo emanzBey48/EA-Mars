@@ -14,14 +14,18 @@ import { bindControls } from './input/input.js';
 import { createHud } from './view/hud.js';
 
 const $ = (id) => document.getElementById(id);
-const debugParams = new URLSearchParams(window.location.search);
+const urlParams = new URLSearchParams(window.location.search);
+const debugParams = urlParams;
 const debugEnabled = debugParams.get('debug') === '1' || window.__MARSWALK_ENABLE_DEBUG__ === true;
 const forceWebgl2Failure = debugEnabled && debugParams.get('testWebGL2Failure') === '1';
+const initialViewParam = urlParams.get('view')?.toLowerCase();
+const startIn3dRequested = initialViewParam === '3d';
 const adapter = adapterFromLabel(MAP_FRAME, WAYPOINTS[0]);
 const waypoints = WAYPOINTS.map((w) => ({ ...w, local: adapter.latLonToLocal(w.latDeg, w.lonDeg) }));
+const targetYawRad = Math.atan2(waypoints[1].local.y - waypoints[0].local.y, waypoints[1].local.x - waypoints[0].local.x);
 const sim = new MarswalkSim({ a: waypoints[0].local, b: waypoints[1].local }, SCENARIO);
 const camera = new Camera();
-const camera3d = createFirstPersonCamera({ xM: waypoints[0].local.x, yM: waypoints[0].local.y, yawRad: sim.headingRad });
+const camera3d = createFirstPersonCamera({ xM: waypoints[0].local.x, yM: waypoints[0].local.y, yawRad: targetYawRad });
 const registry = createDefaultSurfaceRegistry({ expectedFrame: MAP_FRAME, adapter, baseUrl: 'data' });
 const layers = { dtm: new UnavailableLayer(dtmBaseDescriptor(), 'Yükleniyor…'), ortho: null, selectionReport: null };
 let terrain = null;
@@ -30,6 +34,7 @@ let markerMesh = null;
 let markerMeshError = null;
 let lastSnapshot = null;
 let activeView = '2d';
+let hasEntered3dOnce = false;
 let viewRequestId = 0;
 let renderer3d = null;
 let renderer3dError = null;
@@ -44,6 +49,8 @@ const view2dBtn = $('btn-view-2d');
 const view3dBtn = $('btn-view-3d');
 const viewNote = $('view-note');
 const viewStatus = $('view-status');
+const fpReticle = $('fp-reticle');
+const fpHudHint = $('fp-hud-hint');
 const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Dikey ölçek 3× sunum abartısıdır.';
 
 try {
@@ -58,8 +65,9 @@ try {
 }
 
 function updateViewControls() {
-  view2dBtn.setAttribute('aria-pressed', String(activeView === '2d'));
-  view3dBtn.setAttribute('aria-pressed', String(activeView === '3d'));
+  const is3d = activeView === '3d';
+  view2dBtn.setAttribute('aria-pressed', String(!is3d));
+  view3dBtn.setAttribute('aria-pressed', String(is3d));
   view3dBtn.disabled = !renderer3d || !layers.dtm.available || Boolean(terrainMeshError);
   view3dBtn.textContent = terrainMeshError
     ? '3D kullanılamıyor'
@@ -68,9 +76,16 @@ function updateViewControls() {
       : !layers.dtm.available
         ? (layers.dtm.descriptor.access.reason === 'Yükleniyor…' ? '3D DTM yükleniyor…' : '3D DTM yok')
         : '3D';
-  canvas2d.hidden = activeView !== '2d';
-  canvas3d.hidden = activeView !== '3d';
-  viewNote.hidden = activeView !== '3d';
+  canvas2d.hidden = is3d;
+  canvas3d.hidden = !is3d;
+  viewNote.hidden = !is3d;
+  if (fpReticle) {
+    fpReticle.hidden = !is3d;
+    if (!is3d) fpReticle.classList.remove('locked');
+  }
+  if (fpHudHint) {
+    fpHudHint.hidden = !is3d;
+  }
 }
 
 function build3dTerrainOnce() {
@@ -170,7 +185,13 @@ async function selectView(view) {
     }
   }
   if (requestId !== viewRequestId) return;
-  camera3d.yawRad = sim.headingRad;
+  if (!hasEntered3dOnce) {
+    camera3d.yawRad = targetYawRad;
+    sim.headingRad = targetYawRad;
+    hasEntered3dOnce = true;
+  } else {
+    camera3d.yawRad = sim.headingRad;
+  }
   setActiveView('3d');
   viewNote.textContent = FIRST_PERSON_NOTE;
   viewStatus.hidden = true;
@@ -210,7 +231,12 @@ const { keys } = bindControls({
   corridorMax: SCENARIO.corridorHalfWidthMaxM,
   initialCorridor: sim.corridorHalfWidthM,
   onTogglePause: () => { sim.togglePause(); updateHud(); },
-  onRestart: () => { sim.restart(); updateHud(); },
+  onRestart: () => {
+    sim.restart();
+    hasEntered3dOnce = false;
+    camera3d.yawRad = targetYawRad;
+    updateHud();
+  },
   onZoom: (factor) => {
     camera.zoom(factor);
     zoomCamera(camera3d, 1 / factor);
@@ -222,8 +248,15 @@ const { keys } = bindControls({
     sim.headingRad = camera3d.yawRad;
   },
   onPointerLockChange: (locked) => {
-    if (activeView === '3d' && locked) viewNote.textContent = `${FIRST_PERSON_NOTE} Fare kilitli.`;
-    else if (activeView === '3d') viewNote.textContent = FIRST_PERSON_NOTE;
+    const isLocked = locked && document.pointerLockElement === canvas3d;
+    if (fpReticle) {
+      fpReticle.classList.toggle('locked', isLocked);
+    }
+    if (activeView === '3d' && isLocked) {
+      viewNote.textContent = `${FIRST_PERSON_NOTE} Fare kilitli.`;
+    } else if (activeView === '3d') {
+      viewNote.textContent = FIRST_PERSON_NOTE;
+    }
   },
   onCorridorChange: (val) => {
     const next = sim.setCorridorHalfWidth(val);
@@ -261,6 +294,10 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
   updateViewControls();
   hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
   updateHud();
+
+  if (startIn3dRequested && layers.dtm.available && renderer3d && !forceWebgl2Failure) {
+    await selectView('3d');
+  }
 })();
 
 // Main animation loop: one immutable WorldSnapshot is shared by the active renderer and HUD.

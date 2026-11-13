@@ -19,6 +19,17 @@
     <section id="mapwrap">
       <canvas id="map" class="map-canvas" aria-label="Jezero 2D haritası ve astronot"></canvas>
       <canvas id="map-3d" class="map-canvas" hidden aria-label="HiRISE DTM tabanlı Jezero 3D arazisi"></canvas>
+      <div id="fp-reticle" class="fp-reticle" hidden aria-hidden="true">
+        <span class="reticle-ring"></span>
+        <span class="reticle-dot"></span>
+      </div>
+      <div id="fp-hud-hint" class="fp-hud-hint" hidden>
+        <span class="fp-hint-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Yürü</span>
+        <span class="fp-hint-item">🎯 Tıkla: Fare Bakışı</span>
+        <span class="fp-hint-item"><kbd>Space</kbd> Sıçra</span>
+        <span class="fp-hint-item"><kbd>P</kbd> Duraklat</span>
+        <span class="fp-hint-item"><kbd>Esc</kbd> Fareyi Bırak</span>
+      </div>
       <div class="view-toolbar" role="group" aria-label="Harita görünümü">
         <button id="btn-view-2d" type="button" aria-pressed="true">2D</button>
         <button id="btn-view-3d" type="button" aria-pressed="false" disabled>3D yükleniyor…</button>
@@ -26,7 +37,10 @@
       <div id="view-note" class="view-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Dikey ölçek 3× sunum abartısıdır.</div>
       <div id="view-status" class="banner info" hidden role="status" aria-live="polite"></div>
       <div id="deviation-banner" class="banner warn" hidden role="alert"></div>
-      <div id="arrived-banner" class="banner ok" hidden>Sol 164 / Roubion waypoint’ine ulaşıldı. Yeniden başlatmak için R.</div>
+      <div id="arrived-banner" class="banner ok arrived-badge" hidden role="alert" aria-live="polite">
+        <div class="arrived-title">🎯 Sol 164 / Roubion Keşfi Başarıyla Tamamlandı!</div>
+        <div class="arrived-sub">Tarihsel travers hedefi başarıyla tamamlandı. Yeniden başlatmak için <kbd>R</kbd>.</div>
+      </div>
       <div id="raster-banner" class="banner info" hidden></div>
       <div id="start-hint" class="hint">Başlangıç: <b>Sol 120 / WB1</b>. Hedef: <b>Sol 164 / Roubion</b>.<br>2D haritada WASD/oklarla hareket edin. 3D’de kamera yönüne göre yürüyün; senaryo saati ilk hareketle başlar.</div>
       <div id="legend" class="legend"></div>

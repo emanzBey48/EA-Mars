@@ -34,8 +34,118 @@ input[type=number] { width: 64px; background: #101014; color: #eee; border: 1px 
 .banner { position: absolute; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 6px; font-weight: 600; max-width: 80%; text-align: center; }
 .banner.warn { top: 12px; background: rgba(170, 20, 20, 0.92); color: #fff; border: 2px solid #ff8a8a; }
 .banner.ok { top: 60px; background: rgba(20, 90, 140, 0.92); color: #fff; }
+.banner.ok.arrived-badge {
+  top: 60px;
+  background: linear-gradient(135deg, rgba(20, 90, 140, 0.96), rgba(16, 45, 80, 0.96));
+  border: 1.5px solid #7fe0a8;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(127, 224, 168, 0.35);
+  padding: 12px 22px;
+  max-width: 90%;
+  z-index: 10;
+}
+.arrived-badge .arrived-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #7fe0a8;
+  margin-bottom: 3px;
+  letter-spacing: 0.2px;
+}
+.arrived-badge .arrived-sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: #e8e6e3;
+}
+.arrived-badge kbd {
+  background: #1c2e28;
+  border-color: #7fe0a8;
+  color: #7fe0a8;
+  font-weight: 700;
+}
 .banner.info { bottom: 50px; background: rgba(90, 60, 10, 0.92); color: #ffe2b0; font-weight: 500; font-size: 12px; }
 #view-status { bottom: 82px; }
+
+/* First-Person Reticle (Screen Center Crosshair) */
+.fp-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fp-reticle[hidden] {
+  display: none;
+}
+.reticle-ring {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.38);
+  border-radius: 50%;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.reticle-dot {
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.fp-reticle.locked .reticle-ring {
+  border-color: rgba(255, 179, 138, 0.9);
+  box-shadow: 0 0 10px rgba(255, 179, 138, 0.55), inset 0 0 6px rgba(255, 179, 138, 0.35);
+  transform: scale(1.15);
+}
+.fp-reticle.locked .reticle-dot {
+  background: #ffb38a;
+  box-shadow: 0 0 8px #ffb38a;
+  transform: scale(1.25);
+}
+
+/* First-Person HUD Bottom Hint */
+.fp-hud-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: rgba(13, 13, 16, 0.82);
+  border: 1px solid rgba(255, 179, 138, 0.3);
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+  color: #d6d0cb;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.fp-hud-hint[hidden] {
+  display: none;
+}
+.fp-hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.fp-hud-hint kbd {
+  background: #252229;
+  border-color: #554e58;
+  color: #ffeedd;
+  font-size: 10px;
+  padding: 1px 4px;
+}
 .hint { position: absolute; left: 12px; top: 12px; max-width: 360px; background: rgba(0, 0, 0, 0.7); padding: 8px 10px; border-radius: 6px; font-size: 13px; }
 .legend { position: absolute; right: 12px; bottom: 12px; max-width: 330px; background: rgba(0, 0, 0, 0.7); padding: 8px 10px; border-radius: 6px; font-size: 12px; }
 .legend .bar { height: 10px; border-radius: 2px; margin: 4px 0 2px; }

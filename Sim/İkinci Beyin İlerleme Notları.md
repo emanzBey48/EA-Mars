@@ -118,7 +118,7 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 AI’lar önemli ve gözden geçirilebilir aşamaları küçük commit’lere ayırsın; staged diff’i önceden incelesin ve görev branch’ini paylaşsın. Kullanıcı onayı bekleniyorsa commit/push yapma. Push başarısızsa commit hash’ini ve gerçek hatayı bildir; TLS doğrulamasını kapatma. Alparslan entegrasyon sahibi olarak PR/diff’i inceler. Testler yalnız kullanıcı istediğinde çalıştırılır.
 
-**Efe’nin görev durumu:** CPU mesh builder (`3600563`), mesh bellek optimizasyonu (`661d9c7`) ve renderer’dan bağımsız astronot rig/poz üreticisi (`view/3d/astronaut-rig.js`) tamamlandı. Alparslan movement/camera/surface-contact ve rig renderer entegrasyonunu `fbc623f` içinde tamamladı. Branch commit metadata’sı Codex AI adını gösterdiğinden geçmiş commit’lerin Efe tarafından kişisel olarak yazıldığını metadata üzerinden doğrulamıyoruz; dosya sahipliği/görev kaydı iş paketlerini belirtir.
+**Efe’nin görev durumu:** CPU mesh builder (`3600563`), mesh bellek optimizasyonu (`661d9c7`) ve renderer’dan bağımsız astronot rig/poz üreticisi (`view/3d/astronaut-rig.js`) tamamlandı. Alparslan movement/camera/surface-contact ve rig renderer entegrasyonunu `fbc623f` içinde tamamladı. Efe'nin sıradaki paralel kod görevi, `Sim/public/js/view/3d/marker-mesh.js` içinde renderer'dan bağımsız 3D waypoint (Sol 120 / Sol 164) beacon'ları ile basitleştirilmiş rota ve koridor kılavuz vertex geometrisi üretimidir. Efe `renderer.js`, `camera.js`, `main.js`, `config.js`, `simulation/`, `input/` ve snapshot sözleşmelerine dokunmaz; entegrasyon Alparslan'dadır.
 
 ## Tarihsel not — Stage 10 entegrasyonu öncesi (13 Kasım 2026)
 

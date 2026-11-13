@@ -26,6 +26,10 @@ Gerçekten birden fazla modülün paylaştığı değişmeyen ürün değerlerin
 
 Ortak geliştirmede görevleri dosya adına göre değil, tek bir kabul ölçütü olan dosya kümelerine göre böl. Örneğin veri kaynağı incelemesi registry değişikliğiyle, renderer iyileştirmesi simülasyon kuralıyla aynı anda yürütülmesin. `main.js`, `config.js`, snapshot/provider sözleşmeleri ve bu rehber entegrasyon sahibinin koordinasyonunda tek görevde değişsin. Her görev kendi kısa ömürlü branch'inde ilerlesin; diğer AI inceleme yapsın veya farklı dosya kümesinde bağımsız iş alsın. Dosya çakışması bekleniyorsa paralel düzenlemeyi başlatmadan önce işleri sıraya koy.
 
+## Güncel 3D iş bölümü
+
+Yarışma verisi gelene kadar HiRISE fixture ile 3D dikey dilim ana odaktır; ilk terrain dilimi için ek veri seti gerekmez. Alparslan runtime (Three.js/WebGL2) kararını, `view/3d/renderer.js`/`camera.js` ve `main.js` entegrasyonunu yürütür; `config.js` ile snapshot/provider sözleşmelerinin tek sahibidir. Takım arkadaşı ayrı clone/worktree ve branch’te renderer bağımsız CPU mesh builder’ı (`view/3d/terrain-mesh.js`) geliştirir. Mesh asset sözleşmesi: typed `positions` (local X/Y metre + display Z), `normals`, `indices`, kaynak vertex `zM` değerleri, yerel bounds ve provenance/display metadata. No-data içeren quad triangulate edilmez; sıfıra çevrilmez ve boşluk üzerinden üçgen kurulmaz. Bu paket belirli 3D runtime deneyimi varsaymaz. İki iş dosya çakışması olmadan paralel ilerler; testler ancak kullanıcı isterse çalıştırılır. Yarışma verisi intake’i Stage 6 ayrı sonraki görevdir.
+
 ## Git commit ritmi
 
 - Her önemli, gözden geçirilebilir görev aşamasından sonra yalnız ilgili değişiklikleri küçük ve açıklayıcı bir commit olarak kaydet. Büyük görevi tek commit’e yığma; her küçük yazım/düzeltme için de commit oluşturma.

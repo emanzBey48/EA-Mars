@@ -16,7 +16,7 @@
 
 **[DOSYA/KAYNAKLA DOĞRULANDI]** İlk oynanabilir MVP 2D kanvas haritasıdır: WASD/ok tuşlarıyla hareket, senaryo saati, duraklat/devam, yeniden başlat, rota sapması ve koridor, DTM kotu ile 3×3 Horn eğimi. HiRISE’den türetilmiş gölgeli kabartma görsel amaçlıdır; ortogörüntü değildir.
 
-**[YÖN/KARAR]** 3D nihai ürün yönüdür; henüz uygulama yok ve şimdi ana geliştirme odağıdır. Yarışma verisi gelene kadar yerel HiRISE fixture’ı kullanılır. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; veri örnekleri/snapshot’lar kopyalanmış ve değiştirilemez olmalı.
+**[YÖN/KARAR]** 3D nihai ürün yönüdür; henüz uygulama yok ve şimdi ana geliştirme odağıdır. İlk terrain dilimi için ek veri seti gerekmez; yarışma verisi gelene kadar yerel HiRISE fixture’ı kullanılır. Jeo-uzamsal/çevresel hesaplamalar, simülasyon durumu ve UI/render durumu kararlı sözleşmelerle ayrılmalı; veri örnekleri/snapshot’lar kopyalanmış ve değiştirilemez olmalı.
 
 ## Yerel HiRISE verileri ve hizalama
 
@@ -88,7 +88,7 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 ### Kararlar
 
-1. Kullanıcı kontrollü 2D Marswalk MVP mevcut demo için korunur; ayrıntılı 3D simülasyon nihai ürün hedefidir ve sonraki aşamada yürütülür.
+1. Kullanıcı kontrollü 2D Marswalk MVP korunur; ayrıntılı 3D simülasyon nihai ürün hedefidir ve şu an ana geliştirme odağıdır.
 2. PLACES polylinesi alınana kadar rota düz çizgisi açıkça “basitleştirilmiş waypoint bağlantısı” olarak etiketlenir.
 3. DTM kotu arşiv ürününden örneklenen değer; eğim DTM’den hesaplanan değer; oyuncu konumu/saat/hız/koridor senaryo/UI değeridir.
 4. No-data ve unavailable değerleri sıfıra çevrilmez; güvenlik iddiası veya skor üretilmez.
@@ -103,7 +103,7 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 ## Önerilen sonraki somut adım
 
-**Şu anki ana adım — 3D dikey dilim:** Alparslan `WorldSnapshot`→renderer sözleşmesini, bilimsel `zM` ile görsel Z ölçeğini ve no-data mesh kuralını sabitlesin. Ardından 3D deneyimli teammate mevcut HiRISE fixture’ından yalnız yeni `view/3d/terrain.js` modülünü üretsin; 3D deneyimi yoksa UX/HUD/asset gereksinimlerini inceleyip wireframe kabul listesi sunsun. Avatar/kamera entegrasyonu arayüz kararlaştırıldıktan sonra Alparslan’da kalsın. Yarışma verisi gelince Stage 6 intake’i ayrı aç; veri veya PLACES izi uydurma.
+**Şu anki ana adım — eşzamanlı 3D dikey dilim:** Alparslan ayrı clone/worktree ve branch’te runtime (Three.js/WebGL2) kararını verip `view/3d/renderer.js`, `camera.js` ve `main.js` entegrasyonunu geliştirir. Takım arkadaşı ayrı clone/worktree ve branch’te renderer’dan bağımsız `view/3d/terrain-mesh.js` CPU builder’ını üretir; belirli 3D deneyimi önkoşul değildir. Ortak API: typed positions/normals/indices, kaynak vertex kotları, yerel bounds ve provenance/display metadata; no-data içeren quad üçgenlenmez ve boşluk üzerinden köprü kurulmaz. Avatar/input/HUD işi entegrasyondan sonraki dalgadır. Yarışma verisi gelince Stage 6 intake’i ayrı aç; veri veya PLACES izi uydurma.
 
 ## Git çalışma kuralı
 
@@ -111,7 +111,7 @@ Tarayıcı: `http://127.0.0.1:8080/` (isteğe bağlı `PORT` ortam değişkeniyl
 
 AI’lar önemli ve gözden geçirilebilir aşamaları küçük commit’lere ayırsın; staged diff’i önceden incelesin ve görev branch’ini paylaşsın. Kullanıcı onayı bekleniyorsa commit/push yapma. Push başarısızsa commit hash’ini ve gerçek hatayı bildir; TLS doğrulamasını kapatma. Alparslan entegrasyon sahibi olarak PR/diff’i inceler. Testler yalnız kullanıcı istediğinde çalıştırılır.
 
-**Teammate:** Becerileri ve ilgisi öğrenilene kadar sabit kod görevi atanmadı. Uygunsa PLACES kaynak/koordinat doğrulaması veya demo QA ayrı koşullu paket olabilir.
+**Takım arkadaşı:** İlk somut kod paketi `terrain-mesh.js` CPU builder’dır ve beceri/ilgi tahminine bağlı değildir. Sonraki PLACES kaynak doğrulaması veya demo QA işleri kapasite ve ilgiye göre ayrıca atanabilir.
 
 ## 13 Kasım 2026 oturum özeti
 

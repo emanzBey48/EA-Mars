@@ -30,6 +30,8 @@ export class MarswalkSim {
     this.verticalSpeedMps = 0;
     this.grounded = false;
     this.airborne = false; // explicit jump trajectory; separate from whether current DTM contact is known
+    this.landingRecovery = false;
+    this.landingRecoveryTimerS = 0;
     this.bodyWorldZReferenceM = null;
     this.heightAboveReferenceM = 0;
     this.horizontalVelocityXMps = 0;
@@ -112,10 +114,25 @@ export class MarswalkSim {
     if (this.phase !== PHASE.RUNNING) return;
 
     if (Number.isFinite(input.headingRad)) this.headingRad = input.headingRad;
-    if (input.jump && this.grounded && sampleKnown && this.bodyWorldZReferenceM !== null) {
+
+    // Landing recovery timer: elapsed in scenario time
+    if (this.landingRecovery && dtSim > 0) {
+      this.landingRecoveryTimerS = Math.max(0, this.landingRecoveryTimerS - dtSim);
+      if (this.landingRecoveryTimerS <= 0) {
+        this.landingRecovery = false;
+        this.landingRecoveryTimerS = 0;
+      }
+    }
+
+    if (input.jump && this.grounded && !this.landingRecovery && sampleKnown && this.bodyWorldZReferenceM !== null) {
       this.verticalSpeedMps = this.scenario.jumpImpulseMps;
       this.grounded = false;
       this.airborne = true;
+      if (moving) {
+        const speed = this.scenario.walkSpeedMps;
+        this.horizontalVelocityXMps = (moveX / moveLength) * speed;
+        this.horizontalVelocityYMps = (moveY / moveLength) * speed;
+      }
     }
 
     if (this.airborne && this.bodyWorldZReferenceM !== null && dtSim > 0) {
@@ -127,26 +144,51 @@ export class MarswalkSim {
         this.verticalSpeedMps = 0;
         this.grounded = true;
         this.airborne = false;
+        const recDur = this.scenario.landingRecoveryDurationS ?? 0.25;
+        if (recDur > 0) {
+          this.landingRecovery = true;
+          this.landingRecoveryTimerS = recDur;
+        } else {
+          this.landingRecovery = false;
+          this.landingRecoveryTimerS = 0;
+        }
       }
     }
 
     this.simTimeS += dtSim;
-    if (moving && dtSim > 0) {
+
+    if (this.airborne) {
+      // In ballistic flight, horizontal velocity is conserved; mid-air braking is unphysical without thrusters.
+    } else if (this.landingRecovery) {
+      // During landing recovery, ground velocity smoothly equalizes toward commanded ground input
+      const targetSpeed = moving ? this.scenario.walkSpeedMps : 0;
+      const targetVx = moving ? (moveX / moveLength) * targetSpeed : 0;
+      const targetVy = moving ? (moveY / moveLength) * targetSpeed : 0;
+      const recDur = this.scenario.landingRecoveryDurationS ?? 0.25;
+      const blendFactor = recDur > 0 ? Math.min(1, Math.max(0, dtSim / recDur)) : 1;
+      this.horizontalVelocityXMps += (targetVx - this.horizontalVelocityXMps) * blendFactor;
+      this.horizontalVelocityYMps += (targetVy - this.horizontalVelocityYMps) * blendFactor;
+    } else if (moving && dtSim > 0) {
       const nx = moveX / moveLength, ny = moveY / moveLength;
       const speed = this.scenario.walkSpeedMps;
-      const d = speed * dtSim;
-      const nextX = Math.min(this.bounds.xMax, Math.max(this.bounds.xMin, this.pos.x + nx * d));
-      const nextY = Math.min(this.bounds.yMax, Math.max(this.bounds.yMin, this.pos.y + ny * d));
-      this.distanceWalkedM += Math.hypot(nextX - this.pos.x, nextY - this.pos.y);
-      this.pos.x = nextX;
-      this.pos.y = nextY;
       this.horizontalVelocityXMps = nx * speed;
       this.horizontalVelocityYMps = ny * speed;
-      const last = this.trail[this.trail.length - 1];
-      if (Math.hypot(last.x - nextX, last.y - nextY) > 2) this.trail.push({ x: nextX, y: nextY });
     } else {
       this.horizontalVelocityXMps = 0;
       this.horizontalVelocityYMps = 0;
+    }
+
+    const currentSpeed = this.horizontalSpeedMps;
+    if (currentSpeed > 0 && dtSim > 0) {
+      const dx = this.horizontalVelocityXMps * dtSim;
+      const dy = this.horizontalVelocityYMps * dtSim;
+      const nextX = Math.min(this.bounds.xMax, Math.max(this.bounds.xMin, this.pos.x + dx));
+      const nextY = Math.min(this.bounds.yMax, Math.max(this.bounds.yMin, this.pos.y + dy));
+      this.distanceWalkedM += Math.hypot(nextX - this.pos.x, nextY - this.pos.y);
+      this.pos.x = nextX;
+      this.pos.y = nextY;
+      const last = this.trail[this.trail.length - 1];
+      if (Math.hypot(last.x - nextX, last.y - nextY) > 2) this.trail.push({ x: nextX, y: nextY });
     }
     const m = this.metrics();
     if (m.distToEndM <= this.scenario.arrivalRadiusM) {
@@ -173,10 +215,21 @@ export class MarswalkSim {
         this.bodyWorldZReferenceM = surface.value;
         this.heightAboveReferenceM = bodyWorldZM - surface.value;
         if (this.heightAboveReferenceM <= 0) {
+          const wasAirborne = this.airborne;
           this.heightAboveReferenceM = 0;
           this.verticalSpeedMps = 0;
           this.grounded = true;
           this.airborne = false;
+          if (wasAirborne) {
+            const recDur = this.scenario.landingRecoveryDurationS ?? 0.25;
+            if (recDur > 0) {
+              this.landingRecovery = true;
+              this.landingRecoveryTimerS = recDur;
+            } else {
+              this.landingRecovery = false;
+              this.landingRecoveryTimerS = 0;
+            }
+          }
         }
       }
       return true;
@@ -188,6 +241,12 @@ export class MarswalkSim {
 
   get horizontalSpeedMps() {
     return Math.hypot(this.horizontalVelocityXMps, this.horizontalVelocityYMps);
+  }
+
+  get landingRecoveryFrac() {
+    const dur = this.scenario.landingRecoveryDurationS;
+    if (!this.landingRecovery || !dur || dur <= 0) return 0;
+    return Math.max(0, Math.min(1, this.landingRecoveryTimerS / dur));
   }
 
   get bodyWorldZM() {
@@ -279,6 +338,8 @@ export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints =
         verticalSpeedMps: sim.verticalSpeedMps,
         grounded: sim.grounded,
         airborne: sim.airborne,
+        landingRecovery: sim.landingRecovery ?? false,
+        landingRecoveryFrac: sim.landingRecoveryFrac ?? 0,
         phase: sim.phase,
         groundContactStatus: elevation.status,
       },

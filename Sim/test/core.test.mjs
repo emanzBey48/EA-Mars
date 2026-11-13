@@ -437,3 +437,158 @@ test('first-person sim: unknown contact does not start gravity, while a prior ju
   assert.equal(jumper.airborne, true);
   assert.ok(jumper.verticalSpeedMps < vBeforeUnknown, 'gravity continues only for the already active jump trajectory');
 });
+
+test('Stage 12: Mars low-gravity jump ballistic arc — air time ~1.3 s and apex ~0.78 m', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const known = { status: STATUS.OK, value: -2500 };
+  sim.resolveSurfaceContact(known);
+  assert.equal(sim.grounded, true);
+
+  // Jump trigger
+  const dtWall = 0.005; // 0.005 * 8 = 0.04 s sim time per step
+  sim.stepFirstPerson(dtWall, { jump: true }, known);
+  assert.equal(sim.airborne, true);
+  assert.equal(sim.grounded, false);
+
+  const startSimTime = sim.simTimeS;
+  let maxApexHeightM = 0;
+
+  while (sim.airborne) {
+    const height = sim.heightAboveReferenceM;
+    if (height > maxApexHeightM) {
+      maxApexHeightM = height;
+    }
+    sim.stepFirstPerson(dtWall, {}, known);
+  }
+
+  const airDurationSimS = sim.simTimeS - startSimTime;
+  // Analytical: v0 = 2.4 m/s, g = 3.71 m/s²:
+  // apex = 2.4² / (2 * 3.71) = 0.77628 m (~0.78 m)
+  // air time = 2 * 2.4 / 3.71 = 1.2938 s (~1.3 s)
+  assert.ok(Math.abs(maxApexHeightM - 0.776) < 0.02, `Apex height ${maxApexHeightM} m should be ~0.78 m`);
+  assert.ok(Math.abs(airDurationSimS - 1.294) < 0.05, `Air duration ${airDurationSimS} s should be ~1.3 s`);
+  assert.equal(sim.grounded, true);
+  assert.equal(sim.airborne, false);
+});
+
+test('Stage 12: Mid-air horizontal momentum conservation — ballistic transit without mid-air braking', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const known = { status: STATUS.OK, value: -2500 };
+  sim.resolveSurfaceContact(known);
+
+  // Take off while running forward (+X direction, moveX: 1)
+  const dtWall = 0.01;
+  sim.stepFirstPerson(dtWall, { moveX: 1, jump: true }, known);
+  assert.equal(sim.airborne, true);
+  const takeoffVx = sim.horizontalVelocityXMps;
+  assert.ok(Math.abs(takeoffVx - SCENARIO.walkSpeedMps) < 1e-6);
+
+  // Release all movement inputs mid-air: momentum must be conserved
+  sim.stepFirstPerson(dtWall, { moveX: 0, moveY: 0 }, known);
+  assert.equal(sim.airborne, true);
+  assert.equal(sim.horizontalVelocityXMps, takeoffVx, 'Horizontal velocity must be conserved mid-air');
+  assert.equal(sim.horizontalSpeedMps, SCENARIO.walkSpeedMps);
+
+  // Even if opposite inputs are given mid-air, ballistic momentum is strictly conserved
+  sim.stepFirstPerson(dtWall, { moveX: -1 }, known);
+  assert.equal(sim.airborne, true);
+  assert.equal(sim.horizontalVelocityXMps, takeoffVx, 'No mid-air thrusters/aerodynamic braking on Mars');
+
+  // Verify position advances horizontally by conserved momentum
+  const posXBefore = sim.pos.x;
+  sim.stepFirstPerson(dtWall, {}, known);
+  const dtSim = dtWall * SCENARIO.timeScale;
+  assert.ok(Math.abs((sim.pos.x - posXBefore) - takeoffVx * dtSim) < 1e-6);
+});
+
+test('Stage 12: Landing impact recovery — recovery state active, jump blocked, timer expiry and snapshot', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const known = { status: STATUS.OK, value: -2500 };
+  sim.resolveSurfaceContact(known);
+
+  // Jump
+  const dtWall = 0.01;
+  sim.stepFirstPerson(dtWall, { jump: true }, known);
+  assert.equal(sim.airborne, true);
+  assert.equal(sim.landingRecovery, false);
+
+  // Step until landing
+  while (sim.airborne) {
+    sim.stepFirstPerson(dtWall, {}, known);
+  }
+
+  // Right after landing: landingRecovery must be active
+  assert.equal(sim.grounded, true);
+  assert.equal(sim.airborne, false);
+  assert.equal(sim.landingRecovery, true);
+  assert.ok(sim.landingRecoveryTimerS > 0);
+  assert.ok(sim.landingRecoveryFrac > 0 && sim.landingRecoveryFrac <= 1);
+
+  // WorldSnapshot movement contract must include landingRecovery and landingRecoveryFrac
+  const waypoints = WAYPOINTS.map((w) => ({ ...w, local: adapter.latLonToLocal(w.latDeg, w.lonDeg) }));
+  const snap = createWorldSnapshot({
+    sim,
+    surfaceProvider: { sampleSurface: () => ({
+      elevation: known,
+      slope: { status: STATUS.OK, value: 0 },
+    }) },
+    adapter,
+    waypoints,
+  });
+  assert.equal(snap.astronaut.movement.landingRecovery, true);
+  assert.ok(snap.astronaut.movement.landingRecoveryFrac > 0);
+  assert.equal(Object.isFrozen(snap.astronaut.movement), true);
+
+  // Attempting to jump during landing recovery must be blocked
+  sim.stepFirstPerson(dtWall, { jump: true }, known);
+  assert.equal(sim.airborne, false, 'Jump must be blocked during landing recovery');
+  assert.equal(sim.grounded, true);
+
+  // Advance time past landingRecoveryDurationS
+  const remainingWallTime = (sim.landingRecoveryTimerS / SCENARIO.timeScale) + 0.05;
+  sim.stepFirstPerson(remainingWallTime, {}, known);
+  assert.equal(sim.landingRecovery, false);
+  assert.equal(sim.landingRecoveryTimerS, 0);
+  assert.equal(sim.landingRecoveryFrac, 0);
+
+  // Jump is now unblocked
+  sim.stepFirstPerson(dtWall, { jump: true }, known);
+  assert.equal(sim.airborne, true);
+});
+
+test('Stage 12: First-person camera dynamic offsets and view-projection calculation', () => {
+  const camera = createFirstPersonCamera({ yawRad: 0, pitchRad: 0.1 });
+  assert.equal(camera.dynamicPitchOffsetRad, 0);
+  assert.equal(camera.dynamicEyeOffsetM, 0);
+
+  // Set pose with dynamic offsets
+  setFirstPersonPose(camera, {
+    xM: 10,
+    yM: 20,
+    bodyZDisplay: 5,
+    verticalScale: 3,
+    eyeOffsetM: -0.05,
+    pitchOffsetRad: -0.012,
+  });
+
+  assert.equal(camera.xM, 10);
+  assert.equal(camera.yM, 20);
+  assert.equal(camera.dynamicEyeOffsetM, -0.05);
+  assert.equal(camera.dynamicPitchOffsetRad, -0.012);
+  // Expected zDisplay: 5 + (1.62 - 0.05) * 3 = 5 + 1.57 * 3 = 9.71
+  assert.ok(Math.abs(camera.zDisplay - (5 + (1.62 - 0.05) * 3)) < 1e-9);
+
+  // Base pitch remains unchanged
+  assert.equal(camera.pitchRad, 0.1);
+
+  // View-projection matrix must be finite and valid
+  const matrix = getViewProjectionMatrix(camera, 16 / 9);
+  assert.equal(matrix.length, 16);
+  assert.ok([...matrix].every(Number.isFinite));
+
+  // Resetting offsets to default restores standard pose
+  setFirstPersonPose(camera, { xM: 10, yM: 20, bodyZDisplay: 5, verticalScale: 3 });
+  assert.equal(camera.dynamicEyeOffsetM, 0);
+  assert.equal(camera.dynamicPitchOffsetRad, 0);
+  assert.ok(Math.abs(camera.zDisplay - (5 + 1.62 * 3)) < 1e-9);
+});

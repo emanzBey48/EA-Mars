@@ -5,8 +5,10 @@ export const SCENARIO = {
   walkSpeedMps: 1.2,
   // NASA Planet Compare rounded Mars surface gravity reference; not a local Jezero measurement.
   marsGravityMps2: 3.71,
-  // Game-control impulse for a small hop; not an astronaut or suit performance estimate.
-  jumpImpulseMps: 2.5,
+  // Game-control impulse for a small hop under 3.71 m/s² Mars gravity (~1.3 s air time, ~0.78 m apex).
+  jumpImpulseMps: 2.4,
+  // Landing impact absorption duration in scenario seconds (~0.25 s); cushions impact and prevents bunny hopping.
+  landingRecoveryDurationS: 0.25,
   // Scenario clock runs this many times faster than wall-clock time, so the ~686 m link fits a short demo.
   timeScale: 8,
   // Route corridor half-width on each side of the line (m). Demo assumption, NOT a NASA operational limit.

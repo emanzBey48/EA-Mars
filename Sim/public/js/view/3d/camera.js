@@ -123,6 +123,8 @@ export function createFirstPersonCamera({
     fovYRad: finite(fovYRad, 'fovYRad'),
     nearM: finite(nearM, 'nearM'),
     farM: finite(farM, 'farM'),
+    dynamicPitchOffsetRad: 0,
+    dynamicEyeOffsetM: 0,
   };
   if (camera.eyeHeightM <= 0) throw new RangeError('eyeHeightM must be greater than zero');
   if (!(camera.fovYRad > 0 && camera.fovYRad < Math.PI)) throw new RangeError('fovYRad must be between 0 and PI');
@@ -132,13 +134,24 @@ export function createFirstPersonCamera({
 }
 
 /** Updates the eye-level camera pose from the simulated body position in display coordinates. */
-export function setFirstPersonPose(camera, { xM, yM, bodyZDisplay, verticalScale = 1 }) {
+export function setFirstPersonPose(camera, {
+  xM,
+  yM,
+  bodyZDisplay,
+  verticalScale = 1,
+  eyeOffsetM = 0,
+  pitchOffsetRad = 0,
+}) {
   if (camera.mode !== 'first-person') throw new TypeError('A first-person camera is required');
   camera.xM = finite(xM, 'xM');
   camera.yM = finite(yM, 'yM');
   const scale = finite(verticalScale, 'verticalScale');
   if (scale <= 0) throw new RangeError('verticalScale must be greater than zero');
-  camera.zDisplay = finite(bodyZDisplay, 'bodyZDisplay') + camera.eyeHeightM * scale;
+  const eyeOffset = finite(eyeOffsetM ?? 0, 'eyeOffsetM');
+  const pitchOffset = finite(pitchOffsetRad ?? 0, 'pitchOffsetRad');
+  camera.zDisplay = finite(bodyZDisplay, 'bodyZDisplay') + (camera.eyeHeightM + eyeOffset) * scale;
+  camera.dynamicEyeOffsetM = eyeOffset;
+  camera.dynamicPitchOffsetRad = pitchOffset;
   return camera;
 }
 
@@ -210,11 +223,15 @@ export function getViewProjectionMatrix(camera, aspect) {
   if (aspect <= 0) throw new RangeError('aspect must be greater than zero');
   const eye = getCameraPosition(camera);
   if (camera.mode === 'first-person') {
-    const cosPitch = Math.cos(camera.pitchRad);
+    const effectivePitch = Math.min(
+      FIRST_PERSON_MAX_PITCH_RAD,
+      Math.max(FIRST_PERSON_MIN_PITCH_RAD, camera.pitchRad + (camera.dynamicPitchOffsetRad || 0))
+    );
+    const cosPitch = Math.cos(effectivePitch);
     const target = [
       eye.xM + Math.cos(camera.yawRad) * cosPitch,
       eye.yM + Math.sin(camera.yawRad) * cosPitch,
-      eye.zDisplay + Math.sin(camera.pitchRad),
+      eye.zDisplay + Math.sin(effectivePitch),
     ];
     return multiply4(perspective(camera.fovYRad, aspect, camera.nearM, camera.farM), viewFromEye(eye, target));
   }

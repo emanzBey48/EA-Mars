@@ -235,6 +235,8 @@ const { keys } = bindControls({
     sim.restart();
     hasEntered3dOnce = false;
     camera3d.yawRad = targetYawRad;
+    camera3d.dynamicPitchOffsetRad = 0;
+    camera3d.dynamicEyeOffsetM = 0;
     updateHud();
   },
   onZoom: (factor) => {
@@ -333,7 +335,28 @@ function frame(now) {
     try {
       renderer3d.resize(w, h, dpr);
       const player = snapshot.astronaut;
+      const mov = player.movement;
       const hasElevation = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
+
+      let eyeOffsetM = 0;
+      let pitchOffsetRad = 0;
+
+      if (mov?.landingRecovery) {
+        // Landing compression dip: cushions impact with downward camera dip (~0.05 m) and slight pitch tilt
+        const frac = mov.landingRecoveryFrac ?? 0;
+        const dipCurve = Math.sin(Math.max(0, Math.min(1, frac)) * Math.PI);
+        eyeOffsetM = -0.05 * dipCurve;
+        pitchOffsetRad = -0.012 * dipCurve;
+      } else if (mov?.grounded && !mov?.airborne && !mov?.landingRecovery && (mov?.horizontalSpeedMps ?? 0) > 0.1) {
+        // Walking head-bob: subtle vertical sinusoidal oscillation (~0.02 m) and rhythmic pitch tilt
+        const speed = mov.horizontalSpeedMps;
+        const strideM = 1.25;
+        const gaitFreqHz = speed / strideM;
+        const phase = 2 * Math.PI * gaitFreqHz * (mov.timeS ?? 0);
+        eyeOffsetM = 0.02 * Math.sin(2 * phase);
+        pitchOffsetRad = 0.006 * Math.sin(phase);
+      }
+
       if (Number.isFinite(player.bodyWorldZM)) {
         const bodyZDisplay = (player.bodyWorldZM - terrainMesh.displayConfig.referenceElevationM) * terrainMesh.displayConfig.verticalScale;
         setFirstPersonPose(camera3d, {
@@ -341,11 +364,14 @@ function frame(now) {
           yM: player.yM,
           bodyZDisplay,
           verticalScale: terrainMesh.displayConfig.verticalScale,
+          eyeOffsetM,
+          pitchOffsetRad,
         });
       } else {
         // Keep the last eye Z if no sampled world-Z anchor exists; never invent zero terrain height.
         camera3d.xM = player.xM;
         camera3d.yM = player.yM;
+        camera3d.dynamicPitchOffsetRad = pitchOffsetRad;
       }
       renderer3d.renderFrame({
         snapshot,

@@ -6,8 +6,14 @@ h1 { margin: 0; font-size: 18px; color: #ffb38a; }
 .phase { padding: 4px 10px; border-radius: 12px; background: #2f2f3a; font-weight: 600; white-space: nowrap; }
 .phase.running { background: #1f5130; } .phase.paused { background: #6b5214; } .phase.arrived { background: #1d4a6b; }
 main { display: flex; height: calc(100% - 58px); }
-#mapwrap { position: relative; flex: 1; min-width: 0; }
-#map { display: block; width: 100%; height: 100%; outline: none; }
+#mapwrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
+.map-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; outline: none; }
+.map-canvas[hidden] { display: none; }
+.view-toolbar { position: absolute; top: 12px; right: 12px; z-index: 5; display: flex; gap: 4px; padding: 4px; border: 1px solid #48434a; border-radius: 6px; background: rgba(0, 0, 0, 0.72); }
+.view-toolbar button[aria-pressed="true"] { border-color: #ffb38a; background: #573a2e; }
+.view-toolbar button:disabled { cursor: not-allowed; opacity: 0.55; }
+.view-note { position: absolute; top: 54px; right: 12px; z-index: 4; max-width: 340px; padding: 5px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.72); color: #c5bdb7; font-size: 11px; }
+.view-note[hidden] { display: none; }
 #panel { width: 420px; overflow-y: auto; padding: 8px; background: #141418; border-left: 1px solid #2a2a30; }
 .card { background: #1c1c22; border: 1px solid #2c2c34; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
 .card h2 { margin: 0 0 6px; font-size: 14px; }
@@ -28,6 +34,7 @@ input[type=number] { width: 64px; background: #101014; color: #eee; border: 1px 
 .banner.warn { top: 12px; background: rgba(170, 20, 20, 0.92); color: #fff; border: 2px solid #ff8a8a; }
 .banner.ok { top: 60px; background: rgba(20, 90, 140, 0.92); color: #fff; }
 .banner.info { bottom: 50px; background: rgba(90, 60, 10, 0.92); color: #ffe2b0; font-weight: 500; font-size: 12px; }
+#view-status { bottom: 82px; }
 .hint { position: absolute; left: 12px; top: 12px; max-width: 360px; background: rgba(0, 0, 0, 0.7); padding: 8px 10px; border-radius: 6px; font-size: 13px; }
 .legend { position: absolute; right: 12px; bottom: 12px; max-width: 330px; background: rgba(0, 0, 0, 0.7); padding: 8px 10px; border-radius: 6px; font-size: 12px; }
 .legend .bar { height: 10px; border-radius: 2px; margin: 4px 0 2px; }

@@ -10,20 +10,31 @@ in vec3 aPosition;
 in vec3 aNormal;
 uniform mat4 uViewProjection;
 uniform vec3 uLightDirection;
+uniform vec3 uObjectOffset;
+uniform vec3 uBaseColor;
+uniform float uHeadingRad;
+uniform float uVerticalScale;
 out float vLighting;
 void main() {
-  vec3 normal = normalize(aNormal);
+  float c = cos(uHeadingRad);
+  float s = sin(uHeadingRad);
+  vec2 rotatedXY = vec2(c * aPosition.x - s * aPosition.y, s * aPosition.x + c * aPosition.y);
+  vec3 localPosition = vec3(rotatedXY, aPosition.z * uVerticalScale);
+  vec3 worldPosition = localPosition + uObjectOffset;
+  vec3 localNormal = vec3(aNormal.x, aNormal.y, aNormal.z / uVerticalScale);
+  vec3 rotatedNormal = vec3(c * localNormal.x - s * localNormal.y, s * localNormal.x + c * localNormal.y, localNormal.z);
+  vec3 normal = normalize(rotatedNormal);
   vLighting = 0.28 + 0.72 * max(dot(normal, normalize(uLightDirection)), 0.0);
-  gl_Position = uViewProjection * vec4(aPosition, 1.0);
+  gl_Position = uViewProjection * vec4(worldPosition, 1.0);
 }`;
 
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in float vLighting;
+uniform vec3 uBaseColor;
 out vec4 outColor;
 void main() {
-  vec3 marsTint = vec3(0.78, 0.43, 0.25);
-  outColor = vec4(marsTint * vLighting, 1.0);
+  outColor = vec4(uBaseColor * vLighting, 1.0);
 }`;
 
 function compileShader(gl, type, source) {
@@ -64,16 +75,80 @@ function assertMeshAsset(mesh) {
   if (mesh.positions.length % 3 !== 0) throw new RangeError('terrainMesh.positions must contain XYZ triples');
   if (mesh.normals.length !== mesh.positions.length) throw new RangeError('terrainMesh.normals must align with positions');
   if (mesh.indices.length % 3 !== 0) throw new RangeError('terrainMesh.indices must contain triangle triples');
+  if (!(mesh.sourceElevationsM instanceof Float32Array) || mesh.sourceElevationsM.length !== mesh.positions.length / 3) {
+    throw new RangeError('terrainMesh.sourceElevationsM must align with vertices');
+  }
+  if (!mesh.bounds || !mesh.provenance || !mesh.displayConfig ||
+      !Number.isFinite(mesh.displayConfig.referenceElevationM) ||
+      !Number.isFinite(mesh.displayConfig.verticalScale) || mesh.displayConfig.verticalScale <= 0) {
+    throw new TypeError('terrainMesh must include bounds, provenance, and a valid displayConfig');
+  }
   const vertexCount = mesh.positions.length / 3;
   for (const index of mesh.indices) if (index >= vertexCount) throw new RangeError('terrainMesh.indices contains an out-of-range vertex');
 }
 
+function createAstronautGeometry() {
+  const positions = [];
+  const normals = [];
+  const indices = [];
+  const faces = [
+    { normal: [1, 0, 0], corners: [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]] },
+    { normal: [-1, 0, 0], corners: [[-1, 1, -1], [-1, -1, -1], [-1, -1, 1], [-1, 1, 1]] },
+    { normal: [0, 1, 0], corners: [[1, 1, -1], [-1, 1, -1], [-1, 1, 1], [1, 1, 1]] },
+    { normal: [0, -1, 0], corners: [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]] },
+    { normal: [0, 0, 1], corners: [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]] },
+    { normal: [0, 0, -1], corners: [[-1, 1, -1], [1, 1, -1], [1, -1, -1], [-1, -1, -1]] },
+  ];
+  function appendBox(cx, cy, cz, hx, hy, hz) {
+    for (const face of faces) {
+      const first = positions.length / 3;
+      for (const [x, y, z] of face.corners) {
+        positions.push(cx + x * hx, cy + y * hy, cz + z * hz);
+        normals.push(...face.normal);
+      }
+      indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
+    }
+  }
+  // Simple presentation-only astronaut silhouette in local metres; not a physical body model.
+  appendBox(0, 0, 0.94, 0.19, 0.15, 0.28); // torso
+  appendBox(0, 0, 1.34, 0.16, 0.16, 0.16); // helmet
+  appendBox(-0.11, 0, 0.38, 0.075, 0.12, 0.36); // left leg
+  appendBox(0.11, 0, 0.38, 0.075, 0.12, 0.36); // right leg
+  appendBox(-0.28, 0, 0.91, 0.075, 0.11, 0.29); // left arm
+  appendBox(0.28, 0, 0.91, 0.075, 0.11, 0.29); // right arm
+  return { positions: new Float32Array(positions), normals: new Float32Array(normals), indices: new Uint16Array(indices) };
+}
+
+function createAstronautBuffers(gl, locations) {
+  const geometry = createAstronautGeometry();
+  const vao = gl.createVertexArray();
+  const positionBuffer = gl.createBuffer();
+  const normalBuffer = gl.createBuffer();
+  const indexBuffer = gl.createBuffer();
+  if (!vao || !positionBuffer || !normalBuffer || !indexBuffer) throw new Error('WebGL2 astronaut buffer allocation failed');
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, geometry.positions, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(locations.position);
+  gl.vertexAttribPointer(locations.position, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, geometry.normals, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(locations.normal);
+  gl.vertexAttribPointer(locations.normal, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.indices, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: geometry.indices.length };
+}
+
 /**
- * Creates a terrain-only WebGL2 renderer. The prepared mesh asset owns all vertices/indices;
- * omitted no-data quads remain omitted. This module never samples a layer or changes source zM.
+ * Creates a WebGL2 terrain renderer with a snapshot-driven astronaut presentation mesh.
+ * The prepared terrain asset owns all terrain vertices/indices; omitted no-data quads remain omitted.
+ * This module never samples a layer or changes source zM.
  *
- * `renderFrame({ snapshot, camera, terrainMesh })` is the frame contract. The immutable snapshot
- * is accepted for future snapshot-driven scene elements; this first foundation renders terrain.
+ * `renderFrame({ snapshot, camera, terrainMesh })` is the frame contract. The astronaut is drawn
+ * only when snapshot elevation is known; its display Z is derived from the asset's explicit displayConfig.
  */
 export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075], lightDirection = [-0.45, -0.35, 1] } = {}) {
   if (!canvas || typeof canvas.getContext !== 'function') throw new TypeError('A canvas element is required');
@@ -86,8 +161,13 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     normal: gl.getAttribLocation(program, 'aNormal'),
     viewProjection: gl.getUniformLocation(program, 'uViewProjection'),
     lightDirection: gl.getUniformLocation(program, 'uLightDirection'),
+    objectOffset: gl.getUniformLocation(program, 'uObjectOffset'),
+    baseColor: gl.getUniformLocation(program, 'uBaseColor'),
+    headingRad: gl.getUniformLocation(program, 'uHeadingRad'),
+    verticalScale: gl.getUniformLocation(program, 'uVerticalScale'),
   };
-  if (locations.position < 0 || locations.normal < 0 || !locations.viewProjection || !locations.lightDirection) {
+  if (locations.position < 0 || locations.normal < 0 || !locations.viewProjection || !locations.lightDirection ||
+      !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
   }
@@ -101,6 +181,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
   let uploadedMesh = null;
   let disposed = false;
+  const astronaut = createAstronautBuffers(gl, locations);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.clearColor(clearColor[0], clearColor[1], clearColor[2], 1);
@@ -173,14 +254,37 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.useProgram(program);
       gl.uniformMatrix4fv(locations.viewProjection, false, viewProjection);
       gl.uniform3fv(locations.lightDirection, light);
+      gl.uniform3f(locations.objectOffset, 0, 0, 0);
+      gl.uniform1f(locations.headingRad, 0);
+      gl.uniform1f(locations.verticalScale, 1);
+      gl.uniform3f(locations.baseColor, 0.78, 0.43, 0.25);
       gl.bindVertexArray(uploadedMesh.vao);
       gl.drawElements(gl.TRIANGLES, uploadedMesh.indexCount, gl.UNSIGNED_INT, 0);
+
+      const { astronaut: player } = snapshot;
+      const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
+      const elevationKnown = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
+      if (elevationKnown) {
+        const zDisplay = (player.zM - referenceElevationM) * verticalScale;
+        if (Number.isFinite(zDisplay)) {
+          gl.uniform3f(locations.objectOffset, player.xM, player.yM, zDisplay);
+          gl.uniform1f(locations.headingRad, Number.isFinite(player.headingRad) ? player.headingRad : 0);
+          gl.uniform1f(locations.verticalScale, verticalScale);
+          gl.uniform3f(locations.baseColor, 0.78, 0.84, 0.9);
+          gl.bindVertexArray(astronaut.vao);
+          gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+        }
+      }
       gl.bindVertexArray(null);
     },
 
     dispose() {
       if (disposed) return;
       releaseMesh();
+      gl.deleteVertexArray(astronaut.vao);
+      gl.deleteBuffer(astronaut.positionBuffer);
+      gl.deleteBuffer(astronaut.normalBuffer);
+      gl.deleteBuffer(astronaut.indexBuffer);
       gl.deleteProgram(program);
       disposed = true;
     },

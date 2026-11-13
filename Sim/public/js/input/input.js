@@ -10,6 +10,8 @@ const KEYMAP = {
 
 export function bindControls({
   mapEl,
+  view2dBtn,
+  view3dBtn,
   pauseBtn,
   restartBtn,
   corridorInput,
@@ -19,6 +21,7 @@ export function bindControls({
   onTogglePause,
   onRestart,
   onZoom,
+  onViewChange,
   onCorridorChange,
 }) {
   const keys = { up: false, down: false, left: false, right: false };
@@ -41,6 +44,12 @@ export function bindControls({
     e.preventDefault();
     onZoom(e.deltaY < 0 ? 1.15 : 1 / 1.15);
   }, { passive: false });
+
+  view2dBtn?.addEventListener('click', (e) => { onViewChange('2d'); e.currentTarget.blur(); });
+  view3dBtn?.addEventListener('click', (e) => {
+    if (!e.currentTarget.disabled) onViewChange('3d');
+    e.currentTarget.blur();
+  });
 
   pauseBtn.addEventListener('click', (e) => { onTogglePause(); e.currentTarget.blur(); });
   restartBtn.addEventListener('click', (e) => { triggerRestart(); e.currentTarget.blur(); });

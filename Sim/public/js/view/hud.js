@@ -106,6 +106,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     const e = surface.elevation;
     const s = surface.slope;
     const ef = fmtSample(e, 2, 'm (Mars 2000 datumu)');
+    if (!ef.ok) ef.text = `Yükseklik bilinmiyor — ${ef.text}`;
     const sf = fmtSample(s, 1, '°');
     $('v-elev').innerHTML = `<span class="${ef.ok ? 'status-ok' : 'status-bad'}">${esc(ef.text)}</span>` +
       (e.cell ? ` <span class="muted small">hücre satır ${e.cell.row}, sütun ${e.cell.col} · ${esc(e.method)}</span>` : '');

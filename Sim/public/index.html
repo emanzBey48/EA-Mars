@@ -17,7 +17,14 @@
 
   <main>
     <section id="mapwrap">
-      <canvas id="map" aria-label="Jezero haritası ve astronot"></canvas>
+      <canvas id="map" class="map-canvas" aria-label="Jezero 2D haritası ve astronot"></canvas>
+      <canvas id="map-3d" class="map-canvas" hidden aria-label="HiRISE DTM tabanlı Jezero 3D arazisi"></canvas>
+      <div class="view-toolbar" role="group" aria-label="Harita görünümü">
+        <button id="btn-view-2d" type="button" aria-pressed="true">2D</button>
+        <button id="btn-view-3d" type="button" aria-pressed="false" disabled>3D yükleniyor…</button>
+      </div>
+      <div id="view-note" class="view-note" hidden>3D görünümde dikey ölçek 3× sunum abartısıdır; kaynak kotu HUD’da Mars 2000 metre olarak gösterilir.</div>
+      <div id="view-status" class="banner info" hidden role="status" aria-live="polite"></div>
       <div id="deviation-banner" class="banner warn" hidden role="alert"></div>
       <div id="arrived-banner" class="banner ok" hidden>Sol 164 / Roubion waypoint’ine ulaşıldı. Yeniden başlatmak için R.</div>
       <div id="raster-banner" class="banner info" hidden></div>

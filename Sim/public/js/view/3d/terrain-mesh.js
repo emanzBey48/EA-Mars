@@ -20,30 +20,64 @@ export function buildTerrainMesh(layer, displayConfig) {
   const { rows, cols, rowOffset, colOffset } = layer;
   const cellCount = rows * cols;
   const elevations = new Float32Array(cellCount);
-  const valid = new Uint8Array(cellCount);
   let validVertexCount = 0;
   let nonOkCellCount = 0;
   let sourceMinM = Infinity;
   let sourceMaxM = -Infinity;
+  const quadCapacity = Math.max(0, (rows - 1) * (cols - 1));
+  let validQuadCount = 0;
   const bounds = {
     minX: Infinity, maxX: -Infinity,
     minY: Infinity, maxY: -Infinity,
     minZ: Infinity, maxZ: -Infinity,
   };
 
-  // Cache status and coordinates once; renderer frames never need to query the source layer.
-  const localXY = new Float32Array(cellCount * 2);
+  // Keep only source elevations. Row validity is enough to count complete quads without a full-grid mask.
+  let previousRowValid = new Uint8Array(cols);
+  let currentRowValid = new Uint8Array(cols);
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const i = row * cols + col;
       const state = layer.cellState(row + rowOffset, col + colOffset);
       if (state?.status !== 'ok' || !Number.isFinite(state.value)) {
+        elevations[i] = Number.NaN;
         nonOkCellCount++;
-        continue;
+        currentRowValid[col] = 0;
+      } else {
+        assertFloat32(state.value, 'source elevation');
+        elevations[i] = state.value;
+        currentRowValid[col] = 1;
+        validVertexCount++;
+        sourceMinM = Math.min(sourceMinM, state.value);
+        sourceMaxM = Math.max(sourceMaxM, state.value);
       }
 
+      if (row > 0 && col > 0 && currentRowValid[col] && currentRowValid[col - 1] &&
+          previousRowValid[col] && previousRowValid[col - 1]) {
+        validQuadCount++;
+      }
+    }
+
+    const rowBuffer = previousRowValid;
+    previousRowValid = currentRowValid;
+    currentRowValid = rowBuffer;
+  }
+
+  const positions = new Float32Array(validVertexCount * 3);
+  const sourceElevationsM = new Float32Array(validVertexCount);
+  const vertexForCell = new Int32Array(cellCount);
+  vertexForCell.fill(-1);
+  const indices = new Uint32Array(validQuadCount * 6);
+  let vertex = 0;
+  let indexLength = 0;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const cell = row * cols + col;
+      const elevation = elevations[cell];
+      if (!Number.isFinite(elevation)) continue;
+
       const { x, y } = layer.adapter.pixelToLocal(row + rowOffset, col + colOffset);
-      const zDisplay = (state.value - displayConfig.referenceElevationM) * displayConfig.verticalScale;
+      const zDisplay = (elevation - displayConfig.referenceElevationM) * displayConfig.verticalScale;
       assertFloat32(x, 'local X');
       assertFloat32(y, 'local Y');
       assertFloat32(zDisplay, 'display Z');
@@ -51,72 +85,38 @@ export function buildTerrainMesh(layer, displayConfig) {
       const y32 = Math.fround(y);
       const z32 = Math.fround(zDisplay);
 
-      valid[i] = 1;
-      elevations[i] = state.value;
-      localXY[i * 2] = x32;
-      localXY[i * 2 + 1] = y32;
-      validVertexCount++;
-      sourceMinM = Math.min(sourceMinM, state.value);
-      sourceMaxM = Math.max(sourceMaxM, state.value);
+      vertexForCell[cell] = vertex;
+      positions[vertex * 3] = x32;
+      positions[vertex * 3 + 1] = y32;
+      positions[vertex * 3 + 2] = z32;
+      sourceElevationsM[vertex] = elevation;
       bounds.minX = Math.min(bounds.minX, x32);
       bounds.maxX = Math.max(bounds.maxX, x32);
       bounds.minY = Math.min(bounds.minY, y32);
       bounds.maxY = Math.max(bounds.maxY, y32);
       bounds.minZ = Math.min(bounds.minZ, z32);
       bounds.maxZ = Math.max(bounds.maxZ, z32);
+
+      if (row > 0 && col > 0) {
+        const nw = cell - cols - 1;
+        const ne = cell - cols;
+        const sw = cell - 1;
+        const se = cell;
+        if (vertexForCell[nw] >= 0 && vertexForCell[ne] >= 0 && vertexForCell[sw] >= 0) {
+          // Rows increase southward. This winding gives both triangles an upward-facing normal.
+          indices[indexLength++] = vertexForCell[nw];
+          indices[indexLength++] = vertexForCell[sw];
+          indices[indexLength++] = vertexForCell[ne];
+          indices[indexLength++] = vertexForCell[ne];
+          indices[indexLength++] = vertexForCell[sw];
+          indices[indexLength++] = vertexForCell[se];
+        }
+      }
+      vertex++;
     }
   }
 
-  const quadCapacity = Math.max(0, (rows - 1) * (cols - 1));
-  let validQuadCount = 0;
-  for (let row = 0; row < rows - 1; row++) {
-    for (let col = 0; col < cols - 1; col++) {
-      const nw = row * cols + col;
-      const sw = (row + 1) * cols + col;
-      const ne = nw + 1;
-      const se = sw + 1;
-      if (!(valid[nw] && valid[sw] && valid[ne] && valid[se])) continue;
-      validQuadCount++;
-    }
-  }
-
-  const positions = new Float32Array(validVertexCount * 3);
-  const sourceElevationsM = new Float32Array(validVertexCount);
-  const vertexForCell = new Int32Array(cellCount);
-  vertexForCell.fill(-1);
-  let vertex = 0;
-  for (let i = 0; i < cellCount; i++) {
-    if (!valid[i]) continue;
-    const x = localXY[i * 2];
-    const y = localXY[i * 2 + 1];
-    const zDisplay = (elevations[i] - displayConfig.referenceElevationM) * displayConfig.verticalScale;
-    vertexForCell[i] = vertex;
-    positions[vertex * 3] = x;
-    positions[vertex * 3 + 1] = y;
-    positions[vertex * 3 + 2] = zDisplay;
-    sourceElevationsM[vertex] = elevations[i];
-    vertex++;
-  }
-
-  const indices = new Uint32Array(validQuadCount * 6);
-  let indexLength = 0;
-  for (let row = 0; row < rows - 1; row++) {
-    for (let col = 0; col < cols - 1; col++) {
-      const nw = row * cols + col;
-      const sw = (row + 1) * cols + col;
-      const ne = nw + 1;
-      const se = sw + 1;
-      if (!(valid[nw] && valid[sw] && valid[ne] && valid[se])) continue;
-
-      // Rows increase southward. This winding gives both triangles an upward-facing normal.
-      indices[indexLength++] = vertexForCell[nw];
-      indices[indexLength++] = vertexForCell[sw];
-      indices[indexLength++] = vertexForCell[ne];
-      indices[indexLength++] = vertexForCell[ne];
-      indices[indexLength++] = vertexForCell[sw];
-      indices[indexLength++] = vertexForCell[se];
-    }
-  }
+  if (indexLength !== indices.length) throw new Error('Terrain mesh quad count changed while building indices');
 
   const normals = buildNormals(positions, indices);
   const empty = validVertexCount === 0;

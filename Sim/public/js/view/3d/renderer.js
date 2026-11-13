@@ -8,6 +8,7 @@ import { getViewProjectionMatrix } from './camera.js';
 const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
 in vec3 aNormal;
+in vec3 aColor;
 uniform mat4 uViewProjection;
 uniform vec3 uLightDirection;
 uniform vec3 uObjectOffset;
@@ -15,6 +16,7 @@ uniform vec3 uBaseColor;
 uniform float uHeadingRad;
 uniform float uVerticalScale;
 out float vLighting;
+out vec3 vColor;
 void main() {
   float c = cos(uHeadingRad);
   float s = sin(uHeadingRad);
@@ -25,16 +27,18 @@ void main() {
   vec3 rotatedNormal = vec3(c * localNormal.x - s * localNormal.y, s * localNormal.x + c * localNormal.y, localNormal.z);
   vec3 normal = normalize(rotatedNormal);
   vLighting = 0.28 + 0.72 * max(dot(normal, normalize(uLightDirection)), 0.0);
+  vColor = aColor;
   gl_Position = uViewProjection * vec4(worldPosition, 1.0);
 }`;
 
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in float vLighting;
+in vec3 vColor;
 uniform vec3 uBaseColor;
 out vec4 outColor;
 void main() {
-  outColor = vec4(uBaseColor * vLighting, 1.0);
+  outColor = vec4(uBaseColor * vColor * vLighting, 1.0);
 }`;
 
 function compileShader(gl, type, source) {
@@ -90,6 +94,7 @@ function assertMeshAsset(mesh) {
 function createAstronautGeometry() {
   const positions = [];
   const normals = [];
+  const colors = [];
   const indices = [];
   const faces = [
     { normal: [1, 0, 0], corners: [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]] },
@@ -99,24 +104,34 @@ function createAstronautGeometry() {
     { normal: [0, 0, 1], corners: [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]] },
     { normal: [0, 0, -1], corners: [[-1, 1, -1], [1, 1, -1], [1, -1, -1], [-1, -1, -1]] },
   ];
-  function appendBox(cx, cy, cz, hx, hy, hz) {
+  function appendBox(cx, cy, cz, hx, hy, hz, color) {
     for (const face of faces) {
       const first = positions.length / 3;
       for (const [x, y, z] of face.corners) {
         positions.push(cx + x * hx, cy + y * hy, cz + z * hz);
         normals.push(...face.normal);
+        colors.push(...color);
       }
       indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
     }
   }
-  // Simple presentation-only astronaut silhouette in local metres; not a physical body model.
-  appendBox(0, 0, 0.94, 0.19, 0.15, 0.28); // torso
-  appendBox(0, 0, 1.34, 0.16, 0.16, 0.16); // helmet
-  appendBox(-0.11, 0, 0.38, 0.075, 0.12, 0.36); // left leg
-  appendBox(0.11, 0, 0.38, 0.075, 0.12, 0.36); // right leg
-  appendBox(-0.28, 0, 0.91, 0.075, 0.11, 0.29); // left arm
-  appendBox(0.28, 0, 0.91, 0.075, 0.11, 0.29); // right arm
-  return { positions: new Float32Array(positions), normals: new Float32Array(normals), indices: new Uint16Array(indices) };
+  // High-contrast, presentation-only astronaut silhouette in local metres; not a physical body model.
+  const suit = [1.0, 0.48, 0.08];
+  const helmet = [0.92, 0.96, 1.0];
+  const visor = [0.035, 0.12, 0.22];
+  const boots = [0.12, 0.18, 0.24];
+  const pack = [0.08, 0.58, 0.98];
+  appendBox(0, 0, 0.94, 0.24, 0.17, 0.29, suit); // torso
+  appendBox(0, 0, 1.34, 0.18, 0.17, 0.17, helmet); // helmet
+  appendBox(0, -0.176, 1.34, 0.12, 0.025, 0.095, visor); // front visor
+  appendBox(0, 0.21, 0.96, 0.24, 0.13, 0.3, pack); // backpack
+  appendBox(-0.16, 0, 0.38, 0.09, 0.12, 0.36, suit); // left leg
+  appendBox(0.16, 0, 0.38, 0.09, 0.12, 0.36, suit); // right leg
+  appendBox(-0.16, 0, 0.09, 0.105, 0.14, 0.09, boots); // left boot
+  appendBox(0.16, 0, 0.09, 0.105, 0.14, 0.09, boots); // right boot
+  appendBox(-0.43, 0, 0.91, 0.1, 0.12, 0.29, suit); // left arm
+  appendBox(0.43, 0, 0.91, 0.1, 0.12, 0.29, suit); // right arm
+  return { positions: new Float32Array(positions), normals: new Float32Array(normals), colors: new Float32Array(colors), indices: new Uint16Array(indices) };
 }
 
 function createAstronautBuffers(gl, locations) {
@@ -124,8 +139,9 @@ function createAstronautBuffers(gl, locations) {
   const vao = gl.createVertexArray();
   const positionBuffer = gl.createBuffer();
   const normalBuffer = gl.createBuffer();
+  const colorBuffer = gl.createBuffer();
   const indexBuffer = gl.createBuffer();
-  if (!vao || !positionBuffer || !normalBuffer || !indexBuffer) throw new Error('WebGL2 astronaut buffer allocation failed');
+  if (!vao || !positionBuffer || !normalBuffer || !colorBuffer || !indexBuffer) throw new Error('WebGL2 astronaut buffer allocation failed');
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, geometry.positions, gl.STATIC_DRAW);
@@ -135,11 +151,15 @@ function createAstronautBuffers(gl, locations) {
   gl.bufferData(gl.ARRAY_BUFFER, geometry.normals, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(locations.normal);
   gl.vertexAttribPointer(locations.normal, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, geometry.colors, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(locations.color);
+  gl.vertexAttribPointer(locations.color, 3, gl.FLOAT, false, 0, 0);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.indices, gl.STATIC_DRAW);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: geometry.indices.length };
+  return { vao, positionBuffer, normalBuffer, colorBuffer, indexBuffer, indexCount: geometry.indices.length };
 }
 
 /**
@@ -150,7 +170,7 @@ function createAstronautBuffers(gl, locations) {
  * `renderFrame({ snapshot, camera, terrainMesh })` is the frame contract. The astronaut is drawn
  * only when snapshot elevation is known; its display Z is derived from the asset's explicit displayConfig.
  */
-export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075], lightDirection = [-0.45, -0.35, 1] } = {}) {
+export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075], lightDirection = [-0.45, -0.35, 1], collectDiagnostics = false } = {}) {
   if (!canvas || typeof canvas.getContext !== 'function') throw new TypeError('A canvas element is required');
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: true, depth: true, powerPreference: 'high-performance' });
   if (!gl) throw new Error('WebGL2 is unavailable in this browser');
@@ -159,6 +179,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   const locations = {
     position: gl.getAttribLocation(program, 'aPosition'),
     normal: gl.getAttribLocation(program, 'aNormal'),
+    color: gl.getAttribLocation(program, 'aColor'),
     viewProjection: gl.getUniformLocation(program, 'uViewProjection'),
     lightDirection: gl.getUniformLocation(program, 'uLightDirection'),
     objectOffset: gl.getUniformLocation(program, 'uObjectOffset'),
@@ -166,7 +187,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     headingRad: gl.getUniformLocation(program, 'uHeadingRad'),
     verticalScale: gl.getUniformLocation(program, 'uVerticalScale'),
   };
-  if (locations.position < 0 || locations.normal < 0 || !locations.viewProjection || !locations.lightDirection ||
+  if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
@@ -181,6 +202,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
   let uploadedMesh = null;
   let disposed = false;
+  let lastFrameDiagnostics = null;
   const astronaut = createAstronautBuffers(gl, locations);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
@@ -240,6 +262,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
     renderFrame({ snapshot, camera, terrainMesh }) {
+      const frameStartedAt = collectDiagnostics ? performance.now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
         throw new TypeError('A frozen WorldSnapshot is required');
@@ -258,25 +281,38 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.uniform1f(locations.headingRad, 0);
       gl.uniform1f(locations.verticalScale, 1);
       gl.uniform3f(locations.baseColor, 0.78, 0.43, 0.25);
+      gl.disableVertexAttribArray(locations.color);
+      gl.vertexAttrib3f(locations.color, 1, 1, 1);
       gl.bindVertexArray(uploadedMesh.vao);
       gl.drawElements(gl.TRIANGLES, uploadedMesh.indexCount, gl.UNSIGNED_INT, 0);
 
       const { astronaut: player } = snapshot;
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
       const elevationKnown = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
+      let avatarDrawn = false;
       if (elevationKnown) {
         const zDisplay = (player.zM - referenceElevationM) * verticalScale;
         if (Number.isFinite(zDisplay)) {
           gl.uniform3f(locations.objectOffset, player.xM, player.yM, zDisplay);
           gl.uniform1f(locations.headingRad, Number.isFinite(player.headingRad) ? player.headingRad : 0);
           gl.uniform1f(locations.verticalScale, verticalScale);
-          gl.uniform3f(locations.baseColor, 0.78, 0.84, 0.9);
+          gl.uniform3f(locations.baseColor, 1, 1, 1);
           gl.bindVertexArray(astronaut.vao);
           gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+          avatarDrawn = true;
         }
       }
       gl.bindVertexArray(null);
+      if (collectDiagnostics) {
+        lastFrameDiagnostics = {
+          frameRenderMs: performance.now() - frameStartedAt,
+          terrainTriangles: uploadedMesh.indexCount / 3,
+          avatarDrawn,
+        };
+      }
     },
+
+    ...(collectDiagnostics ? { getDiagnostics: () => lastFrameDiagnostics ? { ...lastFrameDiagnostics } : null } : {}),
 
     dispose() {
       if (disposed) return;
@@ -284,6 +320,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.deleteVertexArray(astronaut.vao);
       gl.deleteBuffer(astronaut.positionBuffer);
       gl.deleteBuffer(astronaut.normalBuffer);
+      gl.deleteBuffer(astronaut.colorBuffer);
       gl.deleteBuffer(astronaut.indexBuffer);
       gl.deleteProgram(program);
       disposed = true;

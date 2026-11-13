@@ -3,7 +3,7 @@
 **Güncelleme:** 13 Kasım 2026
 **Proje bağlamı:** Kullanıcı kontrollü Marswalk; uygulama kodu bu klasöre eklenmez.
 
-**Ürün yönü (13 Kasım 2026):** Nihai hedef, HiRISE DTM üzerinde birinci şahıs kullanıcı kontrollü Mars keşfidir. “FPS” first-person kamera/keşif demektir; shooter değildir. 2D Canvas MVP ve mevcut orbit-camera WebGL2 viewer ara aşamalardır. Kullanıcı uygulamanın açıldığını, ortogörüntü çözme uyarısı aldığını ve mevcut 3D'nin hedef deneyime uzak olduğunu bildirdi; bu kullanıcı bildirimi tam runtime kabulü değildir.
+**Ürün yönü (13 Kasım 2026):** Nihai hedef, HiRISE DTM üzerinde birinci şahıs kullanıcı kontrollü Mars keşfidir. “FPS” first-person kamera/keşif demektir; shooter değildir. 2D Canvas MVP ve WebGL2 terrain/first-person Stage 10 dilimi ara aşamalardır. Kullanıcının mevcut 3D'nin hedefe uzak olduğu bildirimi Stage 10 entegrasyonundan önceki görünüm hakkındadır; bu kullanıcı bildirimi bağımsız runtime kabulü değildir. `fbc623f` first-person hareket/temas/rig dilimi sonradan bağımsız denetlendi; JPEG 2000 çözücüsü/orto sınırlaması ise devam ediyor.
 
 **Durum notu:** Bu devir belgesi araştırma ve eski iş planı içerir. Güncel kod durumu için önce `Sim/README.md`, `Sim/public/js/` ve `Sim/İkinci Beyin İlerleme Notları.md` dosyalarını kontrol et. Ortak ürün/ajan kuralları `SYSTEM_PROMPT.md`, teknik plan ise `road map.md` içindedir.
 
@@ -56,8 +56,9 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 | Kaynakta mevcut | HiRISE DTM penceresi, PDS grid dönüşümü, kullanıcı hareketi, saat, rota sapması/koridoru, DTM kotu ve Horn eğimi | Çalışan kod ve kabul davranışı için `Sim/README.md` ile kaynak/testleri esas al. DTM yoksa oyun açılmalı, katman unavailable kalmalı. |
 | Kaynakta mevcut | `SurfaceProvider`, manifest validator/registry, HiRISE default ve fallback, immutable `WorldSnapshot` | Registry genel yeni format parser’ı değildir. Stage 6 validator boşlukları aşağıda açıkça listelenmiştir. |
 | Kaynakta mevcut | Modül ayrımı ve snapshot/provider sözleşmesi | Dosya yolları için `Sim/README.md` ve `Sim/public/js/` esas alınır; registry ve `WorldSnapshot` kaynakta vardır. |
-| Stage 9 — runtime kabulü | İlk kabul turu `d471d6a` üzerinde tamamlandı | `npm test` 13/13, `npm run smoke` 26/26; 2D↔3D, avatar görünürlüğü/gizleme, WebGL2 fallback doğrulandı. `661d9c7` mesh bellek optimizasyonu birleşik HEAD’e sonradan geldi; bu birleşik sürümde regresyon smoke’u tekrar edilmeli. |
-| Stage 10 — first-person keşif | Planlama ve iş bölümü tamam; uygulama başlamadı | Alparslan: kamera yönlü hareket, göz hizası kamera, DTM teması, kaynaklı g ve entegrasyon. Efe: ayrı renderer-bağımsız `view/3d/astronaut-rig.js` poz üreticisi; arayüz Alparslan’la netleşince başlayacak. |
+| Stage 9 — runtime kabulü | İlk kabul `d471d6a` üzerinde, birleşik optimizasyon sonrası regresyon da kapandı | `fbc623f` kod HEAD’i bağımsız `npm test` 18/18 ve `npm run smoke` 32/32 geçti. Audit smoke’un ilk turundaki iki mevcut 2D timing kontrolü hemen yapılan tekrarda geçti. |
+| Stage 10 — first-person keşif ve rig entegrasyonu | Tamamlandı (`fbc623f`) | Alparslan: movement/camera/surface-contact ve renderer entegrasyonu. Efe: bağımsız `astronaut-rig.js` geometri/poz modülü. Bağımsız doğrulama 18/18 unit, 32/32 smoke. |
+| Stage 8 — demo kapsamı/akışı | Sıradaki ürün-planlama kararı | First-person diliminin demo kapsamına girip girmeyeceğini, 60–90 sn akışı ve gösterilecek HUD/uyarıları belirle; karar olmadan demo dondurma sayma. |
 | Ayrı görsel işi | JP2 ortogörüntü çözme ve hizalama | Mevcut uyarı bilinen sınırlama; DTM hillshade orto değildir. Decoder/lisans ve yarım-piksel PDS/GeoTIFF kaydı doğrulanmadan orto bindirmesi iddia edilmemeli. Stage 9/10 önkoşulu değildir. |
 | Sonraki demo işi | Stage 8 demo dondurma/sunum | First-person kapsamı gösterilebilir ve demo kararı verilebilir olduktan sonra 60–90 sn akış dondurulur. |
 | Yarışma verisi gelince | Stage 6 manifest doğrulaması | License/usage, sayısal footprint+kesişim, açıkça doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtıyla fail-closed intake. |
@@ -66,13 +67,11 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 
 ## Sıradaki somut işler
 
-1. **Alparslan — birleşik Stage 9 regresyonu:** `643026b` üzerinde mesh memory optimization sonrası `npm test` ve `npm run smoke` tekrar et; smoke screenshot/performance sonucunu Stage 9 kabul kaydına ekle.
-2. **Alparslan — Stage 10 hareket/kamera temeli:** Kısa ömürlü branch’te hareket durumu arayüzü, first-person kamera, kamera yönlü input, DTM zemin teması ve kaynaklı yerçekimi modelini uygula. `simulation/`, `input/`, `view/3d/camera.js` ayrı kalmalı; `main.js`, `config.js`, snapshot/provider entegrasyonu tek sahibinde olsun. No-data fallback’i ve Mars 2000 `zM`/display Z ayrımını koru.
-3. **Efe — astronot rig/poz modülü:** Alparslan’ın hareket arayüzü netleşince yeni `Sim/public/js/view/3d/astronaut-rig.js` içinde saf, renderer-bağımsız parça geometrisi ve idle/walk/stop/airborne pozları üret. Girdi: `timeS`, yatay/düşey hız, `grounded`, `phase`; aynı girdi aynı pozu vermeli, yürüyüş döngüsü yatay hızla değişmeli, pause’da donmalı. Bu sunum animasyonudur; gerçek suit biyomekaniği değildir. Efe renderer/camera/main/simulation/input/test/snapshot entegrasyon dosyalarını değiştirmez; Alparslan renderer entegrasyonunu üstlenir.
-4. **Atmosferi ölçülü modelle:** NASA basınç/yoğunluk değerlerini kaynaklı genel/ortalama referans veya açık senaryo girdisi olarak etiketle; belirli Jezero zamanı ya da gerçek astronot giysisi modeli diye sunma. İnsan/giysi ve aerodinamik parametreleri kaynaklandırılmadan yürüyüşe atmosferik kuvvet uydurma.
-5. **Ortoyu ayrı tut:** JP2 decoder/lisans araştırması ve yarım-piksel kayıt/alignment doğrulaması FPS işinden bağımsızdır; hizalama kanıtı olmadan ortogörüntü overlay'i ekleme.
-6. **Stage 8 demo:** Stage 10 first-person dilimi ve karakter pozu gösterilebilir olduktan sonra, demo kapsamına alınıp alınmayacağına karar ver; sonra temiz başlangıç yolu ve 60–90 sn akışı dondur.
-7. **Yarışma verisi geldiğinde Stage 6:** Registry fail-closed validator boşluklarını gerçek label/SIS/provenance ile kapat; gerçek veri/kanıt yokken format veya adapter uydurma. PLACES gerçek izi de erişilebilir PDS ürünüyle ayrı doğrulansın.
+1. **Stage 8 demo kapsamı/akışı — sıradaki planlama işi:** Kullanıcı/entegrasyon sahibi first-person Stage 10 dilimini demo kapsamına alıp almayacağına karar versin; başlangıç/son koşullarını, HUD/uyarıları ve 60–90 sn akışını belirlesin. Bu karar verilmeden demo dondurulmuş sayılmaz.
+2. **JP2 ortogörüntü decode/alignment — ayrı, bloke etmeyen iş:** Decoder ve lisansını araştır; `PixelIsArea` ile PDS piksel merkezi arasındaki yarım-piksel kayıt farkını kanıtla doğrulamadan overlay ekleme. Hillshade’i orto diye adlandırma.
+3. **Gerçek PLACES izi — dış erişime bağlı:** PDS’nin aynı birincil ürünü ve label/SIS’i engelsiz ortamdan edinilebilirse koordinat çerçevesini doğrula ve Sol 120–164’i DTM kapsam/no-data ile karşılaştır. Erişim yoksa basitleştirilmiş rota caveat’ı korunur.
+4. **Stage 6 yarışma verisi intake — koşullu:** Organizer dataset ve label/SIS geldiğinde fail-closed validator boşluklarını kaynak/provenance ile kapat; veri/kanıt yokken adapter veya format uydurma. HiRISE fallback korunur.
+5. **Atmosferi ölçülü modelle:** NASA basınç/yoğunluk değerlerini kaynaklı genel/ortalama referans veya açık senaryo girdisi olarak etiketle; Jezero anlık hava ya da gerçek suit fiziği gibi sunma. İnsan/giysi ve aerodinamik parametreleri kaynaklandırılmadan atmosferik kuvvet ekleme.
 
 ### Git başlangıç durumu
 

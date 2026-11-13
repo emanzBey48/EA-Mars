@@ -24,6 +24,7 @@ let terrain = null;
 let terrainMesh = null;
 let lastSnapshot = null;
 let activeView = '2d';
+let viewRequestId = 0;
 let renderer3d = null;
 let renderer3dError = null;
 let terrainMeshError = null;
@@ -89,6 +90,7 @@ function setActiveView(view) {
 }
 
 async function selectView(view) {
+  const requestId = ++viewRequestId;
   if (view !== '3d') {
     setActiveView('2d');
     if (!terrainMeshError && renderer3d) viewStatus.hidden = true;
@@ -110,6 +112,8 @@ async function selectView(view) {
     viewStatus.hidden = false;
     // Let the status message paint before the one-time CPU mesh build on the main thread.
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    // A newer 2D/3D choice supersedes this pending request.
+    if (requestId !== viewRequestId) return;
     try {
       build3dTerrainOnce();
     } catch (error) {
@@ -120,6 +124,7 @@ async function selectView(view) {
       return;
     }
   }
+  if (requestId !== viewRequestId) return;
   setActiveView('3d');
   viewStatus.hidden = true;
 }

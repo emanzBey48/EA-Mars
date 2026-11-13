@@ -56,7 +56,7 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 | Kaynakta mevcut | Modül ayrımı ve snapshot/provider sözleşmesi | Dosya yolları için `Sim/README.md` ve `Sim/public/js/` esas alınır; registry ve `WorldSnapshot` kaynakta vardır. |
 | Açık | Stage 6 manifest doğrulamasını fail-closed tamamla | License/usage, sayısal footprint+kesişim, açıkça doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtı. |
 | Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
-| Kaydedilmiş Git durumu | İki kişilik paylaşım | `docs/shared-code-boundaries` dalındaki `aae4830` commit’inin remote’a push edildiği önceki notta kayıtlı; bu oturumda remote ayrıca sorgulanmadı. |
+| Kaydedilmiş Git durumu | İki kişilik paylaşım | `docs/shared-code-boundaries` dalındaki `aae4830` ve bu belge eşitlemesinin `docs/parallel-roadmap` dalındaki `3060829` commit’i remote’da kayıtlı. |
 
 ## Sıradaki somut işler
 
@@ -66,4 +66,4 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 
 ### Git başlangıç durumu
 
-Önceki devir kaydına göre `origin/docs/shared-code-boundaries` üzerinde `aae4830` var ve push edilmiş; mevcut dal `docs/parallel-roadmap`, son görülen HEAD `aae4830`. Bu oturumda remote durumu doğrulanmadı. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; TLS doğrulaması kapatılmasın.
+`docs/shared-code-boundaries` üzerindeki `aae4830` ve belge eşitlemesini içeren `docs/parallel-roadmap` üzerindeki `3060829` remote’a push edildi. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; TLS doğrulaması kapatılmasın.

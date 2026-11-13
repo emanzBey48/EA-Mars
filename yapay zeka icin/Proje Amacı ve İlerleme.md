@@ -72,7 +72,7 @@ Ek olarak `transformVerified` boolean’ı insan/loader iddiasıdır; yeni CRS d
 
 ### I. Git ile ortak çalışma — güncel dal bilgisi
 
-Bu incelemede çalışma dalı `docs/parallel-roadmap`, yerel HEAD `aae4830` olarak görüldü. Önceki devir notunda `aae4830` commit’inin `origin/docs/shared-code-boundaries` dalına push edildiği kayıtlıdır; remote ref bu oturumda ayrıca doğrulanmadı. IMG/JP2/F32 Git LFS’te izlenir; workspace OneDrive altında olduğundan `.git` eşitleme çatışması riski vardır.
+Bu incelemede `docs/parallel-roadmap` dalındaki belge güncellemesi `3060829` commit’iyle `origin/docs/parallel-roadmap`’a push edildi. Önceki `aae4830` modül düzenlemesi `origin/docs/shared-code-boundaries` dalındadır. IMG/JP2/F32 Git LFS’te izlenir; workspace OneDrive altında olduğundan `.git` eşitleme çatışması riski vardır.
 
 **AI commit kuralı:** Her önemli ve gözden geçirilebilir görev aşamasında yalnız ilgili dosyaları commit et; büyük işi tek commit’te biriktirme. Commit’ten önce staged diff’i gözden geçir. Görev branch’ini remote’a push et ki ekip arkadaşı değişiklikleri görebilsin. Push engellenirse commit hash’ini ve nedeni bildir, remote’a ulaştı iddiasında bulunma. AI kendi kimliğiyle commit etmeli; insanı taklit etmemeli.
 

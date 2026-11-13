@@ -160,7 +160,7 @@ Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi
 ## Git paylaşımı — 13 Kasım 2026 durum kaydı
 
 - Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu ve `origin` ayarlı. `docs/shared-code-boundaries` branch’indeki `aae4830` commit’inin `origin/docs/shared-code-boundaries`’a push edildiği biliniyor. Mevcut bilgiye göre bu commit `main`’e birleştirilmiş değil.
-- Bu yol haritası görevi `docs/parallel-roadmap` branch’inde yürütülüyor; bu güncelleme henüz commit edilmedi veya push edilmedi. Uzak branch durumu ayrıca sorgulanmadı.
+- Bu belge eşitlemesi `docs/parallel-roadmap` dalında `3060829 docs: align Marswalk project notes with current code` commit’iyle kaydedildi ve `origin/docs/parallel-roadmap` dalına başarıyla push edildi.
 - `yapay zeka icin` yönergeleri ile `Sim` kodu aynı repo kökündedir. 381 MB IMG, 34 MB JP2 ve 7.5 MB F32 `.gitattributes` ile Git LFS üzerinden izlenir; normal Git’e eklenmez.
 - Workspace OneDrive altında olduğundan, Git çalışma kopyasını OneDrive senkronizasyonunun dışına almak daha güvenlidir. Takım üyeleri ayrı clone/worktree kullansın; OneDrive `.git` senkronizasyonu ortak Git yöntemi olmasın.
 - `Sim/.gitignore` `dtm_subset.f32`, `dtm_subset.json` ve `ortho_inspection.json` dosyalarını izlemeye alır; F32 LFS üzerinden klonlanır. Mevcut `test-output` ekran görüntüleri de ilk importta eklendi.

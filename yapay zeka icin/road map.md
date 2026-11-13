@@ -156,6 +156,15 @@ Aşama numaraları yürütme sırası değildir. **Güncel durum (13 Kasım 2026
 - **Kabul:** Kamera göz hizasında oyuncu konum/yönünü izler; bakış açısı kullanıcı kontrolündedir; kamera yönüne göre normalize edilmiş hareket; simülasyon zaman adımından bağımsız tutarlı hareket ve pause/restart; geçerli DTM kotuna basma; no-data/invalid/out-of-bounds/unavailable kot sıfıra çevrilmeden açık fallback; `zM` ile görsel Z ayrımı; 2D fallback korunur. Efe’nin animasyon modülü aynı girdi için deterministik idle/walk/stop/airborne pozları verir; renderer entegrasyonu sonrası first-person görünümde kolların/gövdenin kadrajda okunabilirliği ayrıca gözden geçirilir.
 - **Durum (13 Kasım 2026):** Stage 10 kod paketi `fbc623f` (`feat: integrate astronaut rig into first-person renderer`) ile tamamlandı ve origin’e push edildi. Alparslan first-person kamera/yönlü hareket/DTM teması/kaynaklı Mars g girdisi ile rig renderer entegrasyonunu; Efe renderer’dan bağımsız `astronaut-rig.js` parça şablonu ve deterministik poz üreticisini sağladı. Snapshot API’si `grounded`, açık `airborne` jump niyeti ve `groundContactStatus` değerlerini ayırır; bilinmeyen temas tek başına yerçekimi başlatmaz veya uçuş pozu iddia etmez. Bilinmeyen kotta dünya rig’i gizlenir, first-person view-model retained kamera pozu varsa kalabilir. Bağımsız doğrulama `npm test` 18/18, `npm run smoke` 32/32 geçti. Bu, nihai ürün tamamlandı anlamına gelmez; UX gözden geçirmesi ve demo kararı sürer.
 
+### 11. 3D Waypoint beacon'ları ve rota kılavuz geometrisi (marker-mesh) — SIRADAKİ PARALEL KOD GÖREVİ
+
+- **Amaç:** Stage 8 first-person demo akışında astronotun arazide ilerlerken hedefini (Sol 164 / Roubion), başlangıç noktasını (Sol 120 / WB1) ve basitleştirilmiş rota koridorunu 3D uzayda görebilmesini sağlamak; renderer'dan bağımsız saf geometri üretmek.
+- **Çıktı:** `Sim/public/js/view/3d/marker-mesh.js` içinde `buildMarkerMeshes({ waypoints, routePoints, corridorWidthM, displayConfig })` API'si ve `Sim/test/marker-mesh.test.mjs` testleri. Sol 120 ve Sol 164 zemin beacon'ları (kaide, dikme, fener), rota boyunca zemin kılavuz şeridi/segmentleri, ±10 m senaryo koridor sınır işaretleri. Saf `Float32Array`/`Uint32Array` geometri veya parça tanımları, derin dondurulmuş veri yapısı ve PDS/sadeleştirilmiş rota caveat metadata'sı.
+- **Sahip:** Efe (bağımsız 3D geometri modülü); Alparslan (renderer entegrasyonu).
+- **Bağımlılık:** Stage 10 first-person temeli; `config.js` waypoint koordinatları ve DTM yüzey kotu. Renderer entegrasyonu Alparslan'da kalır.
+- **Kabul:** WebGL veya DOM nesnesi döndürmez; saf veri üretir. `npm test` altında deterministik birim testleri geçer. Sol 120/164 PDS koordinatları ve rota basitleştirilmiş bağlantı caveat'ı metadata içinde taşınır. Efe `renderer.js`, `camera.js`, `main.js`, `config.js`, `simulation/`, `input/` dosyalarına dokunmaz.
+- **Tahmin:** 2–3 odaklı çalışma saati (Efe'nin bağımsız kodlama ve birim test süresi).
+
 ### Ayrı, bloke etmeyen veri/görsel işi — HiRISE JP2 ortogörüntü decode ve hizalama
 
 - Arayüzdeki “Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor)” bildirimi mevcut sınırlamadır: DTM'den türetilen hillshade ortofoto değildir.

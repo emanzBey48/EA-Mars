@@ -110,6 +110,24 @@ function assertMeshAsset(mesh) {
   for (const index of mesh.indices) if (index >= vertexCount) throw new RangeError('terrainMesh.indices contains an out-of-range vertex');
 }
 
+function assertMarkerMeshAsset(mesh) {
+  if (!mesh || !(mesh.positions instanceof Float32Array) ||
+      !(mesh.normals instanceof Float32Array) ||
+      !(mesh.colorsRgb instanceof Float32Array) ||
+      !(mesh.indices instanceof Uint32Array)) {
+    throw new TypeError('markerMesh must provide Float32Array positions/normals/colorsRgb and Uint32Array indices');
+  }
+  if (mesh.positions.length % 3 !== 0) throw new RangeError('markerMesh.positions must contain XYZ triples');
+  if (mesh.normals.length !== mesh.positions.length) throw new RangeError('markerMesh.normals must align with positions');
+  if (mesh.colorsRgb.length !== mesh.positions.length) throw new RangeError('markerMesh.colorsRgb must align with positions');
+  if (mesh.indices.length % 3 !== 0) throw new RangeError('markerMesh.indices must contain triangle triples');
+  if (!mesh.bounds || !mesh.metadata) {
+    throw new TypeError('markerMesh must include bounds and metadata');
+  }
+  const vertexCount = mesh.positions.length / 3;
+  for (const index of mesh.indices) if (index >= vertexCount) throw new RangeError('markerMesh.indices contains an out-of-range vertex');
+}
+
 function createAstronautBuffers(gl, locations) {
   const geometry = ASTRONAUT_RIG.geometry;
   const positions = new Float32Array(geometry.positions);
@@ -217,6 +235,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   }
 
   let uploadedMesh = null;
+  let uploadedMarkerMesh = null;
   let disposed = false;
   let lastFrameDiagnostics = null;
   const astronaut = createAstronautBuffers(gl, locations);
@@ -231,6 +250,68 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     gl.deleteBuffer(uploadedMesh.normalBuffer);
     gl.deleteBuffer(uploadedMesh.indexBuffer);
     uploadedMesh = null;
+  }
+
+  function releaseMarkerMesh() {
+    if (!uploadedMarkerMesh) return;
+    gl.deleteVertexArray(uploadedMarkerMesh.vao);
+    gl.deleteBuffer(uploadedMarkerMesh.positionBuffer);
+    gl.deleteBuffer(uploadedMarkerMesh.normalBuffer);
+    gl.deleteBuffer(uploadedMarkerMesh.colorBuffer);
+    gl.deleteBuffer(uploadedMarkerMesh.indexBuffer);
+    uploadedMarkerMesh = null;
+  }
+
+  function uploadMarkerMesh(mesh) {
+    if (!mesh) {
+      releaseMarkerMesh();
+      return;
+    }
+    if (mesh === uploadedMarkerMesh?.source) return;
+    assertMarkerMeshAsset(mesh);
+    releaseMarkerMesh();
+
+    const vao = gl.createVertexArray();
+    const positionBuffer = gl.createBuffer();
+    const normalBuffer = gl.createBuffer();
+    const colorBuffer = gl.createBuffer();
+    const indexBuffer = gl.createBuffer();
+    if (!vao || !positionBuffer || !normalBuffer || !colorBuffer || !indexBuffer) {
+      throw new Error('WebGL2 marker buffer allocation failed');
+    }
+
+    gl.bindVertexArray(vao);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(locations.position);
+    gl.vertexAttribPointer(locations.position, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.normals, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(locations.normal);
+    gl.vertexAttribPointer(locations.normal, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.colorsRgb, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(locations.color);
+    gl.vertexAttribPointer(locations.color, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+
+    gl.bindVertexArray(null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+    uploadedMarkerMesh = {
+      source: mesh,
+      vao,
+      positionBuffer,
+      normalBuffer,
+      colorBuffer,
+      indexBuffer,
+      indexCount: mesh.indices.length,
+    };
   }
 
   function uploadMesh(mesh) {
@@ -277,7 +358,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null }) {
       const frameStartedAt = collectDiagnostics ? performance.now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -307,6 +388,28 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.vertexAttrib3f(locations.color, 1, 1, 1);
       gl.bindVertexArray(uploadedMesh.vao);
       gl.drawElements(gl.TRIANGLES, uploadedMesh.indexCount, gl.UNSIGNED_INT, 0);
+
+      // 3D Waypoint Beacons and Route Guides (if supplied)
+      let markersDrawn = false;
+      if (markerMesh) {
+        uploadMarkerMesh(markerMesh);
+      }
+      if (uploadedMarkerMesh && uploadedMarkerMesh.indexCount > 0) {
+        gl.uniform3f(locations.objectOffset, 0, 0, 0);
+        gl.uniform1f(locations.headingRad, 0);
+        gl.uniform1f(locations.verticalScale, 1);
+        gl.uniform3f(locations.partSize, 1, 1, 1);
+        gl.uniform3f(locations.partCenter, 0, 0, 0);
+        gl.uniform3f(locations.partOffset, 0, 0, 0);
+        gl.uniform3f(locations.partRotationRad, 0, 0, 0);
+        gl.uniform3f(locations.rootOffset, 0, 0, 0);
+        gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
+        gl.uniform3f(locations.baseColor, 1, 1, 1);
+        gl.bindVertexArray(uploadedMarkerMesh.vao);
+        gl.drawElements(gl.TRIANGLES, uploadedMarkerMesh.indexCount, gl.UNSIGNED_INT, 0);
+        gl.bindVertexArray(null);
+        markersDrawn = true;
+      }
 
       const { astronaut: player } = snapshot;
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
@@ -372,6 +475,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         lastFrameDiagnostics = {
           frameRenderMs: performance.now() - frameStartedAt,
           terrainTriangles: uploadedMesh.indexCount / 3,
+          markersDrawn,
+          markerTriangles: uploadedMarkerMesh ? uploadedMarkerMesh.indexCount / 3 : 0,
           avatarDrawn,
           worldRigDrawn: avatarDrawn,
           firstPersonViewModelDrawn,
@@ -393,6 +498,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     dispose() {
       if (disposed) return;
       releaseMesh();
+      releaseMarkerMesh();
       gl.deleteVertexArray(astronaut.vao);
       gl.deleteBuffer(astronaut.positionBuffer);
       gl.deleteBuffer(astronaut.normalBuffer);

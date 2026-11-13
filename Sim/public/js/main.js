@@ -9,6 +9,7 @@ import { Camera, buildTerrainImage, render } from './view/render.js';
 import { cameraRelativeMovement, createFirstPersonCamera, lookCamera, setFirstPersonPose, zoomCamera } from './view/3d/camera.js';
 import { createTerrainRenderer } from './view/3d/renderer.js';
 import { buildTerrainMesh } from './view/3d/terrain-mesh.js';
+import { buildMarkerMeshes } from './view/3d/marker-mesh.js';
 import { bindControls } from './input/input.js';
 import { createHud } from './view/hud.js';
 
@@ -25,6 +26,8 @@ const registry = createDefaultSurfaceRegistry({ expectedFrame: MAP_FRAME, adapte
 const layers = { dtm: new UnavailableLayer(dtmBaseDescriptor(), 'Yükleniyor…'), ortho: null, selectionReport: null };
 let terrain = null;
 let terrainMesh = null;
+let markerMesh = null;
+let markerMeshError = null;
 let lastSnapshot = null;
 let activeView = '2d';
 let viewRequestId = 0;
@@ -93,7 +96,26 @@ function build3dTerrainOnce() {
   }
   if (!prepared.indices.length) throw new Error('DTM penceresinde çizilebilir geçerli terrain quad’ı bulunamadı.');
   terrainMesh = prepared;
+  build3dMarkersOnce();
   return terrainMesh;
+}
+
+function build3dMarkersOnce() {
+  if (markerMesh) return markerMesh;
+  if (!layers.dtm.available || !terrainMesh) return null;
+  try {
+    markerMesh = buildMarkerMeshes({
+      waypoints,
+      route: { a: waypoints[0].local, b: waypoints[1].local },
+      corridorHalfWidthM: sim.corridorHalfWidthM,
+      displayConfig: terrainMesh.displayConfig,
+      surfaceProvider: layers.dtm,
+    });
+  } catch (error) {
+    markerMeshError = error;
+    console.warn('3D marker mesh hazırlanamadı:', error);
+  }
+  return markerMesh;
 }
 
 function setActiveView(view) {
@@ -206,6 +228,10 @@ const { keys } = bindControls({
   onCorridorChange: (val) => {
     const next = sim.setCorridorHalfWidth(val);
     hud.renderLayerPanel(layers, terrain, next);
+    if (terrainMesh && layers.dtm.available) {
+      markerMesh = null;
+      build3dMarkersOnce();
+    }
     updateHud();
     return next;
   },
@@ -284,7 +310,12 @@ function frame(now) {
         camera3d.xM = player.xM;
         camera3d.yM = player.yM;
       }
-      renderer3d.renderFrame({ snapshot, camera: camera3d, terrainMesh });
+      renderer3d.renderFrame({
+        snapshot,
+        camera: camera3d,
+        terrainMesh,
+        markerMesh: markerMesh || build3dMarkersOnce(),
+      });
       if (!hasElevation) {
         viewStatus.textContent = `DTM yüzey kotu bilinmiyor (${player.elevationStatus}); zemin teması doğrulanamıyor. Kamera yalnız saklanan hareket dünya-Z referansını kullanır; bu güncel yüzey kotu değildir.`;
         viewStatus.hidden = false;
@@ -323,6 +354,9 @@ if (debugEnabled) {
       terrainMeshBuildMs,
       terrainMeshCellCount: layers.dtm?.rows * layers.dtm?.cols || null,
       terrainMeshProvenance: terrainMesh ? { ...terrainMesh.provenance } : null,
+      markerMeshReady: Boolean(markerMesh),
+      markerMeshError: markerMeshError?.message ?? null,
+      markerTriangles: markerMesh ? markerMesh.indices.length / 3 : 0,
       cameraMode: camera3d.mode,
       cameraEyeHeightM: camera3d.eyeHeightM,
       cameraFovYRad: camera3d.fovYRad,

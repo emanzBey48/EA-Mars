@@ -40,6 +40,18 @@ WASD / ok tuşları: hareket · P / Space: duraklat-devam · R: yeniden başlat 
 | `scripts/smoke-e2e.mjs` | DevTools protokolüyle gerçek tuş basışlı kabul testi (normal çalıştırmada `window.marswalk` olmadığını doğrular, ardından `?debug=1` ile testleri yürütür) |
 | `server.mjs` | Node standart kütüphanesiyle statik sunucu (127.0.0.1) |
 
+## Sonraki geliştirme dilimi: paralel 3D terrain paketi
+
+Bu bölüm yol haritasıdır; aşağıdaki 3D modüller mevcut kaynakta henüz yoktur. Şu anki çalışan uygulama 2D Canvas MVP’dir. Yarışma verisi gelene kadar ilk 3D dikey dilim doğrulanmış yerel HiRISE DTM fixture’ını kullanır; bu ilk dilim için ek veri seti gerekmez.
+
+- **Alparslan / entegrasyon sahibi:** Renderer runtime’ını (Three.js veya WebGL2) seçer; `public/js/view/3d/renderer.js`, `camera.js` ve `public/js/main.js` entegrasyonunu yürütür. `config.js` ve snapshot/provider sözleşmelerinde tek koordinasyon sahibidir.
+- **Takım arkadaşı / paralel kod paketi:** Yeni `public/js/view/3d/terrain-mesh.js` içinde `GridElevationLayer` girdisinden runtime bağımsız CPU mesh asset’i üretir. Hücre geçerliliği için `cellState()` ve grid koordinatları için mevcut dönüşümleri kullanır; 3D kütüphane deneyimi önkoşul değildir. Bu dosya ve kendine özel yardımcılar dışındaki entegrasyon dosyalarına dokunmaz.
+- **Asset sözleşmesi:** `positions: Float32Array` (local X/Y metre ve sunum Z), `normals: Float32Array`, `indices: Uint32Array`, vertex başına özgün Mars 2000 kotunu taşıyan `sourceElevationsM`, yerel bounds ve kaynak/datum/çözünürlük ile valid/atlanan hücre sayısını içeren provenance/display metadata. Görsel Z, açık `referenceElevationM` ve `verticalScale` ile hesaplanır; kaynak `zM` değiştirilmez.
+- **No-data ve sınırlar:** No-data/invalid köşe içeren grid quad’ı üçgenlenmez; değer sıfırla doldurulmaz ve boşluk üzerinden yüzey köprüsü kurulmaz. Builder Three.js/WebGL nesnesi döndürmez, kare başına çağrılmaz ve CRS/datum dönüşümü uydurmaz. Renderer her karede immutable `WorldSnapshot`, kamera ve hazır mesh asset’i tüketir; 2D fallback korunur.
+- **Çalışma şekli:** İki kişi ayrı clone/worktree ve branch kullanır; aynı OneDrive checkout’unda eşzamanlı Git işlemi yapmaz. Mesh görevi test dosyası değiştirmez/test çalıştırmaz; test kapsamı ayrıca istenirse açılır. Stage 6 manifest/adapter intake’i gerçek yarışma verisi gelince ayrı iş olarak başlar ve ilk 3D dilimi bloke etmez.
+
+Görev kabul ölçütleri ve daha ayrıntılı render/snapshot sözleşmesi depo kökündeki `yapay zeka icin/road map.md` ve `AGENTS.md` dosyalarındadır.
+
 ## Koordinatlar ve veri kararları
 
 - **Yerel düzlem:** x doğu, y kuzey, metre; orijin Sol 120 / WB1. Düzlem, DTM etiketindeki equirectangular

@@ -59,7 +59,7 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 | Şu an ana odak | 3D dikey dilim | Mevcut HiRISE DTM fixture’ı ile eşzamanlı iki paket: Alparslan renderer/runtime/scene entegrasyonu, takım arkadaşı bağımsız CPU mesh builder. `zM` ile görsel Z ayrılır, no-data boş kalır. |
 | Yarışma verisi gelince | Stage 6 manifest doğrulaması | License/usage, sayısal footprint+kesişim, açıkça doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtıyla fail-closed intake. |
 | Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
-| Kaydedilmiş Git durumu | İki kişilik paylaşım | `docs/shared-code-boundaries` dalındaki `aae4830` ve bu belge eşitlemesinin `docs/parallel-roadmap` dalındaki `3060829` commit’i remote’da kayıtlı. |
+| Kaydedilmiş Git durumu | İki kişilik paylaşım | `docs/shared-code-boundaries` dalındaki `aae4830`; görev bölümü ve belge eşitlemesi `docs/parallel-roadmap` dalındaki `d6a1189` commit’inde remote’da kayıtlı. |
 
 ## Sıradaki somut işler
 
@@ -70,4 +70,4 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 
 ### Git başlangıç durumu
 
-`docs/shared-code-boundaries` üzerindeki `aae4830` ile `docs/parallel-roadmap` üzerindeki belge commit’leri remote’a push edildi; mevcut dal bu görev başında `ae570b5` idi. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; TLS doğrulaması kapatılmasın.
+`docs/shared-code-boundaries` üzerindeki `aae4830` ve `docs/parallel-roadmap` üzerindeki `d6a1189` remote’a push edildi. Sonuncusu güncel iki kişilik 3D iş bölümünü ve API sözleşmesini içerir. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; TLS doğrulaması kapatılmasın.

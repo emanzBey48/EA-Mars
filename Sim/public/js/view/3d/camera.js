@@ -5,7 +5,8 @@ const MIN_PITCH_RAD = (5 * Math.PI) / 180;
 const MAX_PITCH_RAD = (85 * Math.PI) / 180;
 const FIRST_PERSON_MIN_PITCH_RAD = (-85 * Math.PI) / 180;
 const FIRST_PERSON_MAX_PITCH_RAD = (85 * Math.PI) / 180;
-const FIRST_PERSON_EYE_HEIGHT_M = 1.62; // presentation/game camera choice; not suit anthropometry
+const FIRST_PERSON_EYE_HEIGHT_M = 1.75; // presentation/game camera choice; not suit anthropometry
+const FIRST_PERSON_FOV_Y_RAD = (80 * Math.PI) / 180; // 80 deg vertical FOV for natural exploration vista
 
 function finite(value, name) {
   if (!Number.isFinite(value)) throw new TypeError(`${name} must be a finite number`);
@@ -108,7 +109,7 @@ export function createFirstPersonCamera({
   yawRad = 0,
   pitchRad = 0,
   eyeHeightM = FIRST_PERSON_EYE_HEIGHT_M,
-  fovYRad = Math.PI / 2.5,
+  fovYRad = FIRST_PERSON_FOV_Y_RAD,
   nearM = 0.05,
   farM = 3000,
 } = {}) {

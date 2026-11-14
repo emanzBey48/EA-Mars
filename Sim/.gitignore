@@ -7,5 +7,7 @@ data/*
 !data/legacy-hirise/dtm_subset.f32
 !data/ortho/
 !data/ortho/**
+!data/viking-mdim/
+!data/viking-mdim/**
 .e2e-profile/
 node_modules/

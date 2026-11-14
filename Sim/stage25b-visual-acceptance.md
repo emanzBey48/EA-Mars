@@ -1,34 +1,34 @@
 # Stage 25B — görsel kabul ve smoke senkronizasyonu
 
 Tarih: 14 Kasım 2026
+Dal/başlangıç: `codex/stage25b-acceptance-update`, `49ac54d`
+Kapsam: Stage 15–18, 19B/20B/22B/24A için görsel kabul ve Stage 25B smoke metin senkronizasyonu; ayrıca 24B/25 entegrasyonlarının gözlenen tarayıcı davranışı.
+Yol haritası ölçütü: kamera/rig/güneş ve ilgili katmanları gerçek tarayıcıda incelemek; `5b` feragat kontrolünü güncel arşiv/minimap/HUD metinleriyle uyumlu tutmak; first-person rig kadrajının kırpılmadığını doğrulamak.
 
-Dal/başlangıç: `codex/stage25b-visual-qa`, `fb0544b`
+## Bağımsız kabul bulguları
 
-Komut: `cd Sim; npm run smoke` (Edge headless, yerel sunucu `127.0.0.1:8181`)
+- **Smoke ve T2 — PASS.** Son kabul kaydındaki `npm test` sonucu **250/250**, `npm run smoke` sonucu **32/32**. T2 kontrolü güncel feragat cümlelerinin tümünü sayfa metninden çıkarıp kalan metinde çelişkili güvenlik/tehlike iddialarını arıyor. Önceki 26/32 ve paused-first-contact-anchor hatası, `0769aa4` ile yapılan düzeltme öncesinin tarihsel sonucudur; güncel durum değildir.
+- **Stage 15/17 first-person rig — kısmi PASS.** 3D kabul akışında kamera/kask göz yüksekliği **1,48 m**; torso ve kollar rig çizim/frustum tanısında bulundu. Aşağı bakışta birinci şahıs takım görünümü gözlendi. Bu, tüm yürüme pozlarında bacakların/kolların kırpılmadığını veya zemin clipping'i olmadığını kanıtlayan kapsamlı bir kadraj incelemesi değildir. 32/32 smoke içinde `6i` rig çizim/parça merkezleri ve heading uyumu; `6j` pause poz/gait dondurma; `6l` WASD gait üretimini kontrol eder.
+- **Yakın beacon davranışı — PASS.** İlk kişi başlangıcında Sol 120 / WB1 yakın direği `hiddenBeaconIds` içinde ve sahnede gizliydi. Kamera WASD ile ilerleyip WB1'den **4,19 m** uzağa geldiğinde gizli kimlik listesi boşaldı; kullanıcı yeniden beacon yönüne baktığında mast/gem tekrar görünür durumdaydı. İlgili smoke kontrolleri `6a` ve `6h`'dir. Uzaklaşma sonrası görünürlük görsel olarak kontrol edildi.
+- **2D fallback — PASS.** `6g`, test koşulunda WebGL2 başlatmasını deterministik olarak başarısız kılıp 2D haritanın görünür/aktif kaldığını doğruluyor. Bu, gerçek cihaz/GPU çeşitliliğinde performans veya WebGL sürücü kabulü değildir.
+- **24B rota planlama — PASS (gözlenen tarayıcı akışı).** Tarayıcı `window-ready` durumuna geldikten sonra geçerli başlangıç `(-318.4, 188.9)` ve bitiş `(398.7, -946.5)` seçildi. Sonuç `status=ok`, `mode=eva_walkability`; **497 m**, **10,4 dk**, **+5,4/−17,8 m**, **11°** en büyük eğim ve **1,13** maliyet gösterdi. Minimap'te plan çizgisi ve heatmap görüldü. Hücre açıklaması `96/100` puanını, kullanılan formülü ve planlama/ölçüm sınırlamasını gösterdi. Uç noktaları temizleme işlemi özet/planı sıfırladı; kapsam dışı seçim reddedildi. Fixture'da **0 no-data hücresi** bulunduğundan gerçek no-data hücresine tıklama davranışı sınanmadı.
+- **Stage 25 rota HUD ve 3D kılavuz — PASS (temel işlev); görüş sınırı var.** Geçerli bir plan için 3D HUD `sağ · −35°`, **297,1 m**, **100/100** yürünebilirlik ve **0,9°** eğim gösterdi. Planı temizleyince cyan plan çizgisi kayboldu; statik sarı görev çizgisi ve mor arşiv izi kaldı. 3D kılavuz uzak görünümde ince/uzak algılanıyor; oyuncuya yakın mesafede okunabilirliği ayrıca doğrulanmadı.
 
-## Sonuç
+Bu 24B/25 gözlemleri ekip içindeki bağımsız tarayıcı kabul çalışmasından aktarılmıştır. Geçici ekran görüntüleri denetimden sonra geri yüklendi/korunmadı; bu rapor kalıcı ekran görüntüsü eki sunmaz. Smoke'un ürettiği geçici görüntüler de commit kapsamına alınmadı.
 
-Stage 25B **kısmi kabul** aldı. DTM ve minimap 2D akışı ile kaynak/uyarı metinleri tarayıcıda görünür. İlk şahıs 3D terrain mesh ve rig bu tarayıcı koşusunda açılmadı; bu nedenle Stage 15–18 kamera/rig/güneş görsel kabulü PASS değildir. 19B geoloji HUD/kontak, 22B fotoğraf galerisi ve 24B rota etkileşimi için de bu smoke akışı yeterli görsel kanıt üretmedi.
+## İncelenmemiş veya kısmi kalanlar
 
-## Smoke bulguları
+- **Görünür zıplama ve iniş animasyonu — incelenmedi.** Smoke'taki zıplama/temas kontrolleri görsel zıplama yayı, iniş darbe sönümlemesi veya kamera dip hareketini kabul etmez.
+- **Mars güneş aydınlatması (Stage 18B) — incelenmedi.** Güneş yönü/ışık davranışının arazideki görünümü için görsel PASS yoktur.
+- **19B jeoloji HUD/kontak — incelenmedi.** Geoloji veri/anahtarının görünmesi, hücre seçimi ve açıklama doğruluğunu tek başına kabul etmez.
+- **20B arşiv izi — kısmi.** Plan temizleme gözleminde mor arşiv izi sarı görev izi ve cyan plan çizgisinden ayrı kaldı. Arşiv izinin tam görünüm/anahtar akışı ve kapsam sınırları bu turda bağımsız olarak sınanmadı.
+- **22B galeri — incelenmedi.** Galeri içeriği/panel kaydırması görsel olarak doğrulanmadı.
+- **24A minimap etkileşimi — kısmi.** 24B uç nokta seçimi için minimap üzerinde etkileşim kullanıldı ve kapsam dışı seçim reddedildi; 24A'nın tüm pan/zoom ve gerçek no-data seçimi kabul ölçütleri çalıştırılmadı.
+- **24B gerçek no-data seçimi — incelenmedi.** Kullanılan fixture no-data hücresi içermiyordu. Kapsam dışı reddi no-data reddinin yerine geçmez.
+- **Stage 25 yakın-alan kılavuz görünürlüğü — açık.** Uzak 3D çizgi gözlendi; oyuncu yakınında çizginin kalınlık/örtüşme/okunabilirliği hakkında PASS verilmedi.
 
-Üç smoke çalıştırması yapıldı. İlk ikisi başarısız 3D geçişini ve T2 feragat regex çakışmasını ayırt etmek için; üçüncüsü teşhis alanları ve yeni planlama feragati eklenmişken. Son çalışma **26/32** kontrol geçti. Üçüncü çalıştırmadan sonra T2 kontrolünün yinelenen feragat metinlerini temizlemesi için `replace()` → `replaceAll()` düzeltmesi yapıldı; bu son küçük düzeltme sonrasında smoke yeniden çalıştırılmadı.
+## Kayıt ve sınırlar
 
-- Geçenler arasında uygulamanın açılması, DTM örneklemesi, no-data/kapsam dışı davranışı, kaynak etiketleri, 2D hareket/duraklatma, fallback ve 60.5 FPS (başsız tarayıcı ölçümü) var.
-- 5a kaynak/birim/datum kontrolü geçti. 5b ilk iki çalıştırmada yeni arşiv feragatini hesaba katmadığı için, üçüncüde ise “Planlama göstergesi — güvenli rota sertifikası değildir.” açıklaması sayfada birden çok kez bulunduğu için başarısız oldu. Kontrol şimdi üç tam açıklamayı metinden tüm eşleşmelerle çıkarıp, kalan metni tarıyor.
-- 3D geçişi üç çalıştırmada da başarısız oldu. Son çalışmada 6a `active=2d`, `mesh=false`, `meshError=null`, `rendererError=null`, 1,884,301 hücre ve CPU build süresi yok olarak raporlandı. İlk geçiş bekleme döngüsü 100 × 100 ms ile sınırlı; CDP çağrı gecikmeleri dahil ölçülen duvar saati 11.1 saniyeydi. Ardından 6b ve 6i de beklenen terrain/rig tanıları gelmediği için başarısız oldu; eye height alanı 1.48 m görünse de `bodyWorldZM=null` ve terrain triangles/rig parts yoktu. 6h hareket yönü/zemin temasını, 6l hareket gait’ini de doğrulayamadı.
-- CDP Runtime istisnası gözlenmedi. Tek console error, `http://127.0.0.1:8181/favicon.ico` için 404’tü.
+Eski rapordaki **26/32**, başarısız 3D ilk geçişine dayanıyordu: smoke başlangıçta simülasyonu paused yaparken `selectView('3d')` yüzey temasını kuramıyor, `bodyWorldZM` null kaldığı için mesh adımına ulaşmıyordu. Bu davranış `0769aa4` ile düzeltildi; son smoke **32/32** olarak kaydedildi. Worker yarışması önceki olası açıklamaydı, doğrulanmış kök neden değildi.
 
-3D geçişindeki kök neden kaynakta belirlendi; Worker yarışı değil. Smoke 0a adımı simülasyonu `paused` yapıyor. `main.js` içindeki `selectView('3d')` geçerli başlangıç kotu bulunca `sim.resolveSurfaceContact(initialElevation)` çağırıyor (yaklaşık satır 513); ancak `simulation/sim.js` yaklaşık satır 208'de `PHASE.PAUSED` iken bu fonksiyon hemen `false` döndürür. Böylece `bodyWorldZM` `null` kalır; `selectView` yaklaşık satır 517'de 3D mesh inşasına ulaşmadan 2D'de kalır. Sonraki 6b/6i/6h/6l başarısızlıkları bunun devamıdır. Bu kabul görevi kök neden modüllerini değiştirmedi.
-
-## Görsel inceleme
-
-Smoke sırasında alınan `05-stage9-3d.png` adlı geçici görüntü yanıltıcı ada rağmen 3D değil, 2D görünümdeydi. Görüntüde 2D DTM hillshade, Jezero minimap, jeoloji sınır anahtarı, arşiv izi anahtarı ve sarı senaryo rotası/koridoru seçilebiliyordu. Minimap metni jeolojiyi hazır, arşiv izini hazır gösteriyordu; arşiv çizgisinin canlı telemetri veya rota önerisi olmadığı açıklaması görünürdü. Ortho katmanı hizalama doğrulanmadığı için kapalıydı.
-
-Galeri için alınan geçici `06-archive-gallery.png` ekran görüntüsü de sayfanın üst görünümünü tekrarladı; ana sayfa kaydırma alanı değil, ayrı panel kaydırıldığı için galeriyi göstermedi. Fotoğraf galerisi görsel kabul edilmedi. Galerinin ayrıca panel içinde kaydırılarak incelenmesi gerekir. CUA in-app browser bu ortamda kullanılabilir değildi; bağımsız görünür tarayıcı incelemesi yapılamadı. Smoke sonrası geçici screenshot’lar temizlendi; önceden izlenen test-output PNG’leri geri yüklendi.
-
-Güneş shader’ı kaynakta gökyüzü diski ve ufuk sönümlemeli doğrudan ışık hesabı içeriyor; `main.js` Mars güneş vektörünü `LTST 15`, `Lₛ 0°` ile veriyor. Fakat 3D render etkinleşmediği için ışığın gerçek sahnedeki görünümü gözlemlenmedi. 1.48 m kamera değeri runtime tanısında bulundu, ancak kask/rig ankrajı ve alt-kadraj kolları görsel olarak doğrulanamadı.
-
-## Kanıt sınırı
-
-Bu kabul tarayıcıda yerel sabit fixture ile yapılan başsız smoke çalışmasıdır. Çıktılar `Sim/test-output/` altındadır ve bu görev commit’ine dahil edilmez. Son T2 `replaceAll()` değişikliği sonrası smoke tekrar edilmedi. 3D, rig, güneş aydınlatması, 19B HUD/kontak, 22B galeri ve 24B gerçek rota seçme/planlama etkileşimi için PASS iddiası yoktur.
+Kabul sonuçları yerel fixture ve belirli tarayıcı oturumlarına aittir. Bu rapor test çıktısı screenshot'ı içermez; kullanıcıya ait TIFF ve `.crdownload` dosyaları değiştirilmemiştir.

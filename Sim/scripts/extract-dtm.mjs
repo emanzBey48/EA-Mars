@@ -27,63 +27,115 @@ function parseTiffMetadata(file) {
   const fd = fs.openSync(file, 'r');
   try {
     const size = fs.fstatSync(fd).size;
-    const h = Buffer.alloc(16);
-    fs.readSync(fd, h, 0, 16, 0);
+    const h = Buffer.alloc(8);
+    if (fs.readSync(fd, h, 0, h.length, 0) !== h.length) throw new Error('Kısa TIFF başlığı');
     const le = h.toString('latin1', 0, 2) === 'II';
-    const magic = le ? h.readUInt16LE(2) : h.readUInt16BE(2);
+    if (!le && h.toString('latin1', 0, 2) !== 'MM') throw new Error('TIFF byte-order işareti geçersiz');
+    const u16 = (b, o = 0) => le ? b.readUInt16LE(o) : b.readUInt16BE(o);
+    const u32 = (b, o = 0) => le ? b.readUInt32LE(o) : b.readUInt32BE(o);
+    const magic = u16(h, 2);
     if (magic !== 42) throw new Error('Geçersiz TIFF formatı');
-    const ifdOff = le ? h.readUInt32LE(4) : h.readUInt32BE(4);
+    const ifdOff = u32(h, 4);
 
     const read = (off, len) => {
+      if (!Number.isSafeInteger(off) || !Number.isSafeInteger(len) || off < 0 || len < 0 || off + len > size) {
+        throw new Error(`TIFF aralık sınır dışında: offset=${off}, bytes=${len}, file=${size}`);
+      }
       const b = Buffer.alloc(len);
-      fs.readSync(fd, b, 0, len, off);
+      if (fs.readSync(fd, b, 0, len, off) !== len) throw new Error(`TIFF kısa okuma: offset=${off}, bytes=${len}`);
       return b;
     };
-    const TYPES = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 11: 4, 12: 8 };
-    const numTags = read(ifdOff, 2).readUInt16LE(0);
+    const TYPES = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8 };
+    const numTags = u16(read(ifdOff, 2));
     const entries = read(ifdOff + 2, numTags * 12);
     const tags = {};
 
     for (let i = 0; i < numTags; i++) {
       const e = entries.subarray(i * 12, i * 12 + 12);
-      const tag = le ? e.readUInt16LE(0) : e.readUInt16BE(0);
-      const type = le ? e.readUInt16LE(2) : e.readUInt16BE(2);
-      const count = le ? e.readUInt32LE(4) : e.readUInt32BE(4);
-      const sz = (TYPES[type] || 1) * count;
-      const raw = sz <= 4 ? e.subarray(8, 8 + sz) : read(le ? e.readUInt32LE(8) : e.readUInt32BE(8), sz);
+      const tag = u16(e, 0);
+      const type = u16(e, 2);
+      const count = u32(e, 4);
+      if (!TYPES[type] || count < 1 || tags[tag]) throw new Error(`TIFF tag ${tag} yinelenmiş veya desteklenmeyen type/count içeriyor`);
+      const sz = TYPES[type] * count;
+      const raw = sz <= 4 ? e.subarray(8, 8 + sz) : read(u32(e, 8), sz);
       let val;
       if (type === 2) val = raw.toString('latin1').replace(/\0+$/, '');
-      else if (type === 3) val = Array.from({ length: count }, (_, k) => (le ? raw.readUInt16LE(k * 2) : raw.readUInt16BE(k * 2)));
-      else if (type === 4) val = Array.from({ length: count }, (_, k) => (le ? raw.readUInt32LE(k * 4) : raw.readUInt32BE(k * 4)));
+      else if ([1, 6, 7].includes(type)) val = Array.from(raw.subarray(0, count));
+      else if ([3, 8].includes(type)) val = Array.from({ length: count }, (_, k) => u16(raw, k * 2));
+      else if ([4, 9].includes(type)) val = Array.from({ length: count }, (_, k) => u32(raw, k * 4));
+      else if (type === 11) val = Array.from({ length: count }, (_, k) => le ? raw.readFloatLE(k * 4) : raw.readFloatBE(k * 4));
       else if (type === 12) val = Array.from({ length: count }, (_, k) => (le ? raw.readDoubleLE(k * 8) : raw.readDoubleBE(k * 8)));
       else val = raw;
-      tags[tag] = { type, count, val };
+      tags[tag] = { type, count, val, raw: Buffer.from(raw) };
     }
 
     const geoKeys = {};
-    const dir = tags[34735]?.val || [];
+    if (!tags[34735] || tags[34735].type !== 3 || tags[34735].count < 4) throw new Error('GeoKeyDirectoryTag (34735) eksik/geçersiz');
+    const dir = tags[34735].val;
+    if (dir[0] !== 1 || dir[1] !== 1 || dir[2] !== 0 || dir.length !== 4 + dir[3] * 4) throw new Error('GeoKeyDirectoryTag sürümü veya uzunluğu desteklenmiyor');
     const dbl = tags[34736]?.val || [];
     const asc = typeof tags[34737]?.val === 'string' ? tags[34737].val : '';
     for (let k = 4; k + 3 < dir.length; k += 4) {
       const [id, loc, count, off] = dir.slice(k, k + 4);
-      geoKeys[id] = loc === 0 ? off : loc === 34736 ? dbl.slice(off, off + count) : loc === 34737 ? asc.slice(off, off + count) : null;
+      if (geoKeys[id] !== undefined) throw new Error(`GeoKey ${id} yinelenmiş`);
+      if (loc === 0) geoKeys[id] = count === 1 ? off : null;
+      else if (loc === 34735 && off + count <= dir.length) geoKeys[id] = dir.slice(off, off + count);
+      else if (loc === 34736 && off + count <= dbl.length) geoKeys[id] = dbl.slice(off, off + count);
+      else if (loc === 34737 && off + count <= asc.length) geoKeys[id] = asc.slice(off, off + count).replace(/\0+$/, '');
+      else throw new Error(`GeoKey ${id} geçersiz location/count içeriyor`);
     }
 
-    return { size, tags, geoKeys, firstStripOffset: tags[273]?.val?.[0] ?? 172609 };
+    return { size, le, tags, geoKeys };
   } finally {
     fs.closeSync(fd);
   }
 }
 
 const tiffInfo = parseTiffMetadata(dtmPath);
-const width = tiffInfo.tags[256]?.val?.[0] ?? 21400;
-const height = tiffInfo.tags[257]?.val?.[0] ?? 21488;
-const sampleBits = tiffInfo.tags[258]?.val?.[0] ?? 32;
-const sampleFormat = tiffInfo.tags[339]?.val?.[0] ?? 3; // 3 = IEEE float
-const pixelScale = tiffInfo.tags[33550]?.val || [1.0, 1.0, 0.0];
-const tiepoint = tiffInfo.tags[33922]?.val || [0, 0, 0, 4577366.0, 1106618.0, 0.0];
-const rasterType = tiffInfo.geoKeys[1025] === 1 ? 'PixelIsArea' : 'PixelIsPoint';
-const semiMajor = tiffInfo.geoKeys[2057]?.[0] ?? 3396190.0;
+if (path.basename(dtmPath) !== 'JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.tif') throw new Error('Input filename is not the identified USGS Jezero DTM mosaic');
+const required = (id, type, count) => {
+  const tag = tiffInfo.tags[id];
+  if (!tag || tag.type !== type || (count != null && tag.count !== count)) throw new Error(`Gerekli TIFF tag ${id} type=${type}, count=${count ?? 'any'} eksik/uyumsuz`);
+  return tag.val;
+};
+const scalar = (id, type) => required(id, type, 1)[0];
+const width = scalar(256, 4), height = scalar(257, 4);
+const sampleBits = scalar(258, 3), compression = scalar(259, 3), photometric = scalar(262, 3);
+const samplesPerPixel = scalar(277, 3), rowsPerStrip = scalar(278, 4), planarConfig = scalar(284, 3), sampleFormat = scalar(339, 3);
+const stripOffsets = required(273, 4), stripByteCounts = required(279, 4);
+const pixelScale = required(33550, 12, 3), tiepoint = required(33922, 12, 6);
+const noDataText = required(42113, 2, null).trim();
+const geoKey = (id) => tiffInfo.geoKeys[id];
+const scalarKey = (id) => Array.isArray(geoKey(id)) && geoKey(id).length === 1 ? geoKey(id)[0] : geoKey(id);
+const rasterKey = scalarKey(1025), modelType = scalarKey(1024), coordTransform = scalarKey(3075);
+const semiMajor = scalarKey(2057);
+if (width !== 21400 || height !== 21488) throw new Error(`Boyutlar resmi mozaik boyutlarıyla uyuşmuyor: ${width}×${height}`);
+if (sampleBits !== 32 || sampleFormat !== 3 || samplesPerPixel !== 1 || planarConfig !== 1 || photometric !== 1) throw new Error('Yalnız tek bant, 32-bit IEEE float, contiguous, BlackIsZero raster desteklenir');
+if (compression !== 1) throw new Error(`Sıkıştırma ${compression} desteklenmiyor; güvenli decode yok`);
+if (rasterKey !== 1) throw new Error(`GeoKey GTRasterTypeGeoKey PixelIsArea (=1) olmalı; gelen ${rasterKey ?? 'yok'}`);
+if (modelType !== 1 || coordTransform !== 17) throw new Error(`GeoKey projeksiyon tanımı Equirectangular olmalı (model=1, transform=17); gelen ${modelType}/${coordTransform}`);
+if (!Number.isFinite(semiMajor) || semiMajor !== 3396190) throw new Error(`GeoKey semi-major radius eksik/uyumsuz: ${semiMajor}`);
+const standardParallelDeg = scalarKey(3078), centralMeridianDeg = scalarKey(3080);
+if (standardParallelDeg !== 0 || centralMeridianDeg !== 0) throw new Error('GeoKey standard parallel/central meridian eksik veya beklenmeyen');
+if (pixelScale[0] !== 1 || pixelScale[1] !== 1 || pixelScale[2] !== 0 || tiepoint[0] !== 0 || tiepoint[1] !== 0 || tiepoint[2] !== 0) throw new Error('PixelScale/Tiepoint eksik veya beklenmeyen axis/origin içeriyor');
+if (stripOffsets.length !== stripByteCounts.length || stripOffsets.length !== Math.ceil(height / rowsPerStrip)) throw new Error('StripOffsets/StripByteCounts sayısı RowsPerStrip ile uyuşmuyor');
+if (!tiffInfo.le) throw new Error('Big-endian float TIFF desteklenmiyor; endian dönüşümü açıkça uygulanmalı');
+const strips = stripOffsets.map((offset, i) => {
+  const rows = Math.min(rowsPerStrip, height - i * rowsPerStrip);
+  const expectedBytes = rows * width * 4;
+  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(stripByteCounts[i]) || stripByteCounts[i] !== expectedBytes || offset + expectedBytes > tiffInfo.size) {
+    throw new Error(`Strip ${i} byte offset/count yapısı beklenenden farklı`);
+  }
+  return { offset, bytes: expectedBytes, rowStart: i * rowsPerStrip, rows };
+});
+const sortedStrips = [...strips].sort((a, b) => a.offset - b.offset);
+for (let i = 1; i < sortedStrips.length; i++) if (sortedStrips[i - 1].offset + sortedStrips[i - 1].bytes > sortedStrips[i].offset) throw new Error('Strip aralıkları üst üste biniyor');
+if (!/^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$/.test(noDataText)) throw new Error(`GDAL_NODATA tag sayısal float32 değil: ${noDataText}`);
+const noDataValue = Number(noDataText);
+const noDataBuffer = Buffer.alloc(4); noDataBuffer.writeFloatLE(noDataValue, 0);
+const noDataBits = noDataBuffer.readUInt32LE(0) >>> 0;
+if (!Number.isFinite(noDataValue) || !Number.isFinite(noDataBuffer.readFloatLE(0))) throw new Error('Nodata değeri sonlu float32 değil');
+const rasterType = 'PixelIsArea';
 
 const label = {
   productId: 'JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40',
@@ -93,23 +145,30 @@ const label = {
   producer: 'USGS Astrogeology Science Center (Fergason, Hare, Mayer, Galuszka, Redding, Smith, Shinaman) in collab. with NASA JPL',
   recordBytes: width * 4,
   imagePointer: 1,
-  firstStripOffset: tiffInfo.firstStripOffset,
   lines: height,
   samples: width,
   bands: 1,
   sampleBits,
-  sampleType: sampleFormat === 3 ? 'PC_REAL' : 'UNKNOWN',
+  sampleType: sampleFormat === 3 ? 'IEEE_REAL' : 'UNKNOWN',
+  noDataSource: 'TIFF_GDAL_NODATA',
+  validRangeScope: 'loaded_window_observed',
+  sampleFormat,
+  compression,
+  planarConfig,
+  photometric,
+  byteOrder: 'LITTLE_ENDIAN',
+  stripCount: strips.length,
   offset: 0,
   scalingFactor: 1,
-  missingConstantHex: 'FF7FFFFB',
-  validMin: -2659.776611328125,
-  validMax: -1942.1046142578125,
+  missingConstantHex: noDataBits.toString(16).padStart(8, '0').toUpperCase(),
+  validMin: null,
+  validMax: null,
   projectionType: 'EQUIRECTANGULAR',
   latitudeType: 'PLANETOCENTRIC',
   positiveLongitude: 'EAST',
   radiusKm: semiMajor / 1000,
-  centerLatDeg: 0.0,
-  centerLonDeg: 0.0,
+  centerLatDeg: standardParallelDeg,
+  centerLonDeg: centralMeridianDeg,
   rotationDeg: 0,
   mapScaleM: pixelScale[0],
   upperLeftX: tiepoint[3],
@@ -118,14 +177,20 @@ const label = {
   sampleProjectionOffset: -(tiepoint[3] + (rasterType === 'PixelIsArea' ? 0.5 * pixelScale[0] : 0)),
   rasterType,
   pixelRegistration: rasterType === 'PixelIsArea' ? 'PIXEL_IS_AREA' : 'CENTER_PDS_1BASED',
-  verticalDatum: 'Mars equipotential surface (MOLA areoid / DeltaGeoid, tied to HRSC & CTX LVS)',
-  verticalDatumVerified: true,
-  verticalDatumEvidence: 'Fergason vd. 2020 (LPSC #2020), USGS FGDC XML (DOI: 10.5066/P9REJ9JN), CTX LVS tie (~0.4m median offset)',
+  verticalDatum: null,
+  verticalDatumVerified: false,
+  verticalDatumEvidence: null,
   minLatDeg: 18.306799449686565,
   maxLatDeg: 18.669315006877746,
   westLonDeg: 77.22293307697142,
   eastLonDeg: 77.58396402093508,
-  license: 'Public Domain / USGS (Please cite authors: Fergason vd. 2020)',
+  useConstraints: 'This work is marked with CC0 1.0 Universal',
+  useConstraintsEvidence: { statement: 'This work is marked with CC0 1.0 Universal', sourceUrl: 'https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic' },
+  provenanceEvidence: {
+    productId: 'JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40',
+    version: 'soc_006_blend40',
+    sourceUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl',
+  },
   citation: 'Fergason, R. L., et al., 2020, 51st LPSC, Abstract #2020. DOI: 10.5066/P9REJ9JN',
 };
 
@@ -142,8 +207,24 @@ console.log('Doğrulanan DTM başlığı:', {
 
 // ---------------------------------------------------------------- Coordinate Adapter & Waypoints
 const adapter = adapterFromLabel(label, WAYPOINTS[0]);
+if (
+  label.mapScaleM !== MAP_FRAME.mapScaleM ||
+  label.lineProjectionOffset !== MAP_FRAME.lineProjectionOffset ||
+  label.sampleProjectionOffset !== MAP_FRAME.sampleProjectionOffset ||
+  label.radiusKm !== MAP_FRAME.radiusKm ||
+  label.lines !== MAP_FRAME.lines || label.samples !== MAP_FRAME.samples ||
+  label.upperLeftX !== MAP_FRAME.upperLeftX || label.upperLeftY !== MAP_FRAME.upperLeftY
+) throw new Error('TIFF grid / axis / projection values do not match the checked canonical frame; extraction refused');
 const wp = WAYPOINTS.map((w) => ({ ...w, local: adapter.latLonToLocal(w.latDeg, w.lonDeg) }));
 const wpCells = wp.map((w) => adapter.localToCell(w.local.x, w.local.y));
+const transformToleranceM = Math.SQRT1_2 * label.mapScaleM + 0.01;
+const transformControls = wp.map((w, i) => {
+  const cell = wpCells[i];
+  const center = adapter.pixelToLocal(cell.row, cell.col);
+  const residualM = Math.hypot(center.x - w.local.x, center.y - w.local.y);
+  return { id: w.id, row: cell.row, col: cell.col, residualM: +residualM.toFixed(6) };
+});
+if (transformControls.some((c) => c.residualM > transformToleranceM)) throw new Error('Waypoint transform residual exceeds half-cell-diagonal tolerance');
 
 console.log('Waypointler ve hücreler:');
 wp.forEach((w, i) => {
@@ -170,7 +251,9 @@ const fd = fs.openSync(dtmPath, 'r');
 try {
   for (let r = 0; r < rows; r++) {
     const fileRow = row0 + r;
-    const pos = label.firstStripOffset + fileRow * label.recordBytes + col0 * 4;
+    const strip = strips[Math.floor(fileRow / rowsPerStrip)];
+    if (!strip || fileRow < strip.rowStart || fileRow >= strip.rowStart + strip.rows) throw new Error(`Strip mapping missing for row ${fileRow}`);
+    const pos = strip.offset + (fileRow - strip.rowStart) * label.recordBytes + col0 * 4;
     const got = fs.readSync(fd, out, r * cols * 4, cols * 4, pos);
     if (got !== cols * 4) throw new Error(`Kısa okuma: satır ${fileRow}, istenen ${cols * 4}, okunan ${got}`);
   }
@@ -181,7 +264,6 @@ try {
 // Float32 and Uint32 views
 const values = new Float32Array(out.buffer, out.byteOffset, rows * cols);
 const bits = new Uint32Array(out.buffer, out.byteOffset, rows * cols);
-const noDataBits = parseInt(label.missingConstantHex, 16) >>> 0;
 
 let nValid = 0, nNoData = 0, nInvalid = 0;
 let zMin = Infinity, zMax = -Infinity;
@@ -189,9 +271,9 @@ let zMin = Infinity, zMax = -Infinity;
 for (let i = 0; i < values.length; i++) {
   const u = bits[i];
   const v = values[i];
-  if (u === noDataBits || v < -1e30 || !Number.isFinite(v)) {
+  if (u === noDataBits) {
     nNoData++;
-  } else if (v < label.validMin || v > label.validMax) {
+  } else if (!Number.isFinite(v)) {
     nInvalid++;
   } else {
     nValid++;
@@ -199,6 +281,9 @@ for (let i = 0; i < values.length; i++) {
     if (v > zMax) zMax = v;
   }
 }
+if (!nValid) throw new Error('Window has no valid elevation cells; output refused');
+label.validMin = zMin;
+label.validMax = zMax;
 
 console.log('Pencere istatistiği:', { valid: nValid, noData: nNoData, invalid: nInvalid, zMin, zMax });
 
@@ -310,6 +395,8 @@ const meta = {
     colF: wpCells[i].colF,
   })),
   routeCheck,
+  transformControls,
+  transformToleranceM,
 };
 
 fs.writeFileSync(path.join(outDir, 'dtm_subset.json'), JSON.stringify(meta, null, 2));

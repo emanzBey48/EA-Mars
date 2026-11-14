@@ -3,6 +3,7 @@
 // Only verified manifests become active SurfaceProviders; ambiguous (`needs_review`), `invalid` or
 // `unavailable` manifests fall back cleanly to `UnavailableLayer` (or a registered fallback provider).
 import { STATUS, makeDescriptor, UnavailableLayer, dtmBaseDescriptor, loadDtmLayer } from './layers.js';
+import { WAYPOINTS } from '../config.js';
 
 /** Overall validation & readiness states for a layer manifest. */
 export const VALIDATION_STATUS = Object.freeze({
@@ -80,17 +81,27 @@ export function validateLayerManifest(manifest, expectedFrame) {
     record('identity', VALIDATION_STATUS.INVALID, 'id, title ve kind zorunludur.');
   }
 
-  if (isNonEmptyStr(manifest.product) && isNonEmptyStr(manifest.version) && isNonEmptyStr(manifest.source) && isNonEmptyStr(manifest.attribution)) {
+  const provenanceEvidence = manifest.provenanceEvidence;
+  if (
+    isNonEmptyStr(manifest.product) && isNonEmptyStr(manifest.version) && isNonEmptyStr(manifest.source) && isNonEmptyStr(manifest.attribution) &&
+    provenanceEvidence?.productId === manifest.product && provenanceEvidence?.version === manifest.version &&
+    provenanceEvidence?.sourceUrl === 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl'
+  ) {
     record('provenance', VALIDATION_STATUS.SUPPORTED, `${manifest.product} v${manifest.version} · ${manifest.source}`);
   } else {
-    record('provenance', VALIDATION_STATUS.INVALID, 'product, version, source ve attribution alanları zorunludur.');
+    record('provenance', VALIDATION_STATUS.NEEDS_REVIEW, 'Ürün kimliği/sürümü resmi ürün label kaynağıyla eşleştirilmedi.');
   }
 
-  const license = manifest.license ?? manifest.useConstraints;
-  if (isNonEmptyStr(license)) {
-    record('license', VALIDATION_STATUS.SUPPORTED, license);
+  const useConstraints = manifest.useConstraints;
+  const useEvidence = manifest.useConstraintsEvidence;
+  if (
+    useConstraints === 'This work is marked with CC0 1.0 Universal' &&
+    useEvidence?.statement === useConstraints &&
+    useEvidence?.sourceUrl === 'https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic'
+  ) {
+    record('license', VALIDATION_STATUS.SUPPORTED, `${useConstraints} [USGS data release]`);
   } else {
-    record('license', VALIDATION_STATUS.NEEDS_REVIEW, 'Lisans/kullanım hakkı (license/useConstraints) eksik; atıf tek başına kullanım izninin yerine geçmez.');
+    record('license', VALIDATION_STATUS.NEEDS_REVIEW, 'USGS release kullanım şartı ve birebir kaynak kanıtı doğrulanmadı; atıf tek başına yeterli değil.');
   }
 
   // 2. Target body & observation/product time coverage + explicit non-live relation to sim clock
@@ -111,16 +122,20 @@ export function validateLayerManifest(manifest, expectedFrame) {
   }
 
   // 3. Unit & explicit vertical datum proof with evidence
-  if (manifest.unit === 'm' && isNonEmptyStr(manifest.verticalDatum)) {
-    if (manifest.verticalDatumVerified !== true) {
-      record('verticalReference', VALIDATION_STATUS.NEEDS_REVIEW, `Düşey datum (${manifest.verticalDatum}) açık insan/kaynak doğrulaması bekliyor (verticalDatumVerified=true zorunludur).`);
-    } else if (!isNonEmptyStr(manifest.verticalDatumEvidence)) {
-      record('verticalReference', VALIDATION_STATUS.NEEDS_REVIEW, `Düşey datum (${manifest.verticalDatum}) kaynak kanıtı (verticalDatumEvidence) belirtilmemiş.`);
-    } else {
-      record('verticalReference', VALIDATION_STATUS.SUPPORTED, `Birim: m · Düşey datum: ${manifest.verticalDatum} [Kanıt: ${manifest.verticalDatumEvidence}]`);
-    }
+  const datumEvidence = manifest.verticalDatumEvidence;
+  if (manifest.unit !== 'm') {
+    record('verticalReference', VALIDATION_STATUS.INVALID, 'Düşey birim m olmalıdır.');
+  } else if (
+    !isNonEmptyStr(manifest.verticalDatum) || manifest.verticalDatumVerified !== true ||
+    !datumEvidence || datumEvidence.statement !== manifest.verticalDatum ||
+    ![
+      'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl',
+      'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.xml',
+    ].includes(datumEvidence?.sourceUrl)
+  ) {
+    record('verticalReference', VALIDATION_STATUS.NEEDS_REVIEW, 'Ürüne özgü düşey datum doğrulanabilir kaynak kanıtıyla sağlanmadı; kot örneklemesi kapalı.');
   } else {
-    record('verticalReference', VALIDATION_STATUS.INVALID, 'Birim ("m") ve verticalDatum açıkça tanımlanmalıdır; tahmin edilmez.');
+    record('verticalReference', VALIDATION_STATUS.SUPPORTED, `Birim: m · Düşey datum: ${manifest.verticalDatum} [${datumEvidence.sourceUrl}]`);
   }
 
   // 4. Full CRS / projection definition & canonical local-metre transform calculation check
@@ -140,31 +155,35 @@ export function validateLayerManifest(manifest, expectedFrame) {
     !approxEq(crs.centerLonDeg, expectedFrame.centerLonDeg)
   ) {
     record('crs', VALIDATION_STATUS.INVALID, 'CRS küre yarıçapı veya merkez enlem/boylamı kanonik yerel metre düzlemiyle uyuşmuyor.');
-  } else if (crs.transformVerified !== true) {
-    record('crs', VALIDATION_STATUS.NEEDS_REVIEW, 'CRS→yerel metre dönüşümü (transformVerified=true) insan doğrulaması bekliyor.');
   } else {
-    // Independent calculation check of the canonical transform:
+    // Recompute a georeferencing residual against the independently sourced waypoint coordinates.
     const DEG = Math.PI / 180;
     const rM = crs.radiusKm * 1000;
     const kx = rM * Math.cos((crs.centerLatDeg ?? 0) * DEG) * DEG;
     const ky = rM * DEG;
-    // Sol 120 control point check
-    const testLat = 18.43906919, testLon = 77.44940206;
-    const testX = (testLon - (crs.centerLonDeg ?? 0)) * kx;
-    const testY = (testLat - (crs.centerLatDeg ?? 0)) * ky;
     const g = manifest.grid;
-    let testCol, testRow;
-    if (g && (g.pixelRegistration === 'PIXEL_IS_AREA' || g.rasterType === 'PixelIsArea')) {
-      testCol = testX / g.mapScaleM + g.sampleProjectionOffset;
-      testRow = g.lineProjectionOffset - testY / g.mapScaleM;
-    } else if (g) {
-      testCol = testX / g.mapScaleM + g.sampleProjectionOffset - 1;
-      testRow = g.lineProjectionOffset - 1 - testY / g.mapScaleM;
-    }
-    if (!Number.isFinite(testCol) || !Number.isFinite(testRow)) {
-      record('crs', VALIDATION_STATUS.INVALID, 'Dönüşüm hesaplama kontrolü başarısız oldu (sayısal olmayan hücre).');
+    const controls = manifest.quality?.transformControls;
+    const toleranceM = manifest.quality?.transformToleranceM;
+    if (!g || !isPosNum(g.mapScaleM) || !isPosNum(g.lines) || !isPosNum(g.samples) || !isFinNum(g.lineProjectionOffset) || !isFinNum(g.sampleProjectionOffset)) {
+      record('crs', VALIDATION_STATUS.NEEDS_REVIEW, 'Dönüşüm residual hesabı için doğrulanmış raster grid bulunamadı.');
     } else {
-      record('crs', VALIDATION_STATUS.SUPPORTED, `Equirectangular R=${crs.radiusKm} km, std. paralel ${crs.centerLatDeg}°, merkez boylam ${crs.centerLonDeg}°E (dönüşüm hesabı doğrulandı)`);
+      const controlById = new Map((Array.isArray(controls) ? controls : []).map((c) => [c.id, c]));
+      const requiredControls = WAYPOINTS.map((w) => {
+        const c = controlById.get(w.id);
+        if (!c || !Number.isInteger(c.row) || !Number.isInteger(c.col) || c.row < 0 || c.col < 0 || c.row >= g.lines || c.col >= g.samples) return { id: w.id, residualM: Infinity };
+        const cellX = (c.col - g.sampleProjectionOffset) * g.mapScaleM;
+        const cellY = (g.lineProjectionOffset - c.row) * g.mapScaleM;
+        const expectedX = (w.lonDeg - crs.centerLonDeg) * kx;
+        const expectedY = (w.latDeg - crs.centerLatDeg) * ky;
+        return { id: w.id, residualM: Math.hypot(cellX - expectedX, cellY - expectedY) };
+      });
+      const maxResidualM = Math.max(...requiredControls.map((c) => c.residualM));
+      const pixelHalfDiagonalM = Math.SQRT1_2 * g.mapScaleM;
+      if (!Array.isArray(controls) || controls.length !== WAYPOINTS.length || !Number.isFinite(maxResidualM) || !isPosNum(toleranceM) || toleranceM > pixelHalfDiagonalM + 0.01 || maxResidualM > toleranceM) {
+        record('crs', VALIDATION_STATUS.NEEDS_REVIEW, `Waypoint hücre merkezleri için sayısal residual doğrulanmadı (max ${Number.isFinite(maxResidualM) ? maxResidualM.toFixed(3) : 'belirsiz'} m; tolerans ${toleranceM ?? 'eksik'} m).`);
+      } else {
+        record('crs', VALIDATION_STATUS.SUPPORTED, `Equirectangular dönüşüm kontrolü: ${requiredControls.length} waypoint, max residual ${maxResidualM.toFixed(3)} m / ${toleranceM} m.`);
+      }
     }
   }
 
@@ -181,7 +200,7 @@ export function validateLayerManifest(manifest, expectedFrame) {
     record('grid', VALIDATION_STATUS.INVALID, `Satır/sütun yönü SOUTH/EAST olmalıdır (gelen: ${grid.rowDirection}/${grid.colDirection}).`);
   } else {
     const pixelReg = grid.pixelRegistration ?? (grid.rasterType === 'PixelIsArea' ? 'PIXEL_IS_AREA' : null);
-    if (pixelReg !== 'PIXEL_IS_AREA' && pixelReg !== 'CENTER_PDS_1BASED') {
+    if (pixelReg !== 'PIXEL_IS_AREA' || grid.rasterType !== 'PixelIsArea') {
       record('grid', VALIDATION_STATUS.NEEDS_REVIEW, `Piksel kayıt kuralı (${pixelReg ?? 'belirsiz'}) yarım piksel belirsizliği içeriyor; insan doğrulaması olmadan örnekleme açılmaz.`);
     } else if (
       !approxEq(grid.mapScaleM, expectedFrame.mapScaleM) ||
@@ -229,6 +248,10 @@ export function validateLayerManifest(manifest, expectedFrame) {
     record('valueEncoding', VALIDATION_STATUS.INVALID, 'Değer kodlaması (format, scaling, no-data, geçerli aralık) eksik.');
   } else if (!SUPPORTED_FORMATS.includes(valSpec.format)) {
     record('valueEncoding', VALIDATION_STATUS.INVALID, `Desteklenmeyen veri biçimi: ${valSpec.format ?? 'belirsiz'}. Yalnız ${SUPPORTED_FORMATS.join(', ')} desteklenir.`);
+  } else if (valSpec.sampleType !== 'IEEE_REAL' || valSpec.sampleBits !== 32 || valSpec.bands !== 1 || valSpec.compression !== 1 || valSpec.planarConfig !== 1 || valSpec.byteOrder !== 'LITTLE_ENDIAN') {
+    record('valueEncoding', VALIDATION_STATUS.INVALID, 'Sample type/bits/bands/compression/planar config/byte order açık ve desteklenen değerler olmalıdır.');
+  } else if (valSpec.noDataSource !== 'TIFF_GDAL_NODATA' || valSpec.validRangeScope !== 'loaded_window_observed') {
+    record('valueEncoding', VALIDATION_STATUS.NEEDS_REVIEW, 'Nodata kaynağı veya gözlenen değer aralığının kapsamı belirtilmedi.');
   } else if (!approxEq(valSpec.scalingFactor, 1) || !approxEq(valSpec.offset, 0)) {
     record('valueEncoding', VALIDATION_STATUS.NEEDS_REVIEW, `SCALING_FACTOR=${valSpec.scalingFactor}, OFFSET=${valSpec.offset}: birim dönüşümü insan doğrulaması bekliyor.`);
   } else if (!isNonEmptyStr(valSpec.noDataHex) || !/^[0-9A-F]{8}$/i.test(valSpec.noDataHex)) {
@@ -292,16 +315,18 @@ export function buildHiriseManifestFromMeta(meta) {
     version: String(label.productVersionId ?? 'soc_006_blend40'),
     source: label.producer ?? 'USGS Astrogeology Science Center / NASA JPL',
     attribution: label.citation ?? 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona',
-    license: label.license ?? 'Public Domain / USGS (Please cite authors: Fergason vd. 2020)',
+    useConstraints: label.useConstraints ?? null,
+    useConstraintsEvidence: label.useConstraintsEvidence ?? null,
+    provenanceEvidence: label.provenanceEvidence ?? null,
     body: 'MARS',
     timeCoverage: {
       summary: meta.timeCoverage ?? (label.dataSetId ? `${label.dataSetId} · ${label.sourceProductIds}` : 'Statik arşiv ürünü'),
       simClockRelation: 'independent_static_archive',
     },
     unit: 'm',
-    verticalDatum: label.verticalDatum ?? 'Mars equipotential surface (MOLA areoid / DeltaGeoid, tied to HRSC & CTX LVS)',
+    verticalDatum: label.verticalDatum ?? null,
     verticalDatumVerified: label.verticalDatumVerified === true,
-    verticalDatumEvidence: label.verticalDatumEvidence ?? 'Fergason vd. 2020 (LPSC #2020), USGS FGDC XML (DOI: 10.5066/P9REJ9JN)',
+    verticalDatumEvidence: label.verticalDatumEvidence ?? null,
     crs: {
       projectionType: label.projectionType,
       latitudeType: label.latitudeType,
@@ -311,8 +336,6 @@ export function buildHiriseManifestFromMeta(meta) {
       centerLonDeg: label.centerLonDeg,
       rotationDeg: label.rotationDeg,
       description: meta.crsText,
-      transformVerified: meta.frameMatchesConfig === true,
-      transformEvidence: 'Equirectangular spherical forward/inverse tested against control waypoints with <0.5m cell residual',
     },
     grid: {
       lines: label.lines,
@@ -331,6 +354,12 @@ export function buildHiriseManifestFromMeta(meta) {
       format: 'GEOTIFF_FLOAT32_WINDOW',
       sampleType: label.sampleType,
       sampleBits: label.sampleBits,
+      bands: label.bands,
+      compression: label.compression,
+      planarConfig: label.planarConfig,
+      byteOrder: label.byteOrder,
+      noDataSource: label.noDataSource,
+      validRangeScope: label.validRangeScope,
       scalingFactor: label.scalingFactor,
       offset: label.offset,
       noDataHex: label.missingConstantHex,
@@ -340,6 +369,8 @@ export function buildHiriseManifestFromMeta(meta) {
     quality: {
       windowStats: meta.windowStats ?? null,
       registration: meta.registration ?? null,
+      transformControls: meta.transformControls ?? null,
+      transformToleranceM: meta.transformToleranceM ?? null,
     },
     access: { status: STATUS.OK, reason: null },
     humanReviewRequired: false,
@@ -369,7 +400,7 @@ export function manifestToDescriptor(manifest, validation) {
     product: manifest.product ?? base.product,
     version: manifest.version ?? null,
     attribution: manifest.attribution ?? base.attribution,
-    license: manifest.license ?? base.license,
+    license: manifest.useConstraints ?? null,
     body: manifest.body ?? 'MARS',
     unit: manifest.unit ?? null,
     verticalDatum: manifest.verticalDatum ?? null,

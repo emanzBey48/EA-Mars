@@ -127,18 +127,53 @@ function build3dTerrainOnce() {
 function buildGeologyLinePositions() {
   if (!geologySegmentsLocal.length) return new Float32Array();
   const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
+  const cellSizeM = layers.dtm.cellSizeM;
+  if (!Number.isFinite(cellSizeM) || cellSizeM <= 0) return new Float32Array();
+  const maxStepM = cellSizeM * 0.25;
   const positions = [];
   for (const segment of geologySegmentsLocal) {
     for (let i = 1; i < segment.xy.length; i++) {
       const [ax, ay] = segment.xy[i - 1], [bx, by] = segment.xy[i];
-      const a = layers.dtm.sampleElevation(ax, ay), b = layers.dtm.sampleElevation(bx, by);
-      // Do not bridge a missing or invalid DTM sample with invented surface height.
-      if (a.status !== 'ok' || b.status !== 'ok') continue;
-      positions.push(ax, ay, (a.value - referenceElevationM) * verticalScale + 0.04,
-        bx, by, (b.value - referenceElevationM) * verticalScale + 0.04);
+      const distanceM = Math.hypot(bx - ax, by - ay);
+      const steps = Math.max(1, Math.ceil(distanceM / maxStepM));
+      let previous = null;
+      for (let step = 0; step <= steps; step++) {
+        const t = step / steps;
+        const x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+        const sample = layers.dtm.sampleElevation(x, y);
+        if (sample.status !== 'ok' || !Number.isFinite(sample.value)) {
+          // Break the line at every invalid sub-sample. Never bridge across a no-data interval.
+          previous = null;
+          continue;
+        }
+        const current = [x, y, (sample.value - referenceElevationM) * verticalScale + 0.04];
+        if (previous) positions.push(...previous, ...current);
+        previous = current;
+      }
     }
   }
   return new Float32Array(positions);
+}
+
+function isExpectedGeologyManifest(manifest) {
+  const citation = typeof manifest?.citation === 'string' ? manifest.citation.toLowerCase() : '';
+  const title = typeof manifest?.title === 'string' ? manifest.title.toLowerCase() : '';
+  const cs = manifest?.coordinate_system;
+  const exportCrs = typeof cs?.geojson_export_crs === 'string' ? cs.geojson_export_crs.toLowerCase() : '';
+  const projection = typeof cs?.native_projection === 'string' ? cs.native_projection.toLowerCase() : '';
+  const datum = typeof cs?.reference_datum === 'string' ? cs.reference_datum.toLowerCase() : '';
+  const lonLatOrder = exportCrs.includes('planetocentric') && exportCrs.includes('longitude/latitude')
+    && exportCrs.includes('x=lon°e') && exportCrs.includes('y=lat°n');
+  const expectedRadiusM = MAP_FRAME.radiusKm * 1000;
+  const radiusMatches = [cs?.radius_equatorial_m, cs?.radius_polar_m].every((radius) =>
+    Number.isFinite(radius) && Math.abs(radius - expectedRadiusM) <= 1,
+  );
+  // EPSG:4326 is a generic Earth CRS label and is not accepted as evidence of Mars coordinates.
+  return title.includes('sim 3464') && citation.includes('sun') && citation.includes('stack')
+    && citation.includes('2020') && citation.includes('10.3133/sim3464')
+    && lonLatOrder && projection.includes('mars transverse mercator')
+    && datum === 'mars 2000 sphere' && radiusMatches
+    && String(cs?.central_meridian ?? '').includes('77.5');
 }
 
 function build3dMarkersOnce() {
@@ -244,7 +279,7 @@ async function loadGeology() {
     ]);
     if (!geoResponse.ok || !manifestResponse.ok) throw new Error(`HTTP ${geoResponse.status}/${manifestResponse.status}`);
     const [geojson, manifest] = await Promise.all([geoResponse.json(), manifestResponse.json()]);
-    if (!manifest?.coordinate_system?.geojson_export_crs || !manifest?.citation) throw new Error('Provenance incompleta');
+    if (!isExpectedGeologyManifest(manifest)) throw new Error('Jeoloji manifesti SIM 3464 / Mars koordinat çerçevesiyle uyuşmuyor');
     geologyIndex = createGeologyIndex(geojson, { source: manifest });
     if (!geologyIndex.counts.acceptedFeatures || geologyIndex.counts.skippedFeatures > 0) {
       throw new Error('Jeoloji verisinde poligon atlandı; kısmi katman kullanılmadı');

@@ -35,6 +35,8 @@ const debugEnabled = debugParams.get('debug') === '1' || window.__MARSWALK_ENABL
 const forceWebgl2Failure = debugEnabled && debugParams.get('testWebGL2Failure') === '1';
 const initialViewParam = urlParams.get('view')?.toLowerCase();
 const startIn3dRequested = initialViewParam === '3d';
+const urlScaleParam = Number(urlParams.get('scale'));
+let currentVerticalScale = [1, 2, 3].includes(urlScaleParam) ? urlScaleParam : 1;
 const adapter = adapterFromLabel(MAP_FRAME, WAYPOINTS[0]);
 const waypoints = WAYPOINTS.map((w) => ({ ...w, local: adapter.latLonToLocal(w.latDeg, w.lonDeg) }));
 const targetYawRad = Math.atan2(waypoints[1].local.y - waypoints[0].local.y, waypoints[1].local.x - waypoints[0].local.x);
@@ -88,6 +90,7 @@ const ctx2d = canvas2d.getContext('2d');
 const view2dBtn = $('btn-view-2d');
 const view3dBtn = $('btn-view-3d');
 const selectOrthoMode = $('select-ortho-mode');
+const selectVerticalScale = $('select-vertical-scale');
 const viewNote = $('view-note');
 const viewStatus = $('view-status');
 const fpReticle = $('fp-reticle');
@@ -106,7 +109,62 @@ const minimapPlanButton = $('minimap-plan-route');
 const minimapRouteSummary = $('minimap-route-summary');
 const minimapCellExplanation = $('minimap-cell-explanation');
 const orthoStatus = $('ortho-status');
-const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. Arazi yüksekliği 3× abartılı. Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.';
+const btnDemoMode = $('btn-demo-mode');
+const btnHeaderDemo = $('btn-header-demo');
+const presentationHud = $('presentation-hud');
+const btnClosePresentation = $('btn-close-presentation');
+const btnDemoTour = $('btn-demo-tour');
+const btnDemoToggleView = $('btn-demo-toggle-view');
+const btnDemoRestart = $('btn-demo-restart');
+const presGuideBanner = $('pres-guide-banner');
+
+let presentationModeActive = false;
+let pendingDemoTour = false;
+
+function setPresentationMode(active) {
+  presentationModeActive = Boolean(active);
+  document.body.classList.toggle('presentation-mode', presentationModeActive);
+  if (presentationHud) presentationHud.hidden = !presentationModeActive;
+  if (btnDemoMode) btnDemoMode.setAttribute('aria-pressed', String(presentationModeActive));
+  if (btnHeaderDemo) btnHeaderDemo.setAttribute('aria-pressed', String(presentationModeActive));
+  updateHud();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, mapWrap.clientWidth), h = Math.max(1, mapWrap.clientHeight);
+  if (activeView === '3d' && renderer3d) {
+    renderer3d.resize(w, h, dpr);
+  }
+}
+
+async function startDemoTour() {
+  setPresentationMode(true);
+  if (currentVerticalScale !== 1) {
+    rebuildTerrainMeshForScale(1);
+  }
+  const startPt = { xM: waypoints[0].local.x, yM: waypoints[0].local.y };
+  const endPt = { xM: waypoints[1].local.x, yM: waypoints[1].local.y };
+  showSelectedPoint('start', startPt);
+  showSelectedPoint('end', endPt);
+  if (routeWorkerReady) {
+    planMinimapRoute();
+  } else {
+    pendingDemoTour = true;
+  }
+  if (presGuideBanner) {
+    presGuideBanner.textContent = 'Sol 120 (WB1) → Sol 164 (Roubion) A* rotası hesaplanıyor. 1× gerçek dikey ölçekte HiRISE ortomozaik üzerinde turkuaz kılavuz şeridi izleyerek WASD ile ilerleyin!';
+  }
+  if (renderer3d && layers.dtm.available && !terrainMeshError && !forceWebgl2Failure) {
+    await selectView('3d');
+  } else {
+    await selectView('2d');
+  }
+}
+
+function getFirstPersonNote(scale = currentVerticalScale) {
+  const scaleText = scale === 1
+    ? 'Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).'
+    : `Dikey ölçek: ${scale}× görsel sunum abartısıdır.`;
+  return `Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. ${scaleText} Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.`;
+}
 
 function showSelectedPoint(kind, point) {
   const label = `${point.xM.toFixed(1)} m doğu, ${point.yM.toFixed(1)} m kuzey (WB1 orijini)`;
@@ -212,6 +270,10 @@ function handleRouteWorkerMessage({ data }) {
     minimapStatus.textContent = routeHeatmap
       ? 'Yürünebilirlik ısı haritası hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
       : 'Rota planlama alanı hazır; ısı haritası verisi Worker yanıtında bulunamadı.';
+    if (pendingDemoTour && minimapEndpoints.start && minimapEndpoints.end) {
+      pendingDemoTour = false;
+      planMinimapRoute();
+    }
     updateRouteButton();
     return;
   }
@@ -242,6 +304,9 @@ function handleRouteWorkerMessage({ data }) {
     minimapStatus.textContent = activeRoute?.status === 'ok'
       ? `Rota planlandı. ${activeRoute.mode === 'eva_walkability' ? 'EVA yürünebilirlik' : 'Bölgesel ön planlama'}. Planlama göstergesi — güvenli rota sertifikası değildir.`
       : activeRoute?.reason || `Rota üretilemedi (${activeRoute?.status || 'bilinmiyor'}).`;
+    if (presentationModeActive && presGuideBanner && activeRoute?.status === 'ok') {
+      presGuideBanner.textContent = 'Sol 120 → Sol 164 A* EVA rotası hazır! 1× gerçek dikey ölçekte HiRISE ortomozaik üzerinde turkuaz şeridi takip ederek yürüyüşe başlayın. Hedefe varıldığında başarı rozeti belirecektir.';
+    }
   } else if (data.type === 'cell-result' && pending.kind === 'explain') {
     renderCellExplanation(data.result);
   }
@@ -425,6 +490,61 @@ function updateViewControls() {
   }
 }
 
+function updateScaleUi() {
+  const scaleText = $('scale-indicator-text');
+  if (scaleText) {
+    scaleText.textContent = currentVerticalScale === 1
+      ? 'Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).'
+      : `Dikey ölçek: ${currentVerticalScale}× görsel sunum abartısıdır.`;
+  }
+  if (selectVerticalScale && Number(selectVerticalScale.value) !== currentVerticalScale) {
+    selectVerticalScale.value = String(currentVerticalScale);
+  }
+  if (activeView === '3d') {
+    const isLocked = document.pointerLockElement === canvas3d;
+    viewNote.textContent = isLocked ? `${getFirstPersonNote()} Fare kilitli.` : getFirstPersonNote();
+  }
+  hud.updateScaleBadge?.(currentVerticalScale);
+}
+
+function rebuildTerrainMeshForScale(newScale) {
+  if (![1, 2, 3].includes(newScale)) return;
+  currentVerticalScale = newScale;
+  if (!layers.dtm.available || typeof layers.dtm.cellState !== 'function') {
+    updateScaleUi();
+    return;
+  }
+  const stats = layers.dtm.descriptor?.quality?.windowStats;
+  if (!Number.isFinite(stats?.min) || !Number.isFinite(stats?.max)) {
+    updateScaleUi();
+    return;
+  }
+  const referenceElevationM = terrainMesh?.displayConfig?.referenceElevationM ?? ((stats.min + stats.max) / 2);
+  const displayConfig = {
+    referenceElevationM,
+    verticalScale: currentVerticalScale,
+  };
+  const buildStartedAt = performance.now();
+  let prepared;
+  try {
+    prepared = buildTerrainMesh(layers.dtm, displayConfig);
+  } finally {
+    terrainMeshBuildMs = performance.now() - buildStartedAt;
+  }
+  if (!prepared.indices.length) throw new Error('DTM penceresinde çizilebilir geçerli terrain quad’ı bulunamadı.');
+  terrainMesh = prepared;
+  renderer3d?.setTerrainMesh?.(terrainMesh);
+  archiveTraverse3d = null;
+  combinedArchiveMarkers = null;
+  archiveMarkerBase = null;
+  markerMesh = null;
+  prepareArchiveDisplay();
+  geologyLinePositions = buildGeologyLinePositions();
+  build3dMarkersOnce();
+  preparePlannedRouteGuide();
+  updateScaleUi();
+}
+
 function build3dTerrainOnce() {
   if (terrainMesh) return terrainMesh;
   if (!layers.dtm.available || typeof layers.dtm.cellState !== 'function') {
@@ -437,7 +557,7 @@ function build3dTerrainOnce() {
   // Presentation origin is the loaded fixture's range midpoint; vertical exaggeration is visual only.
   const displayConfig = {
     referenceElevationM: (stats.min + stats.max) / 2,
-    verticalScale: 3,
+    verticalScale: currentVerticalScale,
   };
   const buildStartedAt = performance.now();
   let prepared;
@@ -452,6 +572,7 @@ function build3dTerrainOnce() {
   geologyLinePositions = buildGeologyLinePositions();
   build3dMarkersOnce();
   preparePlannedRouteGuide();
+  updateScaleUi();
   return terrainMesh;
 }
 
@@ -642,7 +763,7 @@ async function selectView(view) {
     camera3d.yawRad = sim.headingRad;
   }
   setActiveView('3d');
-  viewNote.textContent = FIRST_PERSON_NOTE;
+  viewNote.textContent = getFirstPersonNote();
   viewStatus.hidden = true;
 }
 
@@ -982,14 +1103,14 @@ const { keys } = bindControls({
       fpReticle.classList.toggle('locked', isLocked);
     }
     if (activeView === '3d' && isLocked) {
-      viewNote.textContent = `${FIRST_PERSON_NOTE} Fare kilitli.`;
+      viewNote.textContent = `${getFirstPersonNote()} Fare kilitli.`;
     } else if (activeView === '3d') {
-      viewNote.textContent = FIRST_PERSON_NOTE;
+      viewNote.textContent = getFirstPersonNote();
     }
   },
   onCorridorChange: (val) => {
     const next = sim.setCorridorHalfWidth(val);
-    hud.renderLayerPanel(layers, terrain, next);
+    hud.renderLayerPanel(layers, terrain, next, currentVerticalScale);
     if (terrainMesh && layers.dtm.available) {
       markerMesh = null;
       build3dMarkersOnce();
@@ -999,9 +1120,34 @@ const { keys } = bindControls({
   },
 });
 
+if (selectVerticalScale) {
+  selectVerticalScale.value = String(currentVerticalScale);
+  selectVerticalScale.addEventListener('change', () => {
+    rebuildTerrainMeshForScale(Number(selectVerticalScale.value));
+  });
+}
+
+btnDemoMode?.addEventListener('click', () => setPresentationMode(!presentationModeActive));
+btnHeaderDemo?.addEventListener('click', () => setPresentationMode(!presentationModeActive));
+btnClosePresentation?.addEventListener('click', () => setPresentationMode(false));
+btnDemoTour?.addEventListener('click', () => void startDemoTour());
+btnDemoToggleView?.addEventListener('click', () => void selectView(activeView === '3d' ? '2d' : '3d'));
+btnDemoRestart?.addEventListener('click', () => {
+  sim.restart();
+  hasEntered3dOnce = false;
+  camera3d.yawRad = targetYawRad;
+  updateHud();
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.pointerLockElement && presentationModeActive) {
+    setPresentationMode(false);
+  }
+});
+
 updateViewControls();
 
-hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
+hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalScale);
 
 // Data loading via SurfaceProviderRegistry (app is playable meanwhile)
 (async () => {
@@ -1028,10 +1174,13 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
   initializeRouteWorker();
   updateRouteButton();
   updateViewControls();
-  hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
+  hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalScale);
+  updateScaleUi();
   updateHud();
 
-  if (startIn3dRequested && layers.dtm.available && renderer3d && !forceWebgl2Failure) {
+  if (urlParams.get('demo') === '1' || urlParams.get('presentation') === '1') {
+    await startDemoTour();
+  } else if (startIn3dRequested && layers.dtm.available && renderer3d && !forceWebgl2Failure) {
     await selectView('3d');
   }
 })();
@@ -1174,9 +1323,16 @@ requestAnimationFrame(frame);
 if (debugEnabled) {
   window.marswalk = {
     sim, camera, camera3d, adapter, registry, layers, waypoints, keys, updateHud,
+    rebuildTerrainMeshForScale,
+    setVerticalScale: (scale) => rebuildTerrainMeshForScale(Number(scale)),
+    setPresentationMode,
+    startDemoTour,
+    isPresentationMode: () => presentationModeActive,
     getSnapshot: () => lastSnapshot,
     getDiagnostics: () => ({
       activeView,
+      presentationMode: presentationModeActive,
+      verticalScale: currentVerticalScale,
       rendererAvailable: Boolean(renderer3d),
       rendererError: renderer3dError?.message ?? null,
       terrainMeshReady: Boolean(terrainMesh),

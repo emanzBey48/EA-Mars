@@ -70,7 +70,27 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
   $('v-speed').textContent = `${scenario.walkSpeedMps} m/s senaryo hızı × ${scenario.timeScale} zaman hızlandırma (gerçek Mars yürüyüş hızı iddiası değil). 3D düşey ivme: ${scenario.marsGravityMps2} m/s² (NASA küresel referansı; Jezero yerel ölçümü değil). Space sıçrama girdisi ${scenario.jumpImpulseMps} m/s oyun varsayımıdır, suit performansı değildir.`;
   const geologyProvenance = $('geology-provenance');
 
-  function renderLayerPanel(layers, terrain, currentCorridorM = corridorHalfWidthM) {
+  let activeVerticalScale = 1;
+  function updateScaleBadge(verticalScale = activeVerticalScale) {
+    activeVerticalScale = verticalScale;
+    const container = $('scale-badge-container');
+    if (!container) return;
+    const isReal = verticalScale === 1;
+    const badgeClass = isReal ? 'scale-badge scale-real' : 'scale-badge scale-exaggerated';
+    const text = isReal
+      ? 'Dikey ölçek: 1× Gerçek Mars Kotu (bilimsel 1:1 · DTM kot farkı birebir korunur)'
+      : `Dikey ölçek: ${verticalScale}× Görsel Abartı (sunum parametresidir; gerçek arazi eğimi daha düzdür)`;
+    container.innerHTML = `<div class="${badgeClass}">${esc(text)}</div>`;
+    const presScale = $('pres-scale');
+    if (presScale) {
+      presScale.textContent = isReal
+        ? '1× Gerçek Kot (1:1 Bilimsel)'
+        : `${verticalScale}× Görsel Abartı (Sunum Parametresi)`;
+    }
+  }
+
+  function renderLayerPanel(layers, terrain, currentCorridorM = corridorHalfWidthM, verticalScale = activeVerticalScale) {
+    updateScaleBadge(verticalScale);
     const regBanner = layers.selectionReport
       ? `<div class="layer muted small"><b>SurfaceProvider Kayıt/Seçim:</b> Aktif sağlayıcı <code>${esc(layers.selectionReport.activeId)}</code> (${esc(layers.selectionReport.validation?.status ?? '—')}). ${esc(layers.selectionReport.competitionDataStatus)}</div>`
       : '';
@@ -192,7 +212,40 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
         slope.className = 'status-bad';
       }
     }
+
+    const presPos = $('pres-pos');
+    if (presPos) {
+      presPos.textContent = `x=${astronaut.xM.toFixed(1)} m, y=${astronaut.yM.toFixed(1)} m`;
+    }
+    const presProg = $('pres-progress');
+    if (presProg) {
+      presProg.textContent = `${route.progressM.toFixed(0)}/${route.routeLengthM.toFixed(0)} m (%${(route.progressFrac * 100).toFixed(0)}) · hedefe ${route.distToEndM.toFixed(0)} m`;
+    }
+    const presElev = $('pres-elev');
+    if (presElev) {
+      presElev.textContent = ef.ok ? ef.text : 'Bilinmiyor';
+      presElev.className = ef.ok ? 'pres-val status-ok' : 'pres-val status-bad';
+    }
+    const presSlope = $('pres-slope');
+    if (presSlope) {
+      presSlope.textContent = sf.ok ? sf.text : 'Bilinmiyor';
+      presSlope.className = sf.ok ? 'pres-val status-ok' : 'pres-val status-bad';
+    }
+    const presWalk = $('pres-walkability');
+    if (presWalk) {
+      if (planned?.walkability?.available) {
+        presWalk.textContent = `${planned.walkability.score}/100 (senaryo puanı)`;
+        presWalk.className = 'pres-val status-ok';
+      } else {
+        presWalk.textContent = plannedRouteGuidance?.active ? 'A* Rotası Aktif' : 'Serbest Keşif (A* Planlanmadı)';
+        presWalk.className = 'pres-val';
+      }
+    }
+    const presClock = $('pres-clock');
+    if (presClock) {
+      presClock.textContent = `${formatClock(simTimeS)} (T+0)`;
+    }
   }
 
-  return { renderLayerPanel, updateHud };
+  return { renderLayerPanel, updateHud, updateScaleBadge };
 }

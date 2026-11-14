@@ -754,7 +754,9 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         const headingRad = (firstPerson && Number.isFinite(camera.yawRad)
           ? camera.yawRad
           : (Number.isFinite(player.headingRad) ? player.headingRad : 0)) + ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad;
-        const rigVerticalScale = firstPerson ? 1 : verticalScale;
+        // In both first-person and world modes, the astronaut suit maintains 1:1 human proportions.
+        // Z-axis of body geometry is not stretched; ground contact altitude is positioned by objectOffset.
+        const rigVerticalScale = 1;
         let objectOffset;
         if (firstPerson) {
           // This is a camera-relative visual overlay, not a second physical body position. A forward
@@ -923,6 +925,17 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     setOrthoMode(mode) {
       if (currentOrthoAssets) currentOrthoAssets.mode = mode;
       orthoMode = mode === 'ortho' ? 2 : (mode === 'hybrid' ? 1 : 0);
+    },
+
+    /**
+     * Explicitly updates and uploads the prepared terrain mesh asset.
+     * Ensures GPU buffers and terrain exaggeration reflect the new mesh asset immediately.
+     * @param {Object} newMesh
+     */
+    setTerrainMesh(newMesh) {
+      if (disposed) return;
+      assertMeshAsset(newMesh);
+      uploadMesh(newMesh);
     },
 
     ...(collectDiagnostics ? { getDiagnostics: () => lastFrameDiagnostics ? { ...lastFrameDiagnostics } : null } : {}),

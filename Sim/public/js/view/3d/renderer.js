@@ -60,6 +60,7 @@ uniform vec3 uBaseColor;
 uniform vec3 uLightDirection;
 uniform vec3 uCameraEye;
 uniform vec2 uElevBounds;
+uniform float uTerrainExaggeration;
 uniform int uRenderPass;
 uniform float uAlpha;
 out vec4 outColor;
@@ -87,8 +88,13 @@ void main() {
       sky = mix(sky, zenithSky, smoothstep(0.28, 0.95, h));
     }
     float sunCos = max(dot(rayDir, lightDir), 0.0);
-    float mieGlow = pow(sunCos, 10.0) * 0.26 + pow(sunCos, 96.0) * 0.55;
-    sky += vec3(1.0, 0.78, 0.56) * mieGlow;
+    float daylight = smoothstep(0.0, 0.08, lightDir.z);
+    float glow = 0.07 * pow(sunCos, 16.0) + 0.10 * pow(sunCos, 120.0);
+    // A representative 0.175° angular radius as seen from Mars.
+    float sunDistance = length(rayDir - lightDir);
+    float edge = max(fwidth(sunDistance), 0.0001);
+    float disc = 1.0 - smoothstep(0.00305 - edge, 0.00305 + edge, sunDistance);
+    sky += daylight * (vec3(1.0, 0.83, 0.66) * glow + vec3(0.65, 0.58, 0.46) * disc);
     outColor = vec4(sky, 1.0);
     return;
   }
@@ -116,12 +122,12 @@ void main() {
     float strata = 0.975 + 0.025 * sin(vWorldPos.z * 2.4);
     regolith *= strata;
 
-    // A low-angle, terrain-only presentation light makes modest DTM slopes legible in the
-    // first-person horizon view. It changes shading only; mesh Z/source elevations stay intact.
-    float reliefLight = max(dot(normal, normalize(vec3(-0.68, -0.48, 0.55))), 0.0);
-    vec3 terrainAmbient = mix(vec3(0.16, 0.11, 0.09), vec3(0.34, 0.24, 0.19), hemi);
-    float spec = pow(ndoth, 20.0) * 0.035;
-    vec3 lit = regolith * vColor * (terrainAmbient + 0.96 * reliefLight) + vec3(1.0, 0.82, 0.65) * spec;
+    // The mesh normals include visual vertical exaggeration. Undo it for daylight.
+    vec3 terrainNormal = normalize(vec3(normal.xy, normal.z * uTerrainExaggeration));
+    float daylight = smoothstep(0.0, 0.08, lightDir.z);
+    float direct = max(dot(terrainNormal, lightDir), 0.0) * daylight;
+    vec3 diffuseSky = vec3(0.39, 0.35, 0.33);
+    vec3 lit = regolith * vColor * (diffuseSky + vec3(0.64, 0.60, 0.55) * direct);
     float fogFactor = clamp(1.0 - exp(-dist * 0.00045), 0.0, 0.82);
     outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
     return;
@@ -302,6 +308,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     rootRotationRad: gl.getUniformLocation(program, 'uRootRotationRad'),
     cameraEye: gl.getUniformLocation(program, 'uCameraEye'),
     elevBounds: gl.getUniformLocation(program, 'uElevBounds'),
+    terrainExaggeration: gl.getUniformLocation(program, 'uTerrainExaggeration'),
     renderPass: gl.getUniformLocation(program, 'uRenderPass'),
     alpha: gl.getUniformLocation(program, 'uAlpha'),
   };
@@ -475,6 +482,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.uniform3fv(locations.lightDirection, light);
       gl.uniform3f(locations.cameraEye, eye.xM, eye.yM, eye.zDisplay);
       gl.uniform2f(locations.elevBounds, minZDisplay, maxZDisplay);
+      gl.uniform1f(locations.terrainExaggeration, terrainMesh.displayConfig.verticalScale);
 
       // Pass 3: Procedural Martian Skybox Dome & Solar Mie Scattering
       gl.disable(gl.DEPTH_TEST);

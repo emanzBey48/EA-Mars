@@ -2,6 +2,7 @@
 // immutable WorldSnapshot creation, canvas rendering, input and HUD.
 import { SCENARIO, WAYPOINTS, MAP_FRAME, ROUTE_ORIGIN_NOTE, SOURCES } from './config.js';
 import { adapterFromLabel } from './geo/geo.js';
+import { marsSunDirection } from './geo/mars-sun.js';
 import {
   createGeologyIndex, lookupGeologicUnitLocal, toGeologySnapshot,
   createGeologicContactField, nearestGeologicContactM,
@@ -82,7 +83,7 @@ const minimapStatus = $('minimap-status');
 const minimapGeologyToggle = $('minimap-toggle-geology');
 const minimapArchiveToggle = $('minimap-toggle-archive');
 const minimapLayerStatus = $('minimap-layer-status');
-const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Arazi yüksekliği 3× dikey sunum abartısıdır; yandan ışık da yalnızca görsel kabartma okunurluğu içindir.';
+const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. Arazi yüksekliği 3× abartılı. Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.';
 
 function showSelectedPoint(kind, point) {
   const label = `${point.xM.toFixed(1)} m doğu, ${point.yM.toFixed(1)} m kuzey (WB1 orijini)`;
@@ -149,7 +150,10 @@ refreshMinimapOverlays();
 
 try {
   if (forceWebgl2Failure) throw new Error('Test-only forced WebGL2 initialization failure');
-  renderer3d = createTerrainRenderer(canvas3d, { collectDiagnostics: debugEnabled });
+  renderer3d = createTerrainRenderer(canvas3d, {
+    collectDiagnostics: debugEnabled,
+    lightDirection: marsSunDirection({ latitudeDeg: WAYPOINTS[0].latDeg, solarLongitudeDeg: 0, trueSolarHour: 15 }),
+  });
 } catch (error) {
   renderer3dError = error;
   view3dBtn.disabled = true;

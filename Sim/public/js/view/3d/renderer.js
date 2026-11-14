@@ -233,7 +233,7 @@ function createAstronautBuffers(gl, locations) {
   return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: indices.length };
 }
 
-const FIRST_PERSON_RIG_FORWARD_M = 1.25;
+const FIRST_PERSON_RIG_FORWARD_M = 0.55;
 const FIRST_PERSON_RIG_ROOT_BELOW_EYE_M = 1.48;
 
 function rotateEuler([x, y, z], [rx, ry, rz]) {
@@ -545,8 +545,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         const rigVerticalScale = firstPerson ? 1 : verticalScale;
         let objectOffset;
         if (firstPerson) {
-          // Presentation-only view model: forward and anchored at true 1:1 suit scale below eye level so
-          // arms/gloves/chestPack sit naturally in the lower frame without vertical exaggeration distortion.
+          // Presentation-only view model: camera height and rig dimensions share 1:1 presentation metres.
+          // Keep it close enough to read as the wearer's lower-frame body, not a distant trailing avatar.
           const forwardX = Math.cos(camera.yawRad), forwardY = Math.sin(camera.yawRad);
           objectOffset = [
             camera.xM + forwardX * FIRST_PERSON_RIG_FORWARD_M,

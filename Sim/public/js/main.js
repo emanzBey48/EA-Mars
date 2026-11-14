@@ -372,7 +372,6 @@ function frame(now) {
           xM: player.xM,
           yM: player.yM,
           bodyZDisplay,
-          verticalScale: terrainMesh.displayConfig.verticalScale,
           eyeOffsetM,
           pitchOffsetRad,
           rollOffsetRad,

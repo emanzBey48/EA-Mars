@@ -151,7 +151,11 @@ export function createFirstPersonCamera({
   return camera;
 }
 
-/** Updates the eye-level camera pose from the simulated body position in display coordinates. */
+/** Updates the eye-level camera pose from the simulated body position in display coordinates.
+ * The body anchor already includes terrain vertical exaggeration. By default, eye height and motion
+ * offsets remain presentation metres to match the 1:1 first-person rig. `verticalScale` is a legacy,
+ * explicit opt-in for callers that need those offsets exaggerated; the active first-person view omits it.
+ */
 export function setFirstPersonPose(camera, {
   xM,
   yM,

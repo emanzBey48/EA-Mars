@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   ASTRONAUT_RIG,
   FIRST_PERSON_RIG_PARTS,
+  FIRST_PERSON_LOWER_BODY_PARTS,
   poseAstronautRig,
   chainedLimbPart,
 } from '../public/js/view/3d/astronaut-rig.js';
@@ -12,7 +13,8 @@ const STATUS = Object.freeze({ OK: 'ok', NO_DATA: 'no_data', OUT_OF_BOUNDS: 'out
 test('astronaut rig: immutable template, coordinate metadata and geometry', () => {
   assert.equal(ASTRONAUT_RIG.metadata.forward, '-Y');
   assert.equal(ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad, Math.PI / 2);
-  assert.equal(ASTRONAUT_RIG.metadata.presentationStrideLengthM, 1.25);
+  // Stage 16 (Asama 16): 6 m is a visual presentation stride (was 1.25 m); see the tempo test for the rationale.
+  assert.equal(ASTRONAUT_RIG.metadata.presentationStrideLengthM, 6);
   assert.equal(ASTRONAUT_RIG.geometry.primitive, 'triangles');
   assert.ok(ASTRONAUT_RIG.geometry.positions.length > 0);
   assert.ok(ASTRONAUT_RIG.geometry.normals.length === ASTRONAUT_RIG.geometry.positions.length);
@@ -489,8 +491,9 @@ test('Stage 16: first-person viewModel breathing and step sway', () => {
   const walk = poseAstronautRig(walkInput);
   assert.equal(walk.pose, 'walk');
   assert.equal(walk.gaitFrequencyHz, 1.2 / STRIDE_M);
-  // Golden value: 2*pi * (1.2 / 1.25 Hz) * 1.5 s = 2*pi * 1.44 -> 2*pi * 0.44 = 2.76460153515902 rad.
-  assert.ok(Math.abs(walk.gaitPhaseRad - 2.7646015351590165) < 1e-12, `gait phase ${walk.gaitPhaseRad}`);
+  // Golden value (stride 6 m): 2*pi * (1.2 / 6 Hz) * 1.5 s = 2*pi * 0.3 = 0.6*pi = 1.8849555921538759 rad.
+  // (Previously, with a 1.25 m stride: 2*pi * 0.44 = 2.7646015351590165 rad.)
+  assert.ok(Math.abs(walk.gaitPhaseRad - 1.8849555921538759) < 1e-12, `gait phase ${walk.gaitPhaseRad}`);
   assert.equal(walk.rootOffset.length, 3);
   assert.equal(walk.rootRotationRad.length, 3);
   assert.deepEqual(Object.keys(walk.parts).sort(), Object.keys(ASTRONAUT_RIG.parts).sort());
@@ -682,6 +685,10 @@ test('Stage 14+: Chained boot-to-leg ankle kinematics and helmet/visor horizon s
 
 // --- gaitDistanceM: distance-based gait phase (continuous across speed changes) ---
 
+// SCENARIO.timeScale in config.js (assumed here as a documented test constant; the rig cannot change it).
+const SCENARIO_TIME_SCALE = 8;
+const SCENARIO_FRAME_DT_S = SCENARIO_TIME_SCALE / 60; // one 60 fps wall frame in scenario seconds
+
 const WALK_DIST = (timeS, speed, gaitDistanceM) => ({
   ...WALK_AT(timeS, speed),
   ...(gaitDistanceM === undefined ? {} : { gaitDistanceM }),
@@ -724,15 +731,17 @@ test('Stage 14+: gait phase stays continuous across a speed change when distance
   // comes from speed-scaled amplitudes (speedNorm, ease) changing by 1% at the same phase.
   assert.ok(maxFullPoseJump(a, b) < 0.01, `with distance: ${maxFullPoseJump(a, b)}`);
 
-  // Without the field the same 1% speed change shifts the phase by 2*pi*dv*t/stride (a visible jump);
-  // measured 0.36 rad at t=100 s. This documents why the field exists.
-  const c = poseAstronautRig(WALK_DIST(100, 1.0));
-  const d = poseAstronautRig(WALK_DIST(100, 1.01));
+  // Without the field the same 1% speed change shifts the phase by 2*pi*dv*t/stride (a visible jump).
+  // With the 6 m stride this is 4.8x smaller than with 1.25 m, and sin() can coincidentally cancel it
+  // (e.g. t=100 s gives only 0.003), so t=150 s is used; measured 0.375 there. This documents why the
+  // field exists (residual of the stateless fallback).
+  const c = poseAstronautRig(WALK_DIST(150, 1.0));
+  const d = poseAstronautRig(WALK_DIST(150, 1.01));
   assert.ok(maxFullPoseJump(c, d) > 0.1, `without distance: ${maxFullPoseJump(c, d)}`);
 });
 
 test('Stage 14+: speed ramp (landing-recovery style) has smooth gait with distance, jumpy without', () => {
-  const dt = 1 / 60;
+  const dt = SCENARIO_FRAME_DT_S;
   const steps = 600;
   const maxLegStep = (useDistance) => {
     let distance = 0;
@@ -750,13 +759,13 @@ test('Stage 14+: speed ramp (landing-recovery style) has smooth gait with distan
     }
     return worst;
   };
-  // Measured 0.044 rad/step with distance (the genuine stride motion at 1.2 m/s; bound ~2x) and
-  // 0.30 rad/step without.
+  // Realistic scenario frame step (60 fps wall, timeScale 8). Measured (6 m stride): with distance
+  // 0.075 rad/step; without distance 0.19 rad/step.
   const withDistance = maxLegStep(true);
   const without = maxLegStep(false);
-  assert.ok(withDistance < 0.09, `with distance: ${withDistance}`);
-  assert.ok(without > 0.2, `without distance: ${without}`);
-  assert.ok(without > 3 * withDistance, 'distance phase is clearly smoother');
+  assert.ok(withDistance < 0.12, `with distance: ${withDistance}`);
+  assert.ok(without > 0.14, `without distance: ${without}`);
+  assert.ok(without > 2 * withDistance, 'distance phase is clearly smoother');
 });
 
 test('Stage 14+: gaitDistanceM keeps output deterministic and frozen', () => {
@@ -769,4 +778,184 @@ test('Stage 14+: gaitDistanceM keeps output deterministic and frozen', () => {
   // Distance only drives the walk phase: other poses ignore it.
   const idle = { timeS: 3, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, phase: 'idle' };
   assert.deepStrictEqual(poseAstronautRig({ ...idle, gaitDistanceM: 99 }), poseAstronautRig(idle));
+});
+
+
+// ---- Stage 16 (Asama 16): calm tempo, continuity, first-person lower-body data ----
+
+const STAGE16_WALK = (timeS, speed, extra = {}) => ({
+  timeS, horizontalSpeedMps: speed, verticalSpeedMps: 0, grounded: true,
+  groundContactStatus: STATUS.OK, phase: 'running', ...extra,
+});
+
+test('Stage 16: arm swing tempo is calm in wall-clock terms and arms counter-swing the legs', () => {
+  const stride = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
+  const speed = 1.2; // SCENARIO.walkSpeedMps
+  // Wall-clock cadence = timeScale * speed / stride. Before this stage (1.25 m) it was 7.68 Hz.
+  const wallHz = SCENARIO_TIME_SCALE * speed / stride;
+  assert.ok(wallHz <= 2.0, `wall-clock arm cadence ${wallHz} Hz`);
+
+  // Sample in wall time (scenario time = timeScale * wall time) over several cycles.
+  const dtWall = 1 / 2000;
+  let prevArm = null;
+  let peakArmSpeed = 0;
+  let armPeak = 0;
+  let legPeak = 0;
+  for (let i = 0; i < 4000; i += 1) {
+    const pose = poseAstronautRig(STAGE16_WALK(10 + SCENARIO_TIME_SCALE * i * dtWall, speed));
+    const arm = pose.parts.leftArm.rotationRad[0];
+    if (prevArm !== null) peakArmSpeed = Math.max(peakArmSpeed, Math.abs(arm - prevArm) / dtWall);
+    prevArm = arm;
+    armPeak = Math.max(armPeak, Math.abs(arm));
+    legPeak = Math.max(legPeak, Math.abs(pose.parts.leftLeg.rotationRad[0]));
+    // Counter-phase: left and right arm pitch deviate in opposite directions from their shared offset.
+    const sum = pose.parts.leftArm.rotationRad[0] + pose.parts.rightArm.rotationRad[0];
+    assert.ok(Math.abs(sum) < 1e-9 + 0.04, 'arms counter-swing about a shared small offset');
+    // Each arm swings opposite to its same-side leg.
+    const armDev = pose.parts.leftArm.rotationRad[0] - (pose.parts.leftArm.rotationRad[0] + pose.parts.rightArm.rotationRad[0]) / 2;
+    const legDev = pose.parts.leftLeg.rotationRad[0] - (pose.parts.leftLeg.rotationRad[0] + pose.parts.rightLeg.rotationRad[0]) / 2;
+    assert.ok(armDev * legDev <= 1e-12, 'left arm opposes left leg');
+  }
+  // Measured 0.223 rad peak and 2.25 rad per wall second (was 0.324 rad and 15.5 rad/s).
+  assert.ok(peakArmSpeed < 3.5, `peak arm angular speed ${peakArmSpeed} rad/wall-s`);
+  assert.ok(armPeak < 0.6 * legPeak, `arm peak ${armPeak} vs leg peak ${legPeak}`);
+});
+
+test('Stage 16: speed-change, idle/walk, landing and pause transitions stay continuous', () => {
+  // (a) Speed ramp 1.2 -> 0.6 -> 1.2 m/s with integrated gaitDistanceM at the realistic frame step:
+  // the worst per-frame arm change must be about the natural per-frame motion at constant speed.
+  const worstArmFrame = (speedAt) => {
+    let distance = 0;
+    let timeS = 50;
+    let prev = null;
+    let worst = 0;
+    for (let i = 0; i <= 600; i += 1) {
+      const speed = speedAt(i / 600);
+      const pose = poseAstronautRig(STAGE16_WALK(timeS, speed, { gaitDistanceM: distance }));
+      if (prev) {
+        for (const id of ['leftArm', 'rightArm', 'leftGlove', 'rightGlove']) {
+          for (let k = 0; k < 3; k += 1) {
+            worst = Math.max(worst, Math.abs(pose.parts[id].rotationRad[k] - prev.parts[id].rotationRad[k]),
+              Math.abs(pose.parts[id].offset[k] - prev.parts[id].offset[k]));
+          }
+        }
+      }
+      prev = pose;
+      distance += speed * SCENARIO_FRAME_DT_S;
+      timeS += SCENARIO_FRAME_DT_S;
+    }
+    return worst;
+  };
+  const natural = worstArmFrame(() => 1.2);
+  const ramped = worstArmFrame((f) => 1.2 - 0.6 * (1 - Math.abs(2 * f - 1)));
+  // Measured ratio 1.00 (before this stage: 0.97, i.e. also no extra jump, but each natural frame
+  // step was 0.25 rad because the cadence was 8 times faster in phase per frame).
+  assert.ok(ramped / natural < 1.15, `ramp/natural per-frame arm change ${ramped / natural}`);
+  assert.ok(natural < 0.06, `natural per-frame arm change ${natural} rad`);
+
+  // (b) Landing recovery <-> walk at the 0.04 m/s threshold (same time, same recovery fraction).
+  for (const frac of [1, 0.5, 0.1]) {
+    const land = poseAstronautRig(LAND_AT(frac, { timeS: 37.3, horizontalSpeedMps: 0.04 }));
+    const walk = poseAstronautRig(LAND_AT(frac, { timeS: 37.3, horizontalSpeedMps: 0.0401 }));
+    assert.equal(land.pose, 'landing');
+    assert.equal(walk.pose, 'walk');
+    // Measured rotation jump <= 0.0017 rad (before: 0.21 rad at frac 1); bound covers offsets too.
+    assert.ok(maxFullPoseJump(land, walk) < 0.01, `landing->walk at frac ${frac}: ${maxFullPoseJump(land, walk)}`);
+  }
+
+  // (c) Pause: frozen timeS and motion state give a bit-identical pose, with or without distance.
+  const frozen = STAGE16_WALK(12.5, 1.1, { gaitDistanceM: 13.7 });
+  assert.deepStrictEqual(poseAstronautRig({ ...frozen, phase: 'paused' }), poseAstronautRig({ ...frozen, phase: 'paused' }));
+  assert.deepStrictEqual(poseAstronautRig({ ...frozen, phase: 'paused' }), poseAstronautRig({ ...frozen, phase: 'walk' }));
+
+  // (d) Gait amplitude eases in from rest: arms at 0.0401 m/s equal the idle arms within a hair.
+  const idle = poseAstronautRig(STAGE16_WALK(9, 0.04));
+  const justWalking = poseAstronautRig(STAGE16_WALK(9, 0.0401, { gaitDistanceM: 0.5 }));
+  for (const id of ['leftArm', 'rightArm', 'leftGlove', 'rightGlove']) {
+    for (let k = 0; k < 3; k += 1) {
+      assert.ok(Math.abs(idle.parts[id].rotationRad[k] - justWalking.parts[id].rotationRad[k]) < 0.005, `${id} rot ${k}`);
+    }
+  }
+
+  // (e) Time fallback and distance path agree when distance = speed * time (stateless fallback is exact
+  // at constant speed; its residual is only the phase shift after a speed change, covered above).
+  for (const [speed, timeS] of [[0.5, 3.3], [1.2, 77.7]]) {
+    assert.ok(maxFullPoseJump(
+      poseAstronautRig(STAGE16_WALK(timeS, speed)),
+      poseAstronautRig(STAGE16_WALK(timeS, speed, { gaitDistanceM: speed * timeS })),
+    ) < 1e-8);
+  }
+});
+
+test('Stage 16: first-person lower-body export is frozen, additive and chained in every pose', () => {
+  assert.deepEqual([...FIRST_PERSON_LOWER_BODY_PARTS], ['leftLeg', 'rightLeg', 'leftBoot', 'rightBoot']);
+  assert.ok(Object.isFrozen(FIRST_PERSON_LOWER_BODY_PARTS));
+  // Existing first-person list is unchanged and disjoint from the lower body.
+  assert.deepEqual([...FIRST_PERSON_RIG_PARTS], ['torso', 'chestPack', 'leftArm', 'rightArm', 'leftGlove', 'rightGlove']);
+  assert.ok(FIRST_PERSON_LOWER_BODY_PARTS.every((id) => !FIRST_PERSON_RIG_PARTS.includes(id)));
+  const hint = ASTRONAUT_RIG.metadata.firstPersonLowerBody;
+  assert.deepEqual([...ASTRONAUT_RIG.metadata.firstPersonLowerBodyParts], [...FIRST_PERSON_LOWER_BODY_PARTS]);
+  assert.equal(hint.visibleOnlyWhenLookingDown, true);
+  assert.equal(hint.provisional, true);
+  assert.ok(hint.minLookDownPitchRad > 0 && hint.minLookDownPitchRad < hint.fullLookDownPitchRad);
+  assert.ok(Object.isFrozen(hint));
+  for (const id of FIRST_PERSON_LOWER_BODY_PARTS) {
+    assert.ok(ASTRONAUT_RIG.parts[id].pivot.every(Number.isFinite), `${id} pivot`);
+  }
+
+  const states = [];
+  for (const speed of [0, 0.03, 0.0401, 0.3, 0.8, 1.2, 1.4, 2.4]) {
+    for (const timeS of [0, 0.37, 2.9, 41.3]) {
+      states.push(STAGE16_WALK(timeS, speed), STAGE16_WALK(timeS, speed, { gaitDistanceM: speed * timeS }));
+      for (const frac of [0.2, 1]) states.push(LAND_AT(frac, { timeS, horizontalSpeedMps: speed }));
+    }
+  }
+  for (const vz of [-3, -2.4, -0.5, 0, 0.5, 1.5, 3]) states.push(AIR_AT(2, vz));
+  states.push({ timeS: 1, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, phase: 'stop' });
+  states.push({ timeS: 1, horizontalSpeedMps: 1, verticalSpeedMps: 0, grounded: false, groundContactStatus: STATUS.NO_DATA, phase: 'running' });
+
+  let maxLegAngle = 0;
+  let maxBootAngle = 0;
+  let maxAttach = 0;
+  for (const state of states) {
+    const pose = poseAstronautRig(state);
+    for (const id of FIRST_PERSON_LOWER_BODY_PARTS) {
+      const p = pose.parts[id];
+      assert.ok(p.offset.every(Number.isFinite) && p.rotationRad.every(Number.isFinite), `${id} finite`);
+      const angle = Math.max(...p.rotationRad.map(Math.abs));
+      if (id.endsWith('Leg')) maxLegAngle = Math.max(maxLegAngle, angle);
+      else maxBootAngle = Math.max(maxBootAngle, angle);
+    }
+    for (const side of ['left', 'right']) {
+      const leg = ASTRONAUT_RIG.parts[`${side}Leg`];
+      const boot = ASTRONAUT_RIG.parts[`${side}Boot`];
+      const legPose = pose.parts[`${side}Leg`];
+      const bootPose = pose.parts[`${side}Boot`];
+      const bootPivot = addV(addV(rotateEulerRef(subV(boot.pivot, boot.center), bootPose.rotationRad), boot.center), bootPose.offset);
+      const carried = addV(leg.pivot, rotateEulerRef(subV(boot.pivot, leg.pivot), legPose.rotationRad));
+      maxAttach = Math.max(maxAttach, distV(bootPivot, carried));
+    }
+  }
+  assert.ok(maxAttach < 1e-9, `boot-leg attachment error ${maxAttach}`);
+  // Measured max leg angle over this sweep is 0.70 rad (full-speed walk 0.52 + full landing absorb
+  // 0.18; it was 0.64 before the landing/walk terms were aligned); bound is pi/4 = 0.785, so no extreme angles.
+  assert.ok(maxLegAngle < Math.PI / 4, `leg angle ${maxLegAngle}`);
+  assert.ok(maxBootAngle < Math.PI / 4, `boot angle ${maxBootAngle}`);
+});
+
+test('Stage 16: unknown contact stays neutral, including lower body and viewModel', () => {
+  for (const extra of [{}, { gaitDistanceM: 50 }]) {
+    const pose = poseAstronautRig({
+      timeS: 12.3, horizontalSpeedMps: 1.2, verticalSpeedMps: 0, grounded: true,
+      groundContactStatus: STATUS.NO_DATA, phase: 'running', ...extra,
+    });
+    assert.equal(pose.pose, 'unknown');
+    assert.deepEqual([...pose.rootOffset], [0, 0, 0]);
+    assert.deepEqual([...pose.rootRotationRad], [0, 0, 0]);
+    for (const id of FIRST_PERSON_LOWER_BODY_PARTS) {
+      assert.deepEqual([...pose.parts[id].offset], [0, 0, 0], `${id} offset`);
+      assert.deepEqual([...pose.parts[id].rotationRad], [0, 0, 0], `${id} rotation`);
+    }
+    assert.deepEqual([...pose.viewModel.offset], [0, 0, 0]);
+  }
 });

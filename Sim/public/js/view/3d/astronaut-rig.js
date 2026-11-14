@@ -10,6 +10,18 @@ export const FIRST_PERSON_RIG_PARTS = Object.freeze([
 ]);
 
 /**
+ * Aşama 16 (provisional until the Aşama 15 camera/scale contract is frozen): parts a first-person
+ * renderer may draw ONLY while the player looks down, so legs and boots can appear in the lower frame.
+ * Data only; `FIRST_PERSON_RIG_PARTS` (what the renderer draws today) is intentionally unchanged.
+ * Their poses are always present in `poseAstronautRig(...).parts`.
+ */
+export const FIRST_PERSON_LOWER_BODY_PARTS = Object.freeze(['leftLeg', 'rightLeg', 'leftBoot', 'rightBoot']);
+
+// Presentation stride (visual design constant) and arm-swing share of the leg swing. See metadata note.
+const PRESENTATION_STRIDE_LENGTH_M = 6;
+const ARM_TO_LEG_SWING_RATIO = 0.5;
+
+/**
  * Immutable, renderer-independent rig template. All dimensions, colors, and proportions are visual
  * design units only; they do not describe a real suit, human body, or biomechanical model.
  *
@@ -27,8 +39,25 @@ export const ASTRONAUT_RIG = deepFreeze({
     forward: '-Y',
     forwardHeadingOffsetRad: Math.PI / 2,
     geometryDescription: 'Low-poly cuboids; no physical or suit-biomechanics claim',
-    presentationStrideLengthM: 1.25,
+    // Visual choice, NOT biomechanics: scenario time runs `SCENARIO.timeScale` (8x) faster than wall
+    // time, so wall-clock arm cadence = timeScale * speed / stride. 6 m gives ~1.6 Hz at 1.2 m/s (the
+    // previous 1.25 m gave ~7.7 Hz). Consumers that mirror the gait (e.g. camera head-bob) should read
+    // this value instead of hard-coding a stride.
+    presentationStrideLengthM: PRESENTATION_STRIDE_LENGTH_M,
     firstPersonParts: FIRST_PERSON_RIG_PARTS,
+    firstPersonLowerBodyParts: FIRST_PERSON_LOWER_BODY_PARTS,
+    // Suggestion for the integration owner only (Aşama 17); provisional, not wired to any renderer.
+    // Draw the lower-body parts only when the view pitch is at least `minLookDownPitchRad` below the
+    // horizon, fading in until `fullLookDownPitchRad`; they must not cover the normal-view frame.
+    // Per-part hip/ankle hinge pivots are `parts[id].pivot`; neutral boot sole sits at z = 0.01.
+    firstPersonLowerBody: {
+      parts: FIRST_PERSON_LOWER_BODY_PARTS,
+      visibleOnlyWhenLookingDown: true,
+      minLookDownPitchRad: 0.6,
+      fullLookDownPitchRad: 1.0,
+      provisional: true,
+      note: 'suggestion only; thresholds are not tied to camera.js conventions',
+    },
   },
   geometry: createUnitBoxGeometry(),
   parts: {
@@ -51,7 +80,6 @@ export const ASTRONAUT_RIG = deepFreeze({
 
 const TAU = 2 * Math.PI;
 const MOVING_SPEED_EPSILON_MPS = 0.04;
-const PRESENTATION_STRIDE_LENGTH_M = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
 
 // Stage 16 first-person view-model constants. These are visual choices for the lower-frame torso/arm
 // overlay, not suit or human biomechanics measurements. Camera head-bob lives in camera.js (owned
@@ -157,7 +185,10 @@ export function poseAstronautRig(state) {
     const speedNorm = Math.min(1, speed / WALK_FULL_SPEED_MPS);
     const ease = smoothstep01((speed - MOVING_SPEED_EPSILON_MPS) / GAIT_EASE_MPS);
     const gaitNorm = speedNorm * ease;
-    const idleFade = 1 - speedNorm;
+    // Breath terms fade with speed and with landing recovery. The recovery terms below (squash, lean,
+    // arm flare/pitch, wrist, leg/boot flex, leg spread) deliberately use the SAME coefficients as the
+    // 'landing' pose, so walk and landing agree at the 0.04 m/s threshold (no stateless jump there).
+    const idleFade = (1 - speedNorm) * (1 - recFrac);
     const amplitude = 0.52 * gaitNorm;
     const lopeBounce = 0.035 * gaitNorm * (1 - Math.cos(2 * gaitPhaseRad));
     const squash = 0.065 * recFrac;
@@ -166,19 +197,22 @@ export function poseAstronautRig(state) {
     const forwardLean = 0.04 * speedNorm;
     const hipRoll = 0.015 * speedNorm * cycle;
     const sway = 0.02 * speedNorm * cycle;
-    rootRotationRad = [forwardLean + 0.03 * speedNorm * cycle, hipRoll, sway];
+    const gaitLeanRad = forwardLean + 0.03 * speedNorm * cycle;
+    const recoveryLeanRad = 0.045 * recFrac;
+    rootRotationRad = [gaitLeanRad + recoveryLeanRad, hipRoll, sway];
 
-    const helmetRot = [-0.35 * rootRotationRad[0] - 0.008 * breath * idleFade, -0.4 * hipRoll, -0.3 * sway];
+    const helmetRot = [-0.35 * gaitLeanRad - 0.30 * recoveryLeanRad - 0.008 * breath * idleFade, -0.4 * hipRoll, -0.3 * sway];
     parts.helmet = hingedPart3D('helmet', helmetRot);
     parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
 
-    const armSwing = 0.72 * amplitude * cycle;
-    const armFlare = 0.02 + 0.04 * speedNorm + 0.15 * recFrac;
+    // Arms counter-swing (opposite sign to the same-side leg) at a calmer share of the leg swing.
+    const armSwing = ARM_TO_LEG_SWING_RATIO * amplitude * cycle;
+    const armFlare = 0.02 * (1 - recFrac) + 0.04 * speedNorm + 0.22 * recFrac;
     const armYaw = 0.04 * gaitNorm * cycle;
-    const armPitchIdle = -0.018 * breath * idleFade;
+    const armPitchIdle = -0.018 * breath * idleFade - 0.18 * recFrac;
     // EVA gloves follow arms with natural pre-curved inward working grip
-    const gripPitch = -0.08 - 0.02 * speedNorm - 0.015 * breath * idleFade;
-    const gripRoll = 0.03 + 0.02 * speedNorm;
+    const gripPitch = (-0.08 - 0.02 * speedNorm) * (1 - recFrac) - 0.015 * breath * idleFade - 0.14 * recFrac;
+    const gripRoll = (0.03 + 0.02 * speedNorm) * (1 - recFrac) + 0.06 * recFrac;
     const gripYaw = 0.03 * gaitNorm * cycle;
     setArms(
       parts,
@@ -189,15 +223,15 @@ export function poseAstronautRig(state) {
     );
 
     const legSwing = amplitude * cycle;
-    const legAbsorb = 0.12 * recFrac;
-    const legClearance = 0.03 * ease;
+    const legAbsorb = 0.18 * recFrac;
+    const legClearance = 0.03 * ease + 0.04 * recFrac;
     const leftLegRot = [legSwing - legAbsorb, -legClearance, 0];
     const rightLegRot = [-legSwing - legAbsorb, legClearance, 0];
     parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
     parts.rightLeg = hingedPart3D('rightLeg', rightLegRot);
 
     const bootSwing = 0.30 * amplitude * cycle;
-    const bootAbsorb = 0.10 * recFrac;
+    const bootAbsorb = 0.14 * recFrac;
     const leftAnklePush = cycle > 0 ? 0.12 * amplitude * cycle : 0.04 * amplitude * cycle;
     const rightAnklePush = -cycle > 0 ? -0.12 * amplitude * cycle : -0.04 * amplitude * cycle;
     const leftBootTargetPitch = bootSwing + leftAnklePush + bootAbsorb;

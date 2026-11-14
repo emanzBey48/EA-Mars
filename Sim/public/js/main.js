@@ -52,7 +52,7 @@ const viewNote = $('view-note');
 const viewStatus = $('view-status');
 const fpReticle = $('fp-reticle');
 const fpHudHint = $('fp-hud-hint');
-const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Dikey ölçek 3× sunum abartısıdır.';
+const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Arazi yüksekliği 3× dikey sunum abartısıdır; yandan ışık da yalnızca görsel kabartma okunurluğu içindir.';
 
 try {
   if (forceWebgl2Failure) throw new Error('Test-only forced WebGL2 initialization failure');

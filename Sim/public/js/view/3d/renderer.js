@@ -116,8 +116,12 @@ void main() {
     float strata = 0.975 + 0.025 * sin(vWorldPos.z * 2.4);
     regolith *= strata;
 
-    float spec = pow(ndoth, 20.0) * 0.07;
-    vec3 lit = regolith * vColor * (ambient + 0.78 * ndotl) + vec3(1.0, 0.82, 0.65) * spec;
+    // A low-angle, terrain-only presentation light makes modest DTM slopes legible in the
+    // first-person horizon view. It changes shading only; mesh Z/source elevations stay intact.
+    float reliefLight = max(dot(normal, normalize(vec3(-0.68, -0.48, 0.55))), 0.0);
+    vec3 terrainAmbient = mix(vec3(0.16, 0.11, 0.09), vec3(0.34, 0.24, 0.19), hemi);
+    float spec = pow(ndoth, 20.0) * 0.035;
+    vec3 lit = regolith * vColor * (terrainAmbient + 0.96 * reliefLight) + vec3(1.0, 0.82, 0.65) * spec;
     float fogFactor = clamp(1.0 - exp(-dist * 0.00045), 0.0, 0.82);
     outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
     return;

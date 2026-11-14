@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/extract-dtm.mjs",
-  "generatedAt": "2026-11-14T08:08:52.074Z",
+  "generatedAt": "2026-11-14T09:54:54.413Z",
   "sourceFile": {
     "name": "JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.tif",
     "bytes": 1839545409,
@@ -16,21 +16,35 @@
     "producer": "USGS Astrogeology Science Center (Fergason, Hare, Mayer, Galuszka, Redding, Smith, Shinaman) in collab. with NASA JPL",
     "recordBytes": 85600,
     "imagePointer": 1,
-    "firstStripOffset": 172609,
     "lines": 21488,
     "samples": 21400,
     "bands": 1,
     "sampleBits": 32,
-    "sampleType": "PC_REAL",
+    "sampleType": "IEEE_REAL",
+    "noDataSource": "TIFF_GDAL_NODATA",
+    "rangeSemantics": "loaded_window_observed_extrema_only",
+    "sampleFormat": 3,
+    "compression": 1,
+    "planarConfig": 2,
+    "photometric": 1,
+    "byteOrder": "LITTLE_ENDIAN",
+    "stripCount": 21488,
     "offset": 0,
     "scalingFactor": 1,
     "missingConstantHex": "FF7FFFFB",
-    "validMin": -2659.776611328125,
-    "validMax": -1942.1046142578125,
+    "observedMin": -2592.678955078125,
+    "observedMax": -2547.8369140625,
     "projectionType": "EQUIRECTANGULAR",
     "latitudeType": "PLANETOCENTRIC",
     "positiveLongitude": "EAST",
     "radiusKm": 3396.19,
+    "pdsGridEvidence": {
+      "lineProjectionOffset": 1106617.5,
+      "sampleProjectionOffset": -4577366.5,
+      "mapScaleM": 1,
+      "radiusKm": 3396.19,
+      "sourceUrl": "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl"
+    },
     "centerLatDeg": 0,
     "centerLonDeg": 0,
     "rotationDeg": 0,
@@ -41,14 +55,23 @@
     "sampleProjectionOffset": -4577366.5,
     "rasterType": "PixelIsArea",
     "pixelRegistration": "PIXEL_IS_AREA",
-    "verticalDatum": "Mars equipotential surface (MOLA areoid / DeltaGeoid, tied to HRSC & CTX LVS)",
-    "verticalDatumVerified": true,
-    "verticalDatumEvidence": "Fergason vd. 2020 (LPSC #2020), USGS FGDC XML (DOI: 10.5066/P9REJ9JN), CTX LVS tie (~0.4m median offset)",
+    "verticalDatum": null,
+    "verticalDatumVerified": false,
+    "verticalDatumEvidence": null,
     "minLatDeg": 18.306799449686565,
     "maxLatDeg": 18.669315006877746,
     "westLonDeg": 77.22293307697142,
     "eastLonDeg": 77.58396402093508,
-    "license": "Public Domain / USGS (Please cite authors: Fergason vd. 2020)",
+    "useConstraints": "This work is marked with CC0 1.0 Universal",
+    "useConstraintsEvidence": {
+      "statement": "This work is marked with CC0 1.0 Universal",
+      "sourceUrl": "https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic"
+    },
+    "provenanceEvidence": {
+      "productId": "JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40",
+      "version": "soc_006_blend40",
+      "sourceUrl": "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl"
+    },
     "citation": "Fergason, R. L., et al., 2020, 51st LPSC, Abstract #2020. DOI: 10.5066/P9REJ9JN"
   },
   "frameMatchesConfig": true,
@@ -126,5 +149,57 @@
     "slopeMeanDeg": 4.446,
     "slopeP90Deg": 8.003,
     "slopeMaxDeg": 18.41
+  },
+  "transformControls": [
+    {
+      "id": "sol120-wb1",
+      "row": 13647,
+      "col": 13423,
+      "residualM": 0.455887
+    },
+    {
+      "id": "sol164-roubion",
+      "row": 14322,
+      "col": 13557,
+      "residualM": 0.562552
+    }
+  ],
+  "transformToleranceM": 0.7171067811865476,
+  "transformComparison": {
+    "sourceUrl": "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl",
+    "pdsGrid": {
+      "lineProjectionOffset": 1106617.5,
+      "sampleProjectionOffset": -4577366.5,
+      "mapScaleM": 1,
+      "radiusKm": 3396.19,
+      "sourceUrl": "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl"
+    },
+    "tiffGrid": {
+      "lineProjectionOffset": 1106617.5,
+      "sampleProjectionOffset": -4577366.5
+    },
+    "toleranceM": 0.7071067811865476,
+    "points": [
+      {
+        "line": 1,
+        "sample": 1,
+        "residualM": 0
+      },
+      {
+        "line": 1,
+        "sample": 21400,
+        "residualM": 0
+      },
+      {
+        "line": 21488,
+        "sample": 1,
+        "residualM": 0
+      },
+      {
+        "line": 21488,
+        "sample": 21400,
+        "residualM": 0
+      }
+    ]
   }
 }

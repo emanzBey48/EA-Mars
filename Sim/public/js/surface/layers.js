@@ -66,7 +66,7 @@ export class UnavailableLayer {
 /**
  * In-memory window of a gridded elevation product.
  * `values` is a Float32Array (row-major, `rows` x `cols`) whose cell (0,0) is product cell (rowOffset, colOffset).
- * No-data is detected from the exact 32-bit pattern; values outside [validMin, validMax] or non-finite are `invalid`.
+ * No-data is detected from the exact 32-bit pattern; configured validity bounds and non-finite values are `invalid`.
  */
 export class GridElevationLayer {
   constructor({ descriptor, adapter, values, rows, cols, rowOffset, colOffset, noDataBits, validMin, validMax }) {
@@ -97,8 +97,8 @@ export class GridElevationLayer {
     const i = r * this.cols + c;
     if (this.bits[i] === this.noDataBits) return { status: STATUS.NO_DATA, reason: `Ürün no-data hücresi (tam bit deseni 0x${this.noDataBits.toString(16).padStart(8, '0').toUpperCase()})` };
     const v = this.values[i];
-    if (!Number.isFinite(v) || v < this.validMin || v > this.validMax) {
-      return { status: STATUS.INVALID, reason: 'Değer VALID_MINIMUM/VALID_MAXIMUM aralığı dışında veya non-finite' };
+    if (!Number.isFinite(v) || (Number.isFinite(this.validMin) && v < this.validMin) || (Number.isFinite(this.validMax) && v > this.validMax)) {
+      return { status: STATUS.INVALID, reason: 'Değer beyan edilen geçerlilik sınırı dışında veya sonlu değil' };
     }
     return { status: STATUS.OK, value: v };
   }

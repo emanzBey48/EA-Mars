@@ -99,9 +99,15 @@ const required = (id, type, count) => {
   return tag.val;
 };
 const scalar = (id, type) => required(id, type, 1)[0];
-const width = scalar(256, 4), height = scalar(257, 4);
+// TIFF allows ImageWidth/ImageLength as either SHORT or LONG. The USGS mosaic uses SHORT.
+const scalarShortOrLong = (id) => {
+  const tag = tiffInfo.tags[id];
+  if (!tag || ![3, 4].includes(tag.type) || tag.count !== 1) throw new Error(`TIFF scalar tag ${id} must be a single SHORT or LONG`);
+  return tag.val[0];
+};
+const width = scalarShortOrLong(256), height = scalarShortOrLong(257);
 const sampleBits = scalar(258, 3), compression = scalar(259, 3), photometric = scalar(262, 3);
-const samplesPerPixel = scalar(277, 3), rowsPerStrip = scalar(278, 4), planarConfig = scalar(284, 3), sampleFormat = scalar(339, 3);
+const samplesPerPixel = scalar(277, 3), rowsPerStrip = scalarShortOrLong(278), planarConfig = scalar(284, 3), sampleFormat = scalar(339, 3);
 const stripOffsets = required(273, 4), stripByteCounts = required(279, 4);
 const pixelScale = required(33550, 12, 3), tiepoint = required(33922, 12, 6);
 const noDataText = required(42113, 2, null).trim();
@@ -117,13 +123,13 @@ const scalarKey = (id) => Array.isArray(geoKey(id)) && geoKey(id).length === 1 ?
 const rasterKey = scalarKey(1025), modelType = scalarKey(1024), coordTransform = scalarKey(3075);
 const semiMajor = scalarKey(2057);
 if (width !== 21400 || height !== 21488) throw new Error(`Boyutlar resmi mozaik boyutlarıyla uyuşmuyor: ${width}×${height}`);
-if (sampleBits !== 32 || sampleFormat !== 3 || samplesPerPixel !== 1 || planarConfig !== 1 || photometric !== 1) throw new Error('Yalnız tek bant, 32-bit IEEE float, contiguous, BlackIsZero raster desteklenir');
+if (sampleBits !== 32 || sampleFormat !== 3 || samplesPerPixel !== 1 || ![1, 2].includes(planarConfig) || photometric !== 1) throw new Error('Yalnız tek bant, 32-bit IEEE float, tek örnekli BlackIsZero raster desteklenir');
 if (compression !== 1) throw new Error(`Sıkıştırma ${compression} desteklenmiyor; güvenli decode yok`);
 if (rasterKey !== 1) throw new Error(`GeoKey GTRasterTypeGeoKey PixelIsArea (=1) olmalı; gelen ${rasterKey ?? 'yok'}`);
 if (modelType !== 1 || coordTransform !== 17) throw new Error(`GeoKey projeksiyon tanımı Equirectangular olmalı (model=1, transform=17); gelen ${modelType}/${coordTransform}`);
 if (!Number.isFinite(semiMajor) || semiMajor !== 3396190) throw new Error(`GeoKey semi-major radius eksik/uyumsuz: ${semiMajor}`);
-const standardParallelDeg = scalarKey(3078), centralMeridianDeg = scalarKey(3080);
-if (standardParallelDeg !== 0 || centralMeridianDeg !== 0) throw new Error('GeoKey standard parallel/central meridian eksik veya beklenmeyen');
+const standardParallelDeg = scalarKey(3078), centralMeridianDeg = scalarKey(3080) ?? scalarKey(3088);
+if (standardParallelDeg !== 0 || centralMeridianDeg !== 0) throw new Error(`GeoKey standard parallel/central meridian eksik veya beklenmeyen (${standardParallelDeg}/${centralMeridianDeg})`);
 if (pixelScale[0] !== 1 || pixelScale[1] !== 1 || pixelScale[2] !== 0 || tiepoint[0] !== 0 || tiepoint[1] !== 0 || tiepoint[2] !== 0) throw new Error('PixelScale/Tiepoint eksik veya beklenmeyen axis/origin içeriyor');
 if (pixelScale[0] !== officialPdsGrid.mapScaleM || semiMajor / 1000 !== officialPdsGrid.radiusKm) throw new Error('TIFF pixel scale or radius differs from official PDS3 grid metadata');
 const tiffGrid = {
@@ -179,7 +185,7 @@ const label = {
   sampleBits,
   sampleType: sampleFormat === 3 ? 'IEEE_REAL' : 'UNKNOWN',
   noDataSource: 'TIFF_GDAL_NODATA',
-  validRangeScope: 'loaded_window_observed',
+  rangeSemantics: 'loaded_window_observed_extrema_only',
   sampleFormat,
   compression,
   planarConfig,
@@ -189,8 +195,8 @@ const label = {
   offset: 0,
   scalingFactor: 1,
   missingConstantHex: noDataBits.toString(16).padStart(8, '0').toUpperCase(),
-  validMin: null,
-  validMax: null,
+  observedMin: null,
+  observedMax: null,
   projectionType: 'EQUIRECTANGULAR',
   latitudeType: 'PLANETOCENTRIC',
   positiveLongitude: 'EAST',
@@ -311,8 +317,8 @@ for (let i = 0; i < values.length; i++) {
   }
 }
 if (!nValid) throw new Error('Window has no valid elevation cells; output refused');
-label.validMin = zMin;
-label.validMax = zMax;
+label.observedMin = zMin;
+label.observedMax = zMax;
 
 console.log('Pencere istatistiği:', { valid: nValid, noData: nNoData, invalid: nInvalid, zMin, zMax });
 
@@ -337,8 +343,6 @@ const layer = new GridElevationLayer({
   rowOffset: row0,
   colOffset: col0,
   noDataBits,
-  validMin: label.validMin,
-  validMax: label.validMax,
 });
 
 const A = wp[0].local;

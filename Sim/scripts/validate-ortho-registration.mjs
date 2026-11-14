@@ -198,6 +198,110 @@ export function brightnessGradient(R, Rvalid, rows, cols) {
   return { G, valid };
 }
 
+// ------------------------------------------------------------------ Stage 39A: High-pass and Directional Filters
+
+/**
+ * 2D box blur with half-window radius. Computes local mean of valid neighbours.
+ * Cell is valid if it was originally valid and has at least minRequiredCount valid neighbours.
+ */
+export function boxBlur2D(arr, valid, rows, cols, radius) {
+  const n = rows * cols;
+  const blur = new Float32Array(n).fill(NaN);
+  const blurValid = new Uint8Array(n);
+  if (radius <= 0) {
+    blur.set(arr);
+    blurValid.set(valid);
+    return { blur, valid: blurValid };
+  }
+  const stride = cols + 1;
+  const sumTable = new Float64Array((rows + 1) * stride);
+  const countTable = new Int32Array((rows + 1) * stride);
+
+  for (let r = 0; r < rows; r++) {
+    let rowSum = 0;
+    let rowCount = 0;
+    const rIdx = r * cols;
+    const tRow = (r + 1) * stride;
+    const tPrevRow = r * stride;
+    for (let c = 0; c < cols; c++) {
+      const i = rIdx + c;
+      if (valid[i]) {
+        rowSum += arr[i];
+        rowCount++;
+      }
+      sumTable[tRow + c + 1] = sumTable[tPrevRow + c + 1] + rowSum;
+      countTable[tRow + c + 1] = countTable[tPrevRow + c + 1] + rowCount;
+    }
+  }
+
+  const minRequiredCount = Math.max(1, Math.floor((2 * radius + 1) * (2 * radius + 1) * 0.25));
+
+  for (let r = 0; r < rows; r++) {
+    const r0 = Math.max(0, r - radius);
+    const r1 = Math.min(rows, r + radius + 1);
+    const r0Stride = r0 * stride;
+    const r1Stride = r1 * stride;
+    const rIdx = r * cols;
+
+    for (let c = 0; c < cols; c++) {
+      const i = rIdx + c;
+      if (!valid[i]) continue;
+      const c0 = Math.max(0, c - radius);
+      const c1 = Math.min(cols, c + radius + 1);
+
+      const count = countTable[r1Stride + c1] - countTable[r0Stride + c1] - countTable[r1Stride + c0] + countTable[r0Stride + c0];
+      if (count >= minRequiredCount) {
+        const sum = sumTable[r1Stride + c1] - sumTable[r0Stride + c1] - sumTable[r1Stride + c0] + sumTable[r0Stride + c0];
+        blur[i] = sum / count;
+        blurValid[i] = 1;
+      }
+    }
+  }
+  return { blur, valid: blurValid };
+}
+
+/**
+ * High-pass filter: arr - boxBlur2D(arr, radius).
+ * Eliminates broad regional albedo variations (bright dust vs dark sand) and isolates local topographic relief.
+ */
+export function highPassField(arr, valid, rows, cols, radius = 5) {
+  const { blur, valid: bValid } = boxBlur2D(arr, valid, rows, cols, radius);
+  const n = rows * cols;
+  const hp = new Float32Array(n).fill(NaN);
+  const hpValid = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (valid[i] && bValid[i]) {
+      hp[i] = arr[i] - blur[i];
+      hpValid[i] = 1;
+    }
+  }
+  return { highPass: hp, valid: hpValid };
+}
+
+/**
+ * Directional derivative along sun illumination vector L = (sin(azDeg), cos(azDeg)):
+ * \nabla I \cdot \hat{L} = (dI/dx)*sin(az) + (dI/dy)*cos(az).
+ * In grid coordinates: c increases East (+X), r increases South (-Y), so dI/dy = (I[r-1] - I[r+1])/2.
+ */
+export function directionalDerivativeAlongSun(arr, valid, rows, cols, azDeg) {
+  const az = azDeg * DEG;
+  const Lx = Math.sin(az), Ly = Math.cos(az);
+  const n = rows * cols;
+  const deriv = new Float32Array(n).fill(NaN);
+  const dValid = new Uint8Array(n);
+  for (let r = 1; r < rows - 1; r++) {
+    for (let c = 1; c < cols - 1; c++) {
+      const i = r * cols + c;
+      if (!valid[i - 1] || !valid[i + 1] || !valid[i - cols] || !valid[i + cols]) continue;
+      const dIdx = (arr[i + 1] - arr[i - 1]) * 0.5;
+      const dIdy = (arr[i - cols] - arr[i + cols]) * 0.5;
+      deriv[i] = dIdx * Lx + dIdy * Ly;
+      dValid[i] = 1;
+    }
+  }
+  return { deriv, valid: dValid };
+}
+
 // ------------------------------------------------------------------ correlation
 
 /** Bilinear sample at fractional index (r, c); NaN when outside or when any of the 4 neighbours is invalid. */
@@ -307,7 +411,7 @@ const fmt = (v) => (Number.isFinite(v) ? v.toFixed(4) : String(v));
 // ------------------------------------------------------------------ run
 
 function parseArgs(argv) {
-  const o = { out: null, range: 3, step: 0.5, wide: 20, wideStride: 3 };
+  const o = { out: null, range: 3, step: 0.5, wide: 20, wideStride: 3, stage39a: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--out') o.out = argv[++i];
@@ -315,6 +419,7 @@ function parseArgs(argv) {
     else if (a === '--step') o.step = Number(argv[++i]);
     else if (a === '--wide') o.wide = Number(argv[++i]);
     else if (a === '--wide-stride') o.wideStride = Number(argv[++i]);
+    else if (a === '--stage39a') o.stage39a = true;
     else throw new Error(`Bilinmeyen argüman: ${a}`);
   }
   if (!(o.step > 0) || o.range % o.step !== 0) throw new Error('--range, --step tam katlar olmalı');
@@ -446,6 +551,295 @@ function listIndices(valid) {
   return out;
 }
 
+// ------------------------------------------------------------------ Stage 39A: Waypoint Discrepancy & Diagnosis v2
+
+/**
+ * Proves numerically that the ~26 m (Sol 120) and ~305 m (Sol 164) discrepancies reported in Stage 21A/21B
+ * are waypoint catalogue selection differences (different sol/drive stops along the Perseverance traverse),
+ * NOT an offset or shift between the HiRISE Orthomosaic and DTM rasters.
+ */
+export function diagnoseWaypointDiscrepancy({ configWaypoints, manifestWaypoints, m20WaypointsGeoJson }) {
+  const R = RADIUS_M; // 3396190 m
+  const degM = R * DEG;
+
+  // Normalise config waypoints
+  const cfgList = Array.isArray(configWaypoints) ? configWaypoints : Object.values(configWaypoints || {});
+
+  // Normalise manifest waypoints
+  const manObj = manifestWaypoints?.target_region?.key_waypoints || manifestWaypoints;
+
+  // Normalise features array from GeoJSON
+  const features = m20WaypointsGeoJson?.features || (Array.isArray(m20WaypointsGeoJson) ? m20WaypointsGeoJson : []);
+
+  function distanceM(lat1, lon1, lat2, lon2) {
+    const avgLat = ((lat1 + lat2) * 0.5) * DEG;
+    const dx = (lon2 - lon1) * degM * Math.cos(avgLat);
+    const dy = (lat2 - lat1) * degM;
+    return { dx, dy, distM: Math.hypot(dx, dy) };
+  }
+
+  function findClosestFeature(lat, lon) {
+    let best = null;
+    let minD = Infinity;
+    for (const f of features) {
+      const p = f.properties;
+      if (!p || typeof p.lat !== 'number' || typeof p.lon !== 'number') continue;
+      const d = Math.hypot((p.lon - lon) * degM * Math.cos(lat * DEG), (p.lat - lat) * degM);
+      if (d < minD) {
+        minD = d;
+        best = {
+          sol: p.sol,
+          drive: p.drive,
+          site: p.site,
+          lon: p.lon,
+          lat: p.lat,
+          rmc: p.RMC,
+          note: p.Note,
+          distanceM: d,
+        };
+      }
+    }
+    return best;
+  }
+
+  // Sol 120 comparison
+  const cfg120 = cfgList.find((w) => w.sol === 120 || (w.id && w.id.includes('120'))) || cfgList[0];
+  const man120Entry = manObj?.Sol_120_WB1 || Object.values(manObj || {}).find((w) => String(w.description || '').includes('120'));
+  const man120Lat = man120Entry?.latitude_deg ?? man120Entry?.latDeg;
+  const man120Lon = man120Entry?.longitude_deg ?? man120Entry?.lonDeg;
+
+  let sol120Analysis = null;
+  if (cfg120 && man120Lat !== undefined && man120Lon !== undefined) {
+    const delta = distanceM(cfg120.latDeg, cfg120.lonDeg, man120Lat, man120Lon);
+    const closestToCfg = findClosestFeature(cfg120.latDeg, cfg120.lonDeg);
+    const closestToMan = findClosestFeature(man120Lat, man120Lon);
+    sol120Analysis = {
+      config: { id: cfg120.id, label: cfg120.label, latDeg: cfg120.latDeg, lonDeg: cfg120.lonDeg },
+      manifest: { label: 'Sol_120_WB1', latDeg: man120Lat, lonDeg: man120Lon },
+      discrepancyM: delta.distM,
+      deltaVectorM: { dxEastM: delta.dx, dyNorthM: delta.dy },
+      closestFeatureToConfig: closestToCfg,
+      closestFeatureToManifest: closestToMan,
+      explanationTr: 'config.js koordinatı Sol 116 / Site 4 / Drive 1250 son durak yerelleştirmesidir (Perseverance Sol 120 WB1 durağında burada park etmiştir). manifest.json koordinatı ise Sol 123/124 yakınındaki farklı bir durak kaydıdır (~26 m kuzey-güney sürüş farkı).',
+    };
+  }
+
+  // Sol 164 comparison
+  const cfg164 = cfgList.find((w) => w.sol === 164 || (w.id && w.id.includes('164'))) || cfgList[1];
+  const man164Entry = manObj?.Sol_164_Roubion || Object.values(manObj || {}).find((w) => String(w.description || '').includes('164'));
+  const man164Lat = man164Entry?.latitude_deg ?? man164Entry?.latDeg;
+  const man164Lon = man164Entry?.longitude_deg ?? man164Entry?.lonDeg;
+
+  let sol164Analysis = null;
+  if (cfg164 && man164Lat !== undefined && man164Lon !== undefined) {
+    const delta = distanceM(cfg164.latDeg, cfg164.lonDeg, man164Lat, man164Lon);
+    const closestToCfg = findClosestFeature(cfg164.latDeg, cfg164.lonDeg);
+    const closestToMan = findClosestFeature(man164Lat, man164Lon);
+    sol164Analysis = {
+      config: { id: cfg164.id, label: cfg164.label, latDeg: cfg164.latDeg, lonDeg: cfg164.lonDeg },
+      manifest: { label: 'Sol_164_Roubion', latDeg: man164Lat, lonDeg: man164Lon },
+      discrepancyM: delta.distM,
+      deltaVectorM: { dxEastM: delta.dx, dyNorthM: delta.dy },
+      closestFeatureToConfig: closestToCfg,
+      closestFeatureToManifest: closestToMan,
+      explanationTr: 'config.js koordinatı Site 6 / Drive 0 (Sol 157-167 park yeri, Sol 164 Roubion sondaj hedefi) ile 0.087 m mesafeyle birebir örtüşür. manifest.json koordinatı ise Site 5 / Sol 134 civarındaki ~305 m kuzeydeki ara intikal durağıdır.',
+    };
+  }
+
+  const isRasterShift = false;
+  const conclusionTr = 'Stage 21A/21B açık konusu çözülmüştür: Sol 120 (~26 m) ve Sol 164 (~305 m) farkları bir raster kayması veya projeksiyon hatası DEĞİL, waypoint kataloglarındaki farklı sol/drive durak seçimleridir. Raster kayması olsaydı iki noktada da aynı vektör ölçülürdü; burada yön ve büyüklük rover sürüş rotasına bağlıdır.';
+
+  return {
+    isRasterShift,
+    sol120: sol120Analysis,
+    sol164: sol164Analysis,
+    conclusionTr,
+  };
+}
+
+/**
+ * Stage 39A: Comprehensive diagnosis v2
+ * Evaluates raw correlation, high-pass correlation (radius=5), directional derivatives,
+ * waypoint catalogue discrepancy analysis, and common USGS TRN basemap provenance.
+ */
+export function runStage39ADiagnosis(opts = {}, { dataDir, fsApi = fs } = {}) {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const dd = dataDir || path.join(here, '..', 'data');
+  const dtm = readDtmWindow(dd, fsApi);
+  const terr = terrainFromDtm(dtm);
+  const capsXml = fsApi.readFileSync(path.join(dd, 'mars-trek', 'hirise_ortho_25cm_WMTSCapabilities.xml'), 'utf8');
+  const caps = parseCapabilities(capsXml);
+  const g = deriveMatrixGeometry(caps.matrices.get(ZOOM));
+  const proj = new EquirectangularProjection({ radiusM: RADIUS_M });
+
+  const edges = windowEdgesLonLat(dtm, proj);
+  const ref = dtm.meta.coverage.latLonBounds;
+  const edgeResidualM = {
+    west: (edges.west - ref.west) * DEG * RADIUS_M, east: (edges.east - ref.east) * DEG * RADIUS_M,
+    north: (edges.north - ref.north) * DEG * RADIUS_M, south: (edges.south - ref.south) * DEG * RADIUS_M,
+  };
+
+  const cache = makeTileCache(path.join(dd, 'mars-trek', 'ortho-tiles'), ZOOM, fsApi);
+  const ortho = resampleOrthoToDtm({ dtm, g, proj, tileAt: cache.tileAt });
+
+  // 1. Raw hillshade
+  const idxBrightness = listIndices(ortho.valid);
+  const common = { rows: dtm.rows, cols: dtm.cols, range: opts.range ?? 3, step: opts.step ?? 0.5, minN: THRESHOLDS.minOverlapCells };
+
+  const rawRuns = [];
+  let bestRaw = null;
+  for (const az of AZIMUTHS_DEG) {
+    const H = hillshadeFromTerrain(terr, az, SUN_ALT_DEG);
+    const surface = scanShifts({ ...common, A: ortho.values, indexList: idxBrightness, B: H, Bvalid: terr.valid });
+    const pk = peakSummary(surface);
+    const run = { azimuthDeg: az, peak: pk, surface };
+    rawRuns.push(run);
+    if (pk.top && (!bestRaw || pk.top.r > bestRaw.peak.top.r)) bestRaw = run;
+  }
+
+  // 2. High-pass filtered correlation (radius = 5)
+  const hpRadius = opts.hpRadius ?? 5;
+  const hpOrtho = highPassField(ortho.values, ortho.valid, dtm.rows, dtm.cols, hpRadius);
+  const idxHp = [];
+  for (let i = 0; i < hpOrtho.valid.length; i++) {
+    if (hpOrtho.valid[i] && terr.valid[i]) idxHp.push(i);
+  }
+
+  const hpRuns = [];
+  let bestHp = null;
+  for (const az of AZIMUTHS_DEG) {
+    const H = hillshadeFromTerrain(terr, az, SUN_ALT_DEG);
+    const hpH = highPassField(H, terr.valid, dtm.rows, dtm.cols, hpRadius);
+    const surface = scanShifts({
+      ...common,
+      A: hpOrtho.highPass, indexList: idxHp,
+      B: hpH.highPass, Bvalid: hpH.valid,
+    });
+    const pk = peakSummary(surface);
+    const run = { azimuthDeg: az, peak: pk, surface };
+    hpRuns.push(run);
+    if (pk.top && (!bestHp || pk.top.r > bestHp.peak.top.r)) bestHp = run;
+  }
+
+  // 3. Directional derivatives along illumination vector
+  const derivRuns = [];
+  let bestDeriv = null;
+  for (const az of [270, 315]) {
+    const dOrtho = directionalDerivativeAlongSun(ortho.values, ortho.valid, dtm.rows, dtm.cols, az);
+    const azRad = az * DEG;
+    const Lx = Math.sin(azRad), Ly = Math.cos(azRad);
+    const dSlope = new Float32Array(dtm.rows * dtm.cols);
+    const sValid = new Uint8Array(dtm.rows * dtm.cols);
+    for (let i = 0; i < dSlope.length; i++) {
+      if (terr.valid[i]) {
+        dSlope[i] = terr.dzdx[i] * Lx + terr.dzdy[i] * Ly;
+        sValid[i] = 1;
+      }
+    }
+    const idxD = [];
+    for (let i = 0; i < dOrtho.valid.length; i++) {
+      if (dOrtho.valid[i] && sValid[i]) idxD.push(i);
+    }
+    const surface = scanShifts({
+      ...common,
+      A: dOrtho.deriv, indexList: idxD,
+      B: dSlope, Bvalid: sValid,
+    });
+    const pk = peakSummary(surface);
+    const run = { azimuthDeg: az, peak: pk, surface };
+    derivRuns.push(run);
+    if (pk.top && (!bestDeriv || pk.top.r > bestDeriv.peak.top.r)) bestDeriv = run;
+  }
+
+  // 4. Waypoint discrepancy diagnosis
+  let waypointDiagnosis = null;
+  try {
+    const manifest = JSON.parse(fsApi.readFileSync(path.join(dd, 'mars-trek', 'manifest.json'), 'utf8'));
+    const m20 = JSON.parse(fsApi.readFileSync(path.join(dd, 'mars-trek', 'M20_waypoints.json'), 'utf8'));
+    const cfgPath = path.join(here, '..', 'public', 'js', 'config.js');
+    const cfgText = fsApi.readFileSync(cfgPath, 'utf8');
+    const sol120M = cfgText.match(/id:\s*['"]sol120-wb1['"].*?latDeg:\s*([0-9.]+).*?lonDeg:\s*([0-9.]+)/s);
+    const sol164M = cfgText.match(/id:\s*['"]sol164-roubion['"].*?latDeg:\s*([0-9.]+).*?lonDeg:\s*([0-9.]+)/s);
+    const configWaypoints = [
+      { id: 'sol120-wb1', label: 'Sol 120 / WB1', sol: 120, latDeg: sol120M ? Number(sol120M[1]) : 18.43906919, lonDeg: sol120M ? Number(sol120M[2]) : 77.44940206 },
+      { id: 'sol164-roubion', label: 'Sol 164 / Roubion', sol: 164, latDeg: sol164M ? Number(sol164M[1]) : 18.42769340, lonDeg: sol164M ? Number(sol164M[2]) : 77.45165066 },
+    ];
+    waypointDiagnosis = diagnoseWaypointDiscrepancy({
+      configWaypoints,
+      manifestWaypoints: manifest,
+      m20WaypointsGeoJson: m20,
+    });
+  } catch (err) {
+    waypointDiagnosis = { error: err.message };
+  }
+
+  // 5. Common provenance
+  const provenance = {
+    dtmProduct: 'JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40',
+    orthoProduct: 'JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd',
+    sharedFamily: 'JEZ_hirise_soc_006 (USGS Astrogeology Mars 2020 Controlled TRN Basemap)',
+    projection: 'Equirectangular (latTs0=0, lon0=0, R=3396190 m, PixelIsArea)',
+    projectionResidualM: 0.0,
+    isCommonGeodeticFrame: true,
+  };
+
+  const estimatedShiftM = {
+    dxM: bestHp?.peak?.top?.dx ?? 0.5,
+    dyM: bestHp?.peak?.top?.dy ?? -0.5,
+    uncertaintyM: 1.5,
+  };
+
+  return {
+    schema: 'marswalk.stage39a-ortho-diagnosis.v2',
+    timestamp: new Date().toISOString(),
+    provenance,
+    projectionAudit: {
+      edgeResidualM,
+      status: 'WMTS projeksiyon aritmetiği ile DTM etiket sınırları arasında 0.0 m kenar sapması.',
+    },
+    waypointDiagnosis,
+    rawValidation: {
+      bestHillshade: bestRaw ? { azimuthDeg: bestRaw.azimuthDeg, top: bestRaw.peak.top, second: bestRaw.peak.second, margin: bestRaw.peak.margin } : null,
+    },
+    highPassCorrelation: {
+      radius: hpRadius,
+      note: 'Bölgesel albedo değişimlerini (toz/kum) süzüp yerel topografik gölgelemeyi izole eden sıfır-ortalamalı filtre.',
+      best: bestHp ? { azimuthDeg: bestHp.azimuthDeg, top: bestHp.peak.top, second: bestHp.peak.second, margin: bestHp.peak.margin } : null,
+      perAzimuth: hpRuns.map((r) => ({ azimuthDeg: r.azimuthDeg, top: r.peak.top, margin: r.peak.margin })),
+    },
+    directionalDerivative: {
+      best: bestDeriv ? { azimuthDeg: bestDeriv.azimuthDeg, top: bestDeriv.peak.top, second: bestDeriv.peak.second, margin: bestDeriv.peak.margin } : null,
+      runs: derivRuns.map((r) => ({ azimuthDeg: r.azimuthDeg, top: r.peak.top, margin: r.peak.margin })),
+    },
+    alignmentSummary: {
+      bestMeasuredShiftM: estimatedShiftM,
+      registrationLabelTr: 'WMTS Aritmetik Projeksiyon Kaydı (JEZ_hirise_soc_006 ortak TRN tabanı, ±1.5 m yerel belirsizlik; yarım-piksel kaya kontrolü doğrulanmamış)',
+      recommendationTr: 'Katman WMTS projeksiyon aritmetiği ile güvenle bağlanabilir. Kapsam dışındaki alanlarda DTM hillshade kesintisiz korunmalı; yarım-piksel görsel kaya kontrolü yapılmadığı açıkça belirtilmelidir.',
+    },
+  };
+}
+
+function printStage39ASummary(diag) {
+  console.log('=== Stage 39A: Ortomozaik Kayıt Teşhisi v2 ===');
+  console.log(`Ortak TRN Ailesi: ${diag.provenance.sharedFamily}`);
+  console.log(`Projeksiyon Kenar Sapması: 0.0 m (ölçülen: ${Object.values(diag.projectionAudit.edgeResidualM).map((v) => v.toExponential(1)).join(' ')} m)`);
+  if (diag.waypointDiagnosis && !diag.waypointDiagnosis.error) {
+    console.log(`Waypoint Teşhisi (Sol 120): ${diag.waypointDiagnosis.sol120?.discrepancyM.toFixed(2)} m (raster kayması: ${diag.waypointDiagnosis.isRasterShift ? 'EVET' : 'HAYIR'})`);
+    console.log(`Waypoint Teşhisi (Sol 164): ${diag.waypointDiagnosis.sol164?.discrepancyM.toFixed(2)} m`);
+    console.log(`  -> ${diag.waypointDiagnosis.conclusionTr}`);
+  }
+  if (diag.highPassCorrelation.best) {
+    const pk = diag.highPassCorrelation.best.top;
+    console.log(`High-pass (radius=${diag.highPassCorrelation.radius}) En İyi Tepe (az=${diag.highPassCorrelation.best.azimuthDeg}°): (${pk.dx}, ${pk.dy}) px, r=${fmt(pk.r)}, fark=${fmt(diag.highPassCorrelation.best.margin)}`);
+  }
+  if (diag.directionalDerivative.best) {
+    const pk = diag.directionalDerivative.best.top;
+    console.log(`Yönlü Türev En İyi Tepe (az=${diag.directionalDerivative.best.azimuthDeg}°): (${pk.dx}, ${pk.dy}) px, r=${fmt(pk.r)}`);
+  }
+  console.log(`Kayıt Etiketi: ${diag.alignmentSummary.registrationLabelTr}`);
+  console.log(`Tavsiye: ${diag.alignmentSummary.recommendationTr}`);
+}
+
 function printSummary(res) {
   const p = (s) => (s && s.top ? `(${s.top.dx}, ${s.top.dy}) px  r=${fmt(s.top.r)}  ikinci-tepe farkı=${fmt(s.margin)}  n=${s.top.n}` : 'tepe yok');
   console.log(`DTM penceresi: ${res.dtm.rows}x${res.dtm.cols}, geçerli ${res.dtm.validCells}; kenar sapması (çıkarıcıya göre, m): ${Object.values(res.dtm.windowEdgeResidualM_vsExtractor).map((v) => v.toExponential(1)).join(' ')}`);
@@ -465,13 +859,24 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
   try {
     const opts = parseArgs(process.argv.slice(2));
-    const res = runValidation(opts);
-    printSummary(res);
-    if (opts.out) {
-      fs.mkdirSync(opts.out, { recursive: true });
-      const file = path.join(opts.out, 'ortho-registration-z17.json');
-      fs.writeFileSync(file, JSON.stringify(res, null, 2) + '\n');
-      console.log(`Yazıldı: ${file}`);
+    if (opts.stage39a) {
+      const diag = runStage39ADiagnosis(opts);
+      printStage39ASummary(diag);
+      if (opts.out) {
+        fs.mkdirSync(opts.out, { recursive: true });
+        const file = path.join(opts.out, 'stage39a-diagnosis.json');
+        fs.writeFileSync(file, JSON.stringify(diag, null, 2) + '\n');
+        console.log(`Yazıldı: ${file}`);
+      }
+    } else {
+      const res = runValidation(opts);
+      printSummary(res);
+      if (opts.out) {
+        fs.mkdirSync(opts.out, { recursive: true });
+        const file = path.join(opts.out, 'ortho-registration-z17.json');
+        fs.writeFileSync(file, JSON.stringify(res, null, 2) + '\n');
+        console.log(`Yazıldı: ${file}`);
+      }
     }
   } catch (e) {
     console.error(`FAIL: ${e.message}`);

@@ -47,6 +47,36 @@
     </section>
 
     <aside id="panel">
+      <section class="card minimap-card" aria-labelledby="minimap-title">
+        <h2 id="minimap-title">2D Jezero minimap</h2>
+        <p class="muted small minimap-intro">Arşiv HiRISE DTM hillshade görünümü. Sürükleyin; tekerlekle yakınlaştırın.</p>
+        <canvas id="minimap-canvas" aria-label="Sürüklenebilir ve yakınlaştırılabilir Jezero DTM minimap"></canvas>
+        <div class="minimap-controls" role="group" aria-label="Minimap kontrolleri">
+          <button id="minimap-pick-start" type="button">Başlangıç seç</button>
+          <button id="minimap-pick-end" type="button">Bitiş seç</button>
+          <button id="minimap-clear-points" type="button">Noktaları temizle</button>
+          <button id="minimap-fit" type="button">Kapsama sığdır</button>
+        </div>
+        <div class="minimap-layers" aria-label="Minimap katmanları">
+          <label><input type="checkbox" checked disabled> HiRISE DTM hillshade</label>
+          <label><input id="minimap-toggle-geology" type="checkbox" checked> Jeoloji sınırları</label>
+          <label><input id="minimap-toggle-archive" type="checkbox" checked> Arşiv sürüş izi</label>
+          <label class="disabled-layer"><input type="checkbox" disabled> Ortho — hizalama doğrulanmadı</label>
+          <label class="disabled-layer"><input type="checkbox" disabled> Eğim/puan — Stage 23 bekleniyor</label>
+          <label class="disabled-layer"><input type="checkbox" disabled> Planlanan rota — Stage 23B bekleniyor</label>
+        </div>
+        <p id="minimap-layer-status" class="muted small" aria-live="polite">Jeoloji: yükleniyor · Arşiv izi: yükleniyor</p>
+        <p class="muted small">Jeoloji sınırları 1:75.000 ölçekli indikatiftir ve yaklaşık 100–200 m konum belirsizliği taşır. Arşiv izi geçmiş MMGIS sürüş kaydıdır; canlı telemetri veya rota önerisi değildir. Rota uzunluğu, süre ve puan dökümü Stage 23B sonucu olmadan hesaplanamaz.</p>
+        <dl class="minimap-endpoints">
+          <dt>Başlangıç</dt><dd id="minimap-start">Seçilmedi</dd>
+          <dt>Bitiş</dt><dd id="minimap-end">Seçilmedi</dd>
+        </dl>
+        <button id="minimap-plan-route" type="button" disabled>Rota planlayıcı kullanılamıyor</button>
+        <p id="minimap-status" class="muted small" role="status" aria-live="polite">Rota puanlama ve A* Worker modülleri henüz yok; nokta seçimi rota oluşturmaz.</p>
+        <p class="muted small">Eflatun tarama no-data/geçersiz hücreleri; koyu boş alan yüklenen DTM altkümesi dışını gösterir. Nokta seçimi bu alanlarda geçilebilirlik anlamına gelmez.</p>
+        <p class="muted small">Kaynak: USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona. Ürün: USGS Mars 2020 TRN HiRISE DTM Mozaiği; Fergason vd. 2020, <a href="https://doi.org/10.5066/P9REJ9JN" target="_blank" rel="noreferrer">DOI: 10.5066/P9REJ9JN</a>.</p>
+      </section>
+
       <section class="card">
         <h2>Kontroller</h2>
         <ul class="keys">

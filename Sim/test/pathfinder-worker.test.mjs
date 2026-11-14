@@ -49,12 +49,11 @@ function stripTiming(r) {
 }
 const plan = (id, extra = {}) => ({ type: 'plan-walking-route', id, startLocal: HS, endLocal: HE, ...extra });
 
-// Alparslan'ın main.js (planMinimapRoute) mesaj biçimi, birebir.
-const alparslanMsg = (id, prefKey, cp) => ({
+// Alparslan'ın main.js (planMinimapRoute) güncel mesaj biçimi, birebir.
+const alparslanMsg = (id, prefKey) => ({
   type: 'plan-walking-route', id, startLocal: HS, endLocal: HE,
-  costParams: cp, options: { preference: prefKey, costParams: cp },
+  options: { preference: prefKey },
 });
-const FLATTEST_CP = { slopeWeight: 3.0, distanceWeight: 0.5 };
 
 test('(a) mesajsız ve balanced aynı sonucu verir; mesajsız yol eski yolla bayt bayt aynı', () => {
   const scope = makeScope();
@@ -80,7 +79,7 @@ test('(a) mesajsız ve balanced aynı sonucu verir; mesajsız yol eski yolla bay
 test('(b) Alparslan gerçek mesajı (flattest) hata vermez ve gentle ile aynı sonucu üretir', () => {
   const scope = makeScope();
   send(scope, { type: 'init-window', id: 1, window: HILL_RAW });
-  const flattest = send(scope, alparslanMsg(2, 'flattest', FLATTEST_CP));
+  const flattest = send(scope, alparslanMsg(2, 'flattest'));
   const gentle = send(scope, plan(3, { preference: 'gentle' }));
   assert.equal(flattest.type, 'result', JSON.stringify(flattest));
   assert.equal(flattest.result.status, 'ok', flattest.result.reason);
@@ -92,11 +91,14 @@ test('(b) Alparslan gerçek mesajı (flattest) hata vermez ve gentle ile aynı s
 test('(b2) Alparslan mesajının üç tercihi (balanced/shortest/flattest) hata vermeden çalışır', () => {
   const scope = makeScope();
   send(scope, { type: 'init-window', id: 1, window: HILL_RAW });
-  const cps = { balanced: { slopeWeight: 1, distanceWeight: 1 }, shortest: { slopeWeight: 0.3, distanceWeight: 2 }, flattest: FLATTEST_CP };
-  for (const key of Object.keys(cps)) {
-    const m = send(scope, alparslanMsg(10, key, cps[key]));
+  for (const key of ['balanced', 'shortest', 'flattest']) {
+    const message = alparslanMsg(10, key);
+    assert.deepEqual(Object.keys(message).sort(), ['endLocal', 'id', 'options', 'startLocal', 'type']);
+    assert.deepEqual(message.options, { preference: key });
+    const m = send(scope, message);
     assert.equal(m.type, 'result', `${key}: ${JSON.stringify(m)}`);
     assert.equal(m.result.status, 'ok', `${key}: ${m.result.reason}`);
+    assert.equal(m.requestedPreference, key);
   }
 });
 

@@ -11,3 +11,7 @@ data/*
 !data/viking-mdim/**
 .e2e-profile/
 node_modules/
+!data/regional-dem/
+!data/regional-dem/**
+!data/nodata-fixture/
+!data/nodata-fixture/**

@@ -27,7 +27,7 @@ Geliştirme yalnızca Alparslan'ın sahipliğindeki dosyalarda gerçekleştirilm
 | `Sim/public/js/view/minimap/minimap.js` | Sürüklenebilir uç nokta desteği (`state.draggingEndpoint`, `state.draggedPos`), ekran-dünya mesafesi kontrolü (`hitEndpoint`), hover ve drag imleç yönetimi (`grab`/`grabbing`), sürükleme anında dinamik no-data/sınır dışı denetimi ve pulsar hedef halkası çizimi. |
 | `Sim/public/index.html` | Minimap kontrol kartına rota tercihi seçici (`#minimap-route-preference`) eklendi. |
 | `Sim/public/styles.css` | `.minimap-preference-row` ve zenginleştirilmiş `.minimap-summary` (skor rozetleri, kontrast arka plan ve grid düzeni) stilleri eklendi. |
-| `Sim/public/js/main.js` | Rota tercihleri (`ROUTE_PREFERENCES`), `minimap-route-preference` change dinleyicisi, sürükle-bırak sonrasında anında canlı planlama tetikleyicisi (`byDrag: true`), `costParams` parametresinin worker'a iletilmesi ve zenginleştirilmiş metrik sunumu (`renderRouteSummary`). |
+| `Sim/public/js/main.js` | Worker tarafından çözümlenen rota tercih seçimi, `minimap-route-preference` change dinleyicisi, sürükle-bırak sonrasında anında canlı planlama tetikleyicisi (`byDrag: true`), tercih kimliğinin (`options.preference`) worker'a iletilmesi; ısı haritasının dengeli referans alanı olarak etiketlenmesi ve zenginleştirilmiş metrik sunumu (`renderRouteSummary`). |
 | `Sim/stage34b-minimap-acceptance.md` | Bu kabul raporu (yeni belge). |
 | `yapay zeka icin/road map.md` | Stage 34B aşamasının tamamlandı olarak güncellenmesi. |
 
@@ -43,11 +43,11 @@ Geliştirme yalnızca Alparslan'ın sahipliğindeki dosyalarda gerçekleştirilm
 
 ### 3.2 Rota Tercihleri (Route Preferences)
 Kullanıcı açılır menüden üç farklı strateji seçebilir:
-1. **Dengeli EVA Yürünebilirlik (`balanced` - Varsayılan):** Eğim ve mesafe arasında dengeli maliyet optimizasyonu (`slopeWeight: 1.0, distanceWeight: 1.0`).
-2. **En Kısa Mesafe (`shortest`):** Aşırı dik olmayan yamaçlardan ödün vererek en kısa mesafe çizgisine yakınlaşan rota (`slopeWeight: 0.3, distanceWeight: 2.0`).
-3. **En Düz / Düşük Eğim (`flattest`):** Eğim maliyetini katı şekilde artıran, düz zeminleri dolaşmayı tercih eden rota (`slopeWeight: 3.0, distanceWeight: 0.5`).
+1. **Dengeli EVA Yürünebilirlik (`balanced` - Varsayılan):** Referans `cost-model` önayarını kullanır; uzaklık, eğim ve pürüzlülüğü birlikte değerlendirir. Minimap ısı haritası bu dengeli referans alandan hazırlanır.
+2. **En Kısa Mesafe (`shortest`):** Sert eğim sınırını korurken daha kısa mesafeye öncelik veren `route-compare` senaryo önayarını kullanır.
+3. **En Düz / Düşük Eğim (`flattest`, Worker'da kanonik `gentle`):** Eğim ve pürüzlülük cezasını artıran, sert eğim sınırını koruyarak daha düz yüzeylere yönelen `route-compare` senaryo önayarını kullanır.
 
-Tercih değiştirildiğinde, uç noktalar seçiliyse arka planda çalışan Web Worker'a yeni `costParams` iletilir ve rota anında güncellenir.
+Tercih değiştirildiğinde, uç noktalar seçiliyse Web Worker'a yalnızca `options.preference` kimliği gönderilir. Worker, kimliği `route-compare` önayarına çözer; maliyet parametreleri UI tarafından gönderilmez.
 
 ### 3.3 Zenginleştirilmiş Rota Özet Kartı
 Rota başarıyla hesaplandığında aşağıdaki metrikler dinamik olarak kartta listelenir:

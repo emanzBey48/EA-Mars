@@ -28,6 +28,7 @@ import { buildPlannedRouteLinePositions, derivePlannedRouteGuidance } from './vi
 import { createFootprintTrail } from './view/3d/footprint-trail.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 import { createMinimap } from './view/minimap/minimap.js';
+import { classifyPlanResponse } from './view/minimap/plan-response-state.js';
 
 const $ = (id) => document.getElementById(id);
 const urlParams = new URLSearchParams(window.location.search);
@@ -171,21 +172,6 @@ function getFirstPersonNote(scale = currentVerticalScale) {
   return `Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. ${scaleText} Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.`;
 }
 
-const ROUTE_PREFERENCES = Object.freeze({
-  balanced: {
-    label: 'Dengeli EVA Yürünebilirlik',
-    costParams: { slopeWeight: 1.0, distanceWeight: 1.0 },
-  },
-  shortest: {
-    label: 'En Kısa Mesafe',
-    costParams: { slopeWeight: 0.3, distanceWeight: 2.0 },
-  },
-  flattest: {
-    label: 'En Düz / Düşük Eğim',
-    costParams: { slopeWeight: 3.0, distanceWeight: 0.5 },
-  },
-});
-
 function showSelectedPoint(kind, point, byDrag = false) {
   const label = `${point.xM.toFixed(1)} m doğu, ${point.yM.toFixed(1)} m kuzey (WB1 orijini)`;
   if (kind === 'start') minimapStartLabel.textContent = label;
@@ -316,7 +302,7 @@ function handleRouteWorkerMessage({ data }) {
     routeHeatmap = updateHeatmap(data.heatmap);
     minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
     minimapStatus.textContent = routeHeatmap
-      ? 'Yürünebilirlik ısı haritası hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
+      ? 'Dengeli EVA yürünebilirlik alanı hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
       : 'Rota planlama alanı hazır; ısı haritası verisi Worker yanıtında bulunamadı.';
     if (pendingDemoTour && minimapEndpoints.start && minimapEndpoints.end) {
       pendingDemoTour = false;
@@ -326,8 +312,22 @@ function handleRouteWorkerMessage({ data }) {
     return;
   }
   if (pending.kind === 'plan') {
-    if (data.id !== pendingPlanId || pending.endpointRevision !== endpointRevision) return;
+    const preference = minimapRoutePreference?.value ?? 'balanced';
+    const responseState = classifyPlanResponse({
+      responseId: data.id,
+      pendingPlanId,
+      pendingEndpointRevision: pending.endpointRevision,
+      endpointRevision,
+      pendingPreference: pending.preference,
+      currentPreference: preference,
+    });
+    if (responseState === 'stale') return;
     pendingPlanId = null;
+    if (responseState === 'superseded') {
+      updateRouteButton();
+      planMinimapRoute();
+      return;
+    }
   } else if (pending.kind === 'explain' && data.id !== latestExplainId) {
     return;
   }
@@ -431,21 +431,16 @@ function planMinimapRoute() {
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
   renderRouteSummary({ status: 'pending', reason: 'Rota hesaplanıyor' });
   pendingPlanId = id;
-  routeWorkerRequests.set(id, { kind: 'plan', endpointRevision });
+  const prefKey = minimapRoutePreference?.value ?? 'balanced';
+  routeWorkerRequests.set(id, { kind: 'plan', endpointRevision, preference: prefKey });
   minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi — güvenli rota sertifikası değildir.';
   updateRouteButton();
-
-  const prefKey = minimapRoutePreference?.value ?? 'balanced';
-  const pref = ROUTE_PREFERENCES[prefKey] ?? ROUTE_PREFERENCES.balanced;
-  const selectedCostParams = pref.costParams;
-
   ensureRouteWorker().postMessage({
     type: 'plan-walking-route',
     id,
     startLocal: minimapEndpoints.start,
     endLocal: minimapEndpoints.end,
-    costParams: selectedCostParams,
-    options: { preference: prefKey, costParams: selectedCostParams },
+    options: { preference: prefKey },
   });
 }
 

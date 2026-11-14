@@ -38,8 +38,14 @@
           <option value="ortho">HiRISE Ortomozaik (WMTS z17/z14)</option>
           <option value="hillshade">DTM Gölgeli Kabartma (Hillshade)</option>
         </select>
+        <label class="scale-selector-label" for="select-vertical-scale">Dikey Ölçek:</label>
+        <select id="select-vertical-scale" class="view-select" aria-label="Dikey ölçek ve kabartma abartısı" title="Dikey ölçek ve kabartma abartısı">
+          <option value="1" selected>1× Gerçek Ölçek (Bilimsel 1:1)</option>
+          <option value="2">2× Görsel Abartı (Sunum Parametresi)</option>
+          <option value="3">3× Görsel Abartı (Eski Sunum Parametresi)</option>
+        </select>
       </div>
-      <div id="view-note" class="view-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Dikey ölçek 3× sunum abartısıdır.</div>
+      <div id="view-note" class="view-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. <span id="scale-indicator-text">Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).</span></div>
       <div id="view-status" class="banner info" hidden role="status" aria-live="polite"></div>
       <div id="deviation-banner" class="banner warn" hidden role="alert"></div>
       <div id="arrived-banner" class="banner ok arrived-badge" hidden role="alert" aria-live="polite">
@@ -147,6 +153,7 @@
 
       <section class="card archive">
         <h2><span class="tag tag-arch">Arşiv ürünü</span> Katmanlar</h2>
+        <div id="scale-badge-container"></div>
         <label class="small"><input id="toggle-geology" type="checkbox" checked> Jeoloji sınırlarını göster (indikatiftir)</label>
         <div id="geology-status" class="muted small" aria-live="polite"></div>
         <p id="geology-provenance" class="muted small"></p>

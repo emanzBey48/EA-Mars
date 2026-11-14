@@ -4,6 +4,20 @@
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Hedef uygulama:** `C:\Users\Erdem\OneDrive\Desktop\nasa space apps\Sim`
 
+## Güncel bağımsız inceleme — 14 Kasım 2026
+
+**USGS HiRISE DTM migration kabul edilmedi (FAIL).** `eb385ea` yeni USGS Mars 2020 TRN HiRISE DTM Mosaic’e geçişi ve pencereli TIFF provider’ını içeriyor; migration remote’a push edilmişti. Kodun mevcut olması verinin provenance/koordinat/datum/lisans kabulünü tamamlamaz. Stage 8–12 için önceki commit’lerde kaydedilen testler bu migration’ın test veya kabul sonucu değildir; bu yeni aşama için bağımsız test/kabul çalıştırması yapılmadı.
+
+Bağımsız review engelleri:
+
+1. `extract-dtm.mjs`, eksik TIFF tag’leri varken ürün kimliği, boyut, tiepoint/yarıçap, no-data, geçerli aralık, datum ve lisansı varsayıyor/sabitliyor; TIFF strip yerleşimi ve compression doğrulanmıyor.
+2. Manifest bayrakları ve `frameMatchesConfig` destek durumunu bağımsız transform doğrulaması olmadan verebiliyor. Raster örnek kontrolü yalnız sonlu değeri kontrol ediyor; sayısal koordinat dönüşüm/rezidüel ve footprint doğrulaması gösterilmedi.
+3. Ürün etiketi/SIS, provenance, datum ve lisans/kullanım koşulu için QC kapısı hâlâ açık. USGS release sayfasındaki hak ifadesi **“This work is marked with CC0 1.0 Universal”** şeklindedir ([USGS data release](https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic)); bu ifade kaynak olarak ilişkilendirilmeli, ama tek başına yerel TIFF’in ürün kimliğini veya metadata eşleşmesini kanıtlamaz.
+
+**Sıradaki kod işi Alparslan’a:** bu çıkarıcı/manifest/koordinat doğrulama boşluklarını fail-closed biçimde kapatıp yeni bir bağımsız review ve kabul çalıştırması sunmak. Stage 13 (Efe’nin yalnız astronot rig’i ve birim testleri kapsamındaki loping/iniş kinematiği) ayrı kalır ve bundan sonra yürütülür. Eski IMG/JP2 dosyaları kullanıcı tarafından geçersiz bildirildi; migration başarısızlığı onları yeniden geçerli veri yapmaz.
+
+İnceleme anındaki working tree’de legacy raster silmeleri, camera/renderer/test/screenshot değişiklikleri ve TIFF/`.crdownload` dosyaları not değişikliklerinden ayrı unstaged/untracked durumdaydı; bu notlar bunları sahiplenmez.
+
 Bu belge, projeyi devralan kişi veya başka bir yapay zekâ için adım adım devir notudur. Güncel kod ve birincil kaynaklar, eski notlardan daha güncel olabilir; çelişkide güncel kaynaklara bakıp bu notu düzelt.
 
 ## 1. Ürün vaadi ve sınırlar
@@ -109,7 +123,7 @@ Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulum
 3. **Stage 11 — 3D waypoint beacon ve rota kılavuz geometrisi:** `8054b1a` ile tamamlandı. Efe `marker-mesh.js` modülünü yazdı, Alparslan renderer'a entegre etti. Sol 120 / WB1 ve Sol 164 / Roubion 3D fenerleri, rota şeridi ve koridor sınırları eklendi.
 4. **Stage 8 — first-person demo akışı ve HUD entegrasyonu:** `f5259d2` ve `9819da2` ile tamamlandı. Doğrudan 3D URL açılışı (`?view=3d`), Sol 164 hedef kilidi, nişangah (`#fp-reticle`), kontrol kılavuz kapsülü (`#fp-hud-hint`) ve Roubion varış rozeti eklendi.
 5. **Stage 12 — Mars düşük yerçekimi zıplama balistiği ve kamera dinamikleri:** `58660f0` ile Alparslan tarafından tamamlandı. Mars $3.71\text{ m/s}^2$ yerçekimi altında $v_0 = 2.4\text{ m/s}$ dikey zıplama dürtüsüyle $\sim 1.3\text{ s}$ hava süresi ve $\sim 0.78\text{ m}$ apeks doğrulandı. Havada yatay momentum korunumu (balistik transit), iniş darbe sönümleme süresi (`landingRecovery` $\sim 0.25\text{ s}$) ve birinci şahıs adım kafa salınımı (head-bobbing) ile iniş kamera esnemesi (landing dip) eklendi. Bağımsız `npm test` 29/29 ve `npm run smoke` 32/32 geçti (59.3 FPS).
-6. **Sıradaki iş — Stage 13: Düşük Yerçekimi EVA Loping ve Sıçrama/İniş Poz Kinematiği:** Efe'nin kodlama görevidir. Yalnızca `Sim/public/js/view/3d/astronaut-rig.js` ve birim testlerinde Alparslan'ın snapshot'a eklediği `landingRecovery`, `landingRecoveryFrac`, `grounded`, `airborne` verilerini tüketerek Apollo/Mars EVA loping yürüyüşü, apex balance, landing squash & recover ve view-model salınım kinematiğini kodlar; renderer/simülasyon dosyalarına dokunmaz.
+6. **Sonraki ayrı aşama — Stage 13: Düşük Yerçekimi EVA Loping ve Sıçrama/İniş Poz Kinematiği:** Efe'nin kodlama görevidir; ancak güncel sırada önce Stage 6/TIFF migration fail-closed blokları kapatılıp bağımsız kabul alınmalıdır. Kabul sonrasında yalnız `Sim/public/js/view/3d/astronaut-rig.js` ve birim testlerinde hareket snapshot girdilerine bağlı loping, apex balance ve landing squash kinematiği uygulanır; renderer/simülasyon dosyalarına dokunulmaz.
 7. **Atmosfer/kuvvet modeli:** NASA ortalama/seasonal değerlerini referans ve senaryo girdisi olarak açıkça etiketle. Belirli Jezero hava koşulu veya gerçek uzay giysisi modeli olduğunu ileri sürme; gerekli kütle/drag/wind parametreleri kaynaklandırılmadan karakter hareketine atmosfer kuvveti uydurma.
 8. **Ortogörüntü ayrı işi:** JP2 çözme kütüphanesi/lisansı ve `PixelIsArea` ile PDS pixel-center yarım piksel farkı araştırılsın; hizalama doğrulanmadan görsel bindirme iddiası kurma. Stage 12/13 önkoşulu değildir.
 9. **Yarışma verisi/PLACES:** Gerçek veri gelince Stage 6 intake’i kanıtla aç; gerçek PLACES traverse ise erişilebilir aynı birincil PDS ürünüyle ayrı doğrulansın. HiRISE fallback’i ve rota caveat’ı korunur.

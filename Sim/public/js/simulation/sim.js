@@ -340,6 +340,7 @@ export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints =
         airborne: sim.airborne,
         landingRecovery: sim.landingRecovery ?? false,
         landingRecoveryFrac: sim.landingRecoveryFrac ?? 0,
+        gaitDistanceM: sim.distanceWalkedM,
         phase: sim.phase,
         groundContactStatus: elevation.status,
       },

@@ -242,6 +242,17 @@ export function getCameraPosition(camera) {
   };
 }
 
+/** Returns the first-person look-down amount from 0 (horizon) to 1 (full lower-body view). */
+export function firstPersonLookDownFraction(camera, minLookDownPitchRad, fullLookDownPitchRad) {
+  if (camera?.mode !== 'first-person') throw new TypeError('A first-person camera is required');
+  const min = finite(minLookDownPitchRad, 'minLookDownPitchRad');
+  const full = finite(fullLookDownPitchRad, 'fullLookDownPitchRad');
+  if (min < 0 || full <= min) throw new RangeError('Look-down pitch thresholds are invalid');
+  const effectivePitch = Math.min(FIRST_PERSON_MAX_PITCH_RAD,
+    Math.max(FIRST_PERSON_MIN_PITCH_RAD, camera.pitchRad + (camera.dynamicPitchOffsetRad || 0)));
+  return Math.max(0, Math.min(1, (-effectivePitch - min) / (full - min)));
+}
+
 /** Builds a column-major WebGL clip transform from the camera state and canvas aspect ratio. */
 export function getViewProjectionMatrix(camera, aspect) {
   finite(aspect, 'aspect');

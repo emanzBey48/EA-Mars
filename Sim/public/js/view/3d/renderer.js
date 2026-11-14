@@ -3,8 +3,8 @@
 // upload those arrays directly and supports 32-bit element indices without adding a package or CDN.
 // This keeps deployment simple; the tradeoff is that shaders and GPU resource lifecycle live here.
 
-import { getCameraPosition, getViewProjectionMatrix } from './camera.js';
-import { ASTRONAUT_RIG, FIRST_PERSON_RIG_PARTS, poseAstronautRig } from './astronaut-rig.js';
+import { firstPersonLookDownFraction, getCameraPosition, getViewProjectionMatrix } from './camera.js';
+import { ASTRONAUT_RIG, FIRST_PERSON_LOWER_BODY_PARTS, FIRST_PERSON_RIG_PARTS, poseAstronautRig } from './astronaut-rig.js';
 
 const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
@@ -61,6 +61,7 @@ uniform vec3 uLightDirection;
 uniform vec3 uCameraEye;
 uniform vec2 uElevBounds;
 uniform int uRenderPass;
+uniform float uAlpha;
 out vec4 outColor;
 
 void main() {
@@ -136,7 +137,7 @@ void main() {
   float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.22;
   float spec = pow(ndoth, 32.0) * 0.22;
   vec3 suitLit = uBaseColor * vColor * (ambient * 0.85 + 0.78 * ndotl) + vec3(1.0, 0.90, 0.78) * (spec + rim);
-  outColor = vec4(suitLit, 1.0);
+  outColor = vec4(suitLit, uAlpha);
 }`;
 
 function compileShader(gl, type, source) {
@@ -299,11 +300,12 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     cameraEye: gl.getUniformLocation(program, 'uCameraEye'),
     elevBounds: gl.getUniformLocation(program, 'uElevBounds'),
     renderPass: gl.getUniformLocation(program, 'uRenderPass'),
+    alpha: gl.getUniformLocation(program, 'uAlpha'),
   };
   if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
       !locations.partSize || !locations.partCenter || !locations.partOffset || !locations.partRotationRad ||
-      !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass) {
+      !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass || !locations.alpha) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
   }
@@ -565,6 +567,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.bindVertexArray(astronaut.vao);
         gl.disableVertexAttribArray(locations.color);
         if (firstPerson) gl.disable(gl.DEPTH_TEST); // Deliberate lower-frame suit overlay; terrain cannot hide it.
+        gl.uniform1f(locations.alpha, 1);
         for (const id of partIds) {
           const part = ASTRONAUT_RIG.parts[id];
           const partPose = rigPose.parts[id];
@@ -580,7 +583,36 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           const worldCenter = rigPartWorldCenter(part, partPose, rigPose, objectOffset, headingRad, rigVerticalScale);
           if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
         }
-        if (firstPerson) gl.enable(gl.DEPTH_TEST);
+        if (firstPerson) {
+          gl.enable(gl.DEPTH_TEST);
+          const lowerBody = ASTRONAUT_RIG.metadata.firstPersonLowerBody;
+          const lookDown = firstPersonLookDownFraction(camera, lowerBody.minLookDownPitchRad, lowerBody.fullLookDownPitchRad);
+          // Boots require current valid DTM contact; a retained airborne anchor is never treated as ground.
+          if (elevationKnown && lookDown > 0) {
+            const lowerBodyOffset = [objectOffset[0], objectOffset[1], camera.zDisplay - camera.eyeHeightM];
+            gl.uniform3fv(locations.objectOffset, lowerBodyOffset);
+            gl.uniform1f(locations.alpha, lookDown);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            for (const id of FIRST_PERSON_LOWER_BODY_PARTS) {
+              const part = ASTRONAUT_RIG.parts[id];
+              const partPose = rigPose.parts[id];
+              gl.uniform3fv(locations.partSize, part.size);
+              gl.uniform3fv(locations.partCenter, part.center);
+              gl.uniform3fv(locations.partOffset, partPose.offset);
+              gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
+              gl.uniform3fv(locations.rootOffset, rigPose.rootOffset);
+              gl.uniform3fv(locations.rootRotationRad, rigPose.rootRotationRad);
+              gl.vertexAttrib3fv(locations.color, part.colorRgb);
+              gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+              rigPartsDrawn.push(id);
+              const worldCenter = rigPartWorldCenter(part, partPose, rigPose, lowerBodyOffset, headingRad, rigVerticalScale);
+              if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
+            }
+            gl.disable(gl.BLEND);
+          }
+          gl.uniform1f(locations.alpha, 1);
+        }
         firstPersonViewModelDrawn = firstPerson && rigPartsDrawn.length > 0;
         avatarDrawn = !firstPerson && rigPartsDrawn.length > 0;
       }

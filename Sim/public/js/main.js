@@ -8,6 +8,7 @@ import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
 import { Camera, buildTerrainImage, render } from './view/render.js';
 import { cameraRelativeMovement, createFirstPersonCamera, lookCamera, setFirstPersonPose, zoomCamera } from './view/3d/camera.js';
 import { createTerrainRenderer } from './view/3d/renderer.js';
+import { ASTRONAUT_RIG } from './view/3d/astronaut-rig.js';
 import { buildTerrainMesh } from './view/3d/terrain-mesh.js';
 import { buildMarkerMeshes } from './view/3d/marker-mesh.js';
 import { bindControls } from './input/input.js';
@@ -358,9 +359,10 @@ function frame(now) {
         // Mars 0.38g loping head-bob: rhythmic flight bounce, pitch nod, and subtle weight-shift roll
         const speed = mov.horizontalSpeedMps;
         const speedNorm = Math.min(1, speed / 1.4);
-        const strideM = 1.25;
-        const gaitFreqHz = speed / strideM;
-        const phase = 2 * Math.PI * gaitFreqHz * (mov.timeS ?? 0);
+        const strideM = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
+        const phase = mov.gaitDistanceM !== undefined
+          ? 2 * Math.PI * mov.gaitDistanceM / strideM
+          : 2 * Math.PI * (speed / strideM) * (mov.timeS ?? 0);
         eyeOffsetM = 0.024 * speedNorm * Math.sin(2 * phase);
         pitchOffsetRad = 0.006 * speedNorm * Math.sin(phase);
         rollOffsetRad = 0.005 * speedNorm * Math.cos(phase);

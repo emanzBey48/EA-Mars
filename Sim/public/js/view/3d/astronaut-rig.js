@@ -1,5 +1,14 @@
 // Presentation-only astronaut part geometry and deterministic pose generation.
 
+export const FIRST_PERSON_RIG_PARTS = Object.freeze([
+  'torso',
+  'chestPack',
+  'leftArm',
+  'rightArm',
+  'leftGlove',
+  'rightGlove',
+]);
+
 /**
  * Immutable, renderer-independent rig template. All dimensions, colors, and proportions are visual
  * design units only; they do not describe a real suit, human body, or biomechanical model.
@@ -19,15 +28,20 @@ export const ASTRONAUT_RIG = deepFreeze({
     forwardHeadingOffsetRad: Math.PI / 2,
     geometryDescription: 'Low-poly cuboids; no physical or suit-biomechanics claim',
     presentationStrideLengthM: 1.25,
+    firstPersonParts: FIRST_PERSON_RIG_PARTS,
   },
   geometry: createUnitBoxGeometry(),
   parts: {
     torso: part('torso', [0.44, 0.34, 0.58], [0, 0, 0.99], [0, 0, 0.99], [0.94, 0.43, 0.08]),
+    chestPack: part('chestPack', [0.26, 0.14, 0.22], [0, -0.23, 0.99], [0, 0, 0.99], [0.85, 0.88, 0.92]),
     helmet: part('helmet', [0.34, 0.31, 0.32], [0, 0, 1.48], [0, 0, 1.34], [0.92, 0.96, 1.0]),
     visor: part('visor', [0.23, 0.035, 0.16], [0, -0.17, 1.48], [0, 0, 1.34], [0.035, 0.12, 0.22]),
     backpack: part('backpack', [0.34, 0.23, 0.43], [0, 0.21, 0.99], [0, 0.21, 0.99], [0.08, 0.58, 0.98]),
+    plssAntenna: part('plssAntenna', [0.035, 0.035, 0.30], [0.12, 0.23, 1.35], [0.12, 0.23, 1.205], [0.75, 0.78, 0.82]),
     leftArm: part('leftArm', [0.19, 0.23, 0.53], [-0.34, 0, 0.96], [-0.27, 0, 1.22], [0.96, 0.53, 0.14]),
     rightArm: part('rightArm', [0.19, 0.23, 0.53], [0.34, 0, 0.96], [0.27, 0, 1.22], [0.96, 0.53, 0.14]),
+    leftGlove: part('leftGlove', [0.13, 0.16, 0.17], [-0.34, -0.02, 0.615], [-0.34, 0, 0.695], [0.20, 0.22, 0.25]),
+    rightGlove: part('rightGlove', [0.13, 0.16, 0.17], [0.34, -0.02, 0.615], [0.34, 0, 0.695], [0.20, 0.22, 0.25]),
     leftLeg: part('leftLeg', [0.21, 0.25, 0.53], [-0.14, 0, 0.40], [-0.14, 0, 0.65], [0.96, 0.53, 0.14]),
     rightLeg: part('rightLeg', [0.21, 0.25, 0.53], [0.14, 0, 0.40], [0.14, 0, 0.65], [0.96, 0.53, 0.14]),
     leftBoot: part('leftBoot', [0.23, 0.34, 0.16], [-0.14, -0.035, 0.09], [-0.14, 0, 0.17], [0.12, 0.18, 0.24]),
@@ -59,16 +73,21 @@ const PRESENTATION_STRIDE_LENGTH_M = ASTRONAUT_RIG.metadata.presentationStrideLe
  * A renderer may then apply the whole-rig world transform (including heading) separately.
  *
  * @param {{timeS:number, horizontalSpeedMps:number, verticalSpeedMps:number,
- *   grounded:boolean, airborne?:boolean, groundContactStatus?:string, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
- * @returns {{pose:'idle'|'walk'|'stop'|'airborne'|'unknown', gaitPhaseRad:number, gaitFrequencyHz:number,
+ *   grounded:boolean, airborne?:boolean, landingRecovery?:boolean, landingRecoveryFrac?:number,
+ *   groundContactStatus?:string, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
+ * @returns {{pose:'idle'|'walk'|'stop'|'airborne'|'landing'|'unknown', gaitPhaseRad:number, gaitFrequencyHz:number,
  *   rootOffset:[number,number,number], rootRotationRad:[number,number,number],
- *   parts:Record<string,{offset:[number,number,number],rotationRad:[number,number,number]} >}}
+ *   parts:Record<string,{offset:[number,number,number],rotationRad:[number,number,number]}>}}
  */
 export function poseAstronautRig(state) {
   assertMotionState(state);
 
   const { timeS, horizontalSpeedMps: speed, verticalSpeedMps, grounded, groundContactStatus, phase } = state;
   const contactKnown = groundContactStatus === undefined || groundContactStatus === 'ok';
+  const recFrac = (state.landingRecovery === true || (state.landingRecoveryFrac ?? 0) > 0)
+    ? (state.landingRecoveryFrac !== undefined ? state.landingRecoveryFrac : 1.0)
+    : 0;
+
   let pose;
   if (phase === 'airborne' || state.airborne === true || (contactKnown && !grounded)) {
     pose = 'airborne';
@@ -76,6 +95,8 @@ export function poseAstronautRig(state) {
     pose = 'unknown';
   } else if (phase === 'stop' || phase === 'arrived') {
     pose = 'stop';
+  } else if (recFrac > 0 && speed <= MOVING_SPEED_EPSILON_MPS) {
+    pose = 'landing';
   } else if (speed > MOVING_SPEED_EPSILON_MPS && phase !== 'idle' && phase !== 'ready') {
     pose = 'walk';
   } else {
@@ -90,39 +111,131 @@ export function poseAstronautRig(state) {
   let rootRotationRad = [0, 0, 0];
 
   if (pose === 'walk') {
-    const amplitude = 0.48 * Math.min(1, speed / 1.4);
-    const bob = 0.018 * (1 - Math.cos(2 * gaitPhaseRad));
-    rootOffset = [0, 0, bob];
-    rootRotationRad = [0.025 * cycle, 0, 0];
-    parts.leftArm = hingedPart('leftArm', -0.7 * amplitude * cycle);
-    parts.rightArm = hingedPart('rightArm', 0.7 * amplitude * cycle);
-    parts.leftLeg = hingedPart('leftLeg', amplitude * cycle);
-    parts.rightLeg = hingedPart('rightLeg', -amplitude * cycle);
-    parts.leftBoot = hingedPart('leftBoot', 0.28 * amplitude * cycle);
-    parts.rightBoot = hingedPart('rightBoot', -0.28 * amplitude * cycle);
+    // Apollo/Mars EVA loping gait: wide stride amplitude, pronounced vertical flight bounce (bob),
+    // and rhythmic low-gravity arm counter-swing with pressurized suit clearance.
+    const speedNorm = Math.min(1, speed / 1.4);
+    const amplitude = 0.52 * speedNorm;
+    const lopeBounce = 0.035 * speedNorm * (1 - Math.cos(2 * gaitPhaseRad));
+    const squash = 0.065 * recFrac;
+    rootOffset = [0, 0, lopeBounce - squash];
+
+    const forwardLean = 0.04 * speedNorm;
+    const sway = 0.02 * speedNorm * cycle;
+    rootRotationRad = [forwardLean + 0.03 * speedNorm * cycle, 0, sway];
+
+    const armSwing = 0.72 * amplitude * cycle;
+    const armFlare = 0.06 + 0.15 * recFrac;
+    const leftArmRot = [-armSwing, armFlare, -0.04 * cycle];
+    const rightArmRot = [armSwing, -armFlare, 0.04 * cycle];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+
+    // EVA gloves follow arms with natural pre-curved inward working grip
+    const leftGrip = [-0.10, 0.05, -0.03 * cycle];
+    const rightGrip = [-0.10, -0.05, 0.03 * cycle];
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, leftGrip);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, rightGrip);
+
+    const legSwing = amplitude * cycle;
+    const legAbsorb = 0.12 * recFrac;
+    const legClearance = 0.03;
+    parts.leftLeg = hingedPart3D('leftLeg', [legSwing - legAbsorb, -legClearance, 0]);
+    parts.rightLeg = hingedPart3D('rightLeg', [-legSwing - legAbsorb, legClearance, 0]);
+
+    const bootSwing = 0.30 * amplitude * cycle;
+    const bootAbsorb = 0.10 * recFrac;
+    parts.leftBoot = hingedPart3D('leftBoot', [bootSwing + bootAbsorb, -legClearance, 0]);
+    parts.rightBoot = hingedPart3D('rightBoot', [-bootSwing + bootAbsorb, legClearance, 0]);
   } else if (pose === 'airborne') {
-    const verticalSign = verticalSpeedMps < 0 ? -1 : 1;
-    rootRotationRad = [0.045 * verticalSign, 0, 0];
-    parts.leftArm = hingedPart('leftArm', -0.42);
-    parts.rightArm = hingedPart('rightArm', -0.42);
-    parts.leftLeg = hingedPart('leftLeg', 0.24 * verticalSign);
-    parts.rightLeg = hingedPart('rightLeg', -0.24 * verticalSign);
-    parts.leftBoot = hingedPart('leftBoot', 0.12 * verticalSign);
-    parts.rightBoot = hingedPart('rightBoot', -0.12 * verticalSign);
+    // Mars low-gravity jump kinematics (0.38g):
+    // 1. Ascent (verticalSpeedMps > 0.5): arms forward/upward, legs trailing backward.
+    // 2. Apex Balance (|verticalSpeedMps| <= 0.5): floating equilibrium, arms flared out, legs soft.
+    // 3. Descent (verticalSpeedMps < -0.5): legs/boots reaching forward to brace for touchdown.
+    const vz = verticalSpeedMps;
+    const tAscent = Math.max(0, Math.min(1, (vz - 0.5) / 1.0));
+    const tDescent = Math.max(0, Math.min(1, (-vz - 0.5) / 1.0));
+    const tApex = 1 - tAscent - tDescent;
+
+    const rootPitch = tAscent * 0.045 - tDescent * 0.04;
+    rootRotationRad = [rootPitch, 0, 0];
+
+    const apexFloat = tApex * 0.012 * Math.sin(timeS * 2.5);
+    rootOffset = [0, 0, apexFloat];
+
+    const leftArmPitch = tAscent * -0.55 + tApex * -0.26 + tDescent * -0.32;
+    const leftArmRoll = tAscent * 0.10 + tApex * 0.20 + tDescent * 0.14;
+    const leftArmRot = [leftArmPitch, leftArmRoll, 0];
+    const rightArmRot = [leftArmPitch, -leftArmRoll, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+
+    // Hands adapt dynamically across jump regimes
+    const gripPitch = tAscent * -0.08 + tApex * -0.06 + tDescent * -0.12;
+    const gripRoll = tAscent * 0.04 + tApex * 0.08 + tDescent * 0.05;
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [gripPitch, gripRoll, 0]);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [gripPitch, -gripRoll, 0]);
+
+    const legPitch = tAscent * 0.22 + tApex * 0.06 - tDescent * 0.26;
+    const legSpread = 0.03 + tApex * 0.02;
+    const stagger = tApex * 0.04;
+    parts.leftLeg = hingedPart3D('leftLeg', [legPitch + stagger, -legSpread, 0]);
+    parts.rightLeg = hingedPart3D('rightLeg', [legPitch - stagger, legSpread, 0]);
+
+    const bootPitch = tAscent * 0.10 + tApex * 0.02 - tDescent * 0.14;
+    parts.leftBoot = hingedPart3D('leftBoot', [bootPitch + stagger * 0.5, -legSpread, 0]);
+    parts.rightBoot = hingedPart3D('rightBoot', [bootPitch - stagger * 0.5, legSpread, 0]);
+  } else if (pose === 'landing') {
+    // Landing squash & recovery: knees flex, torso drops (negative rootOffset Z), arms flare.
+    const squash = -0.065 * recFrac;
+    rootOffset = [0, 0, squash];
+    rootRotationRad = [0.045 * recFrac, 0, 0];
+
+    const armFlare = 0.22 * recFrac;
+    const armPitch = -0.18 * recFrac;
+    const leftArmRot = [armPitch, armFlare, 0];
+    const rightArmRot = [armPitch, -armFlare, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+
+    // Wrists flex to cushion landing impact
+    const landGrip = [-0.14 * recFrac, 0.06 * recFrac, 0];
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, landGrip);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.14 * recFrac, -0.06 * recFrac, 0]);
+
+    const legFlex = -0.18 * recFrac;
+    const bootFlex = 0.14 * recFrac;
+    const legSpread = 0.04 * recFrac;
+    parts.leftLeg = hingedPart3D('leftLeg', [legFlex, -legSpread, 0]);
+    parts.rightLeg = hingedPart3D('rightLeg', [legFlex, legSpread, 0]);
+    parts.leftBoot = hingedPart3D('leftBoot', [bootFlex, -legSpread, 0]);
+    parts.rightBoot = hingedPart3D('rightBoot', [bootFlex, legSpread, 0]);
   } else if (pose === 'stop') {
     // Fixed settled stance: no hidden previous-pose state or transition clock is required.
-    parts.leftArm = hingedPart('leftArm', -0.035);
-    parts.rightArm = hingedPart('rightArm', -0.035);
+    const leftArmRot = [-0.035, 0.02, 0];
+    const rightArmRot = [-0.035, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [-0.08, 0.03, 0]);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08, -0.03, 0]);
   } else if (pose === 'unknown') {
     // Static neutral presentation: unknown contact is not visually asserted as ground or flight.
-    parts.leftArm = hingedPart('leftArm', -0.035);
-    parts.rightArm = hingedPart('rightArm', -0.035);
+    const leftArmRot = [-0.035, 0.02, 0];
+    const rightArmRot = [-0.035, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [-0.08, 0.03, 0]);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08, -0.03, 0]);
   } else {
     // A small deterministic idle breath freezes naturally when the caller freezes timeS.
     const breath = Math.sin(TAU * 0.22 * timeS);
     rootOffset = [0, 0, 0.006 * breath];
-    parts.leftArm = hingedPart('leftArm', -0.018 * breath);
-    parts.rightArm = hingedPart('rightArm', -0.018 * breath);
+    const leftArmRot = [-0.018 * breath, 0.02, 0];
+    const rightArmRot = [-0.018 * breath, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    const idleGrip = [-0.08 - 0.015 * breath, 0.03, 0];
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, idleGrip);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08 - 0.015 * breath, -0.03, 0]);
   }
 
   for (const id of Object.keys(ASTRONAUT_RIG.parts)) {
@@ -136,18 +249,89 @@ function part(id, size, center, pivot, colorRgb) {
   return { id, geometry: 'unitBox', size, center, pivot, colorRgb };
 }
 
-function hingedPart(id, angleRad) {
+export function hingedPart3D(id, rotationRad, extraOffset = [0, 0, 0]) {
   const { center, pivot } = ASTRONAUT_RIG.parts[id];
+  const dx = center[0] - pivot[0];
   const dy = center[1] - pivot[1];
   const dz = center[2] - pivot[2];
-  const cos = Math.cos(angleRad);
-  const sin = Math.sin(angleRad);
-  const rotatedY = cos * dy - sin * dz;
-  const rotatedZ = sin * dy + cos * dz;
+  const [rx, ry, rz] = rotateEuler([dx, dy, dz], rotationRad);
   return {
-    offset: [0, rotatedY - dy, rotatedZ - dz],
-    rotationRad: [angleRad, 0, 0],
+    offset: [rx - dx + extraOffset[0], ry - dy + extraOffset[1], rz - dz + extraOffset[2]],
+    rotationRad: [...rotationRad],
   };
+}
+
+/**
+ * Calculates hierarchical kinematics for a child part attached to a parent joint (e.g. glove on arm).
+ * The child rotates with its own local joint rotation (wrist) and is carried by the parent's pivot rotation (shoulder).
+ *
+ * @param {string} childId
+ * @param {string} parentId
+ * @param {[number,number,number]} parentRotationRad
+ * @param {[number,number,number]} childLocalRotationRad
+ * @returns {{offset:[number,number,number], rotationRad:[number,number,number]}}
+ */
+export function chainedLimbPart(childId, parentId, parentRotationRad, childLocalRotationRad = [0, 0, 0]) {
+  const parent = ASTRONAUT_RIG.parts[parentId];
+  const child = ASTRONAUT_RIG.parts[childId];
+
+  // 1. Child neutral vector relative to child pivot (e.g. glove center relative to wrist)
+  const dChild = [
+    child.center[0] - child.pivot[0],
+    child.center[1] - child.pivot[1],
+    child.center[2] - child.pivot[2],
+  ];
+  // 2. Rotate child relative to its own pivot by childLocalRotationRad
+  const dChildRot = rotateEuler(dChild, childLocalRotationRad);
+
+  // 3. Child pivot relative to parent pivot (e.g. wrist relative to shoulder)
+  // combined with the locally rotated child offset
+  const dParent = [
+    child.pivot[0] - parent.pivot[0] + dChildRot[0],
+    child.pivot[1] - parent.pivot[1] + dChildRot[1],
+    child.pivot[2] - parent.pivot[2] + dChildRot[2],
+  ];
+
+  // 4. Rotate the entire chain by parentRotationRad (e.g. shoulder rotation)
+  const dParentRot = rotateEuler(dParent, parentRotationRad);
+
+  // 5. Final world-relative position of child center relative to parent pivot
+  const finalCenter = [
+    parent.pivot[0] + dParentRot[0],
+    parent.pivot[1] + dParentRot[1],
+    parent.pivot[2] + dParentRot[2],
+  ];
+
+  // 6. Child offset is difference between final center and neutral center
+  const offset = [
+    finalCenter[0] - child.center[0],
+    finalCenter[1] - child.center[1],
+    finalCenter[2] - child.center[2],
+  ];
+
+  // 7. Combined orientation: parent rotation + child local rotation
+  const rotationRad = [
+    parentRotationRad[0] + childLocalRotationRad[0],
+    parentRotationRad[1] + childLocalRotationRad[1],
+    parentRotationRad[2] + childLocalRotationRad[2],
+  ];
+
+  return { offset, rotationRad };
+}
+
+function hingedPart(id, angleRad) {
+  return hingedPart3D(id, [angleRad, 0, 0]);
+}
+
+function rotateEuler([x, y, z], [rx, ry, rz]) {
+  const cx = Math.cos(rx), sx = Math.sin(rx);
+  const y1 = cx * y - sx * z;
+  const z1 = sx * y + cx * z;
+  const cy = Math.cos(ry), sy = Math.sin(ry);
+  const x2 = cy * x + sy * z1;
+  const z2 = -sy * x + cy * z1;
+  const cz = Math.cos(rz), sz = Math.sin(rz);
+  return [cz * x2 - sz * y1, sz * x2 + cz * y1, z2];
 }
 
 function fixedPart() {
@@ -158,7 +342,9 @@ function assertMotionState(state) {
   if (!state || !Number.isFinite(state.timeS) || state.timeS < 0 ||
       !Number.isFinite(state.horizontalSpeedMps) || state.horizontalSpeedMps < 0 ||
       !Number.isFinite(state.verticalSpeedMps) || typeof state.grounded !== 'boolean' ||
-      (state.airborne !== undefined && typeof state.airborne !== 'boolean')) {
+      (state.airborne !== undefined && typeof state.airborne !== 'boolean') ||
+      (state.landingRecovery !== undefined && typeof state.landingRecovery !== 'boolean') ||
+      (state.landingRecoveryFrac !== undefined && (!Number.isFinite(state.landingRecoveryFrac) || state.landingRecoveryFrac < 0))) {
     throw new TypeError('state requires finite timeS, non-negative horizontalSpeedMps, finite verticalSpeedMps, and boolean grounded');
   }
   const phases = ['idle', 'walk', 'stop', 'airborne', 'paused', 'ready', 'running', 'arrived'];

@@ -67,7 +67,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
   $('sources').innerHTML = sources.map((s) => `<li><a href="${s.url}" target="_blank" rel="noopener">${s.label}</a></li>`).join('') +
     '<li>Görüntü/veri: NASA / JPL-Caltech / University of Arizona / USGS Astrogeology Science Center.</li>';
   $('v-speed').textContent = `${scenario.walkSpeedMps} m/s senaryo hızı × ${scenario.timeScale} zaman hızlandırma (gerçek Mars yürüyüş hızı iddiası değil). 3D düşey ivme: ${scenario.marsGravityMps2} m/s² (NASA küresel referansı; Jezero yerel ölçümü değil). Space sıçrama girdisi ${scenario.jumpImpulseMps} m/s oyun varsayımıdır, suit performansı değildir.`;
-  $('geology-provenance').innerHTML = `<a href="https://doi.org/10.3133/sim3464" target="_blank" rel="noopener">USGS SIM 3464 (Sun &amp; Stack, 2020)</a> · ölçek 1:75.000 · konum ofseti ~100–200 m · lisans belirtilmemiş. Birimler ve sınırlar yalnız indikatiftir; mineraloji, saha gerçeği, güvenlik veya geçilebilirlik iddiası değildir.`;
+  const geologyProvenance = $('geology-provenance');
 
   function renderLayerPanel(layers, terrain, currentCorridorM = corridorHalfWidthM) {
     const regBanner = layers.selectionReport
@@ -109,13 +109,29 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     dev.className = route.outsideCorridor ? 'status-bad' : 'status-ok';
     $('v-walked').textContent = `${distanceWalkedM.toFixed(1)} m`;
 
-    const geology = snapshot.geology ?? { status: 'unavailable' };
+    const { geology, geologyLayerStatus, geologyContactDistanceM } = snapshot;
     const geologyStatus = $('geology-status');
-    if (geology.status === 'ok') geologyStatus.textContent = `Haritalanmış birim: ${geology.unitCode} — ${geology.unitName}${geology.onBoundary ? ' (sınır üzerinde)' : ''}. İndikatiftir.`;
-    else if (geology.status === 'outside_coverage') geologyStatus.textContent = 'Bu konum koridor jeoloji veri kapsamı dışında; birim atanmadı.';
-    else if (geology.status === 'ambiguous') geologyStatus.textContent = 'Harita sınırında birden fazla birim adayı var; birim atanmadı.';
-    else geologyStatus.textContent = geology.status === 'loading' ? 'Jeoloji katmanı yükleniyor…' : 'Jeoloji katmanı kullanılamıyor; birim atanmadı.';
-    geologyStatus.dataset.status = geology.status;
+    let geologyText;
+    if (geologyLayerStatus === 'loading') geologyText = 'Jeoloji katmanı yükleniyor…';
+    else if (geology?.status === 'ok' && geology.unitCode) geologyText = `Haritalanmış birim: ${geology.unitCode} — ${geology.unitName}${geology.onBoundary ? ' (harita sınırında)' : ''}. İndikatiftir.`;
+    else if (geology?.status === 'outside_coverage') geologyText = 'Bu konum jeoloji verisinin kapsamı dışında.';
+    else if (geology?.status === 'ambiguous') {
+      const codes = [...new Set(geology.candidates.map((candidate) => candidate.unitCode))];
+      geologyText = `Birden fazla haritalanmış birim adayı var (${codes.join(', ')}). Birim atanmadı.`;
+    } else geologyText = 'Jeoloji katmanı kullanılamıyor.';
+    if (Number.isFinite(geologyContactDistanceM)) {
+      const { min, max } = geology.positionalUncertaintyM;
+      geologyText += ` En yakın haritalanmış kontağa düzlemde yaklaşık ${Math.round(geologyContactDistanceM)} m (konum belirsizliği ~${min}–${max} m).`;
+    }
+    if (geologyStatus.textContent !== geologyText) geologyStatus.textContent = geologyText;
+    geologyStatus.dataset.status = geologyLayerStatus === 'ready' ? geology.status : (geologyLayerStatus ?? 'unavailable');
+    const provenanceText = [
+      geology?.citation,
+      geology?.doi ? `DOI ${geology.doi}` : null,
+      geology?.license === 'not_stated' ? 'Lisans kaynakta belirtilmemiş.' : null,
+      geology?.caveatTr,
+    ].filter(Boolean).join(' · ');
+    if (geologyProvenance.textContent !== provenanceText) geologyProvenance.textContent = provenanceText;
 
     const e = surface.elevation;
     const s = surface.slope;

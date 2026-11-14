@@ -454,7 +454,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null }) {
       const frameStartedAt = collectDiagnostics ? performance.now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -538,23 +538,26 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         markersDrawn = true;
       }
 
-      if (geologyLinePositions instanceof Float32Array && geologyLinePositions.length >= 6) {
+      function drawSurfaceLines(positions, red, green, blue, baseGreen = 1, baseBlue = 1) {
+        if (!(positions instanceof Float32Array) || positions.length < 6) return;
         gl.uniform1i(locations.renderPass, 1);
         gl.uniform3f(locations.objectOffset, 0, 0, 0);
         gl.uniform1f(locations.headingRad, 0);
         gl.uniform1f(locations.verticalScale, 1);
-        gl.uniform3f(locations.baseColor, 1.0, 0.84, 0.24);
+        gl.uniform3f(locations.baseColor, 1, baseGreen, baseBlue);
         gl.bindVertexArray(geologyVao);
         gl.bindBuffer(gl.ARRAY_BUFFER, geologyPositionBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, geologyLinePositions, gl.DYNAMIC_DRAW);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
         gl.disableVertexAttribArray(locations.normal);
         gl.vertexAttrib3f(locations.normal, 0, 0, 1);
         gl.disableVertexAttribArray(locations.color);
-        gl.vertexAttrib3f(locations.color, 1, 0.82, 0.22);
+        gl.vertexAttrib3f(locations.color, red, green, blue);
         gl.lineWidth(2);
-        gl.drawArrays(gl.LINES, 0, geologyLinePositions.length / 3);
+        gl.drawArrays(gl.LINES, 0, positions.length / 3);
         gl.bindVertexArray(null);
       }
+      drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24);
+      drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1);
 
       const { astronaut: player } = snapshot;
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;

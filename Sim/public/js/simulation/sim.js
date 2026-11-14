@@ -1,6 +1,9 @@
 // Simulation core: player state, scenario clock, route progress and corridor deviation.
 // Works purely in the local metre plane (x east, y north). No DOM, no screen coordinates.
 import { pointToSegment } from '../geo/geo.js';
+import { toGeologySnapshot } from '../geo/geology.js';
+
+const EMPTY_GEOLOGY_SNAPSHOT = toGeologySnapshot(null, null);
 
 export const PHASE = Object.freeze({ READY: 'ready', RUNNING: 'running', PAUSED: 'paused', ARRIVED: 'arrived' });
 
@@ -29,7 +32,7 @@ export class MarswalkSim {
     this.distanceWalkedM = 0;
     this.verticalSpeedMps = 0;
     this.grounded = false;
-    this.airborne = false; // explicit jump trajectory; separate from whether current DTM contact is known
+    this.airborne = false; // active ballistic motion, separate from whether current DTM contact is known
     this.landingRecovery = false;
     this.landingRecoveryTimerS = 0;
     this.bodyWorldZReferenceM = null;
@@ -102,7 +105,8 @@ export class MarswalkSim {
     const moveLength = Math.hypot(moveX, moveY);
     const moving = moveLength > 0;
 
-    if (this.phase === PHASE.PAUSED || this.phase === PHASE.ARRIVED) {
+    if (this.phase === PHASE.PAUSED) return;
+    if (this.phase === PHASE.ARRIVED) {
       this.horizontalVelocityXMps = 0;
       this.horizontalVelocityYMps = 0;
       return;
@@ -200,6 +204,8 @@ export class MarswalkSim {
 
   /** Reconciles body motion with a fresh sample injected by the composition root. */
   resolveSurfaceContact(surface = {}) {
+    // The composition root still supplies a fresh sample on paused frames.
+    if (this.phase === PHASE.PAUSED) return false;
     if (surface.status === 'ok' && Number.isFinite(surface.value)) {
       if (this.bodyWorldZReferenceM === null) {
         this.bodyWorldZReferenceM = surface.value;
@@ -214,7 +220,10 @@ export class MarswalkSim {
         const bodyWorldZM = this.bodyWorldZReferenceM + this.heightAboveReferenceM;
         this.bodyWorldZReferenceM = surface.value;
         this.heightAboveReferenceM = bodyWorldZM - surface.value;
-        if (this.heightAboveReferenceM <= 0) {
+        if (this.heightAboveReferenceM > 0) {
+          // A valid, lower surface confirms the retained body position is above ground.
+          this.airborne = true;
+        } else {
           const wasAirborne = this.airborne;
           this.heightAboveReferenceM = 0;
           this.verticalSpeedMps = 0;
@@ -287,7 +296,10 @@ export function deepFreeze(obj) {
  * - `zM` is the Mars 2000 surface elevation (NOT astronaut body height); `null` whenever status !== 'ok' (never 0).
  * - Consumers (HUD, renderer) read exclusively from this snapshot and cannot mutate live simulation state.
  */
-export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints = [], routeNote = '', geology = null }) {
+export function createWorldSnapshot({
+  sim, surfaceProvider, adapter, waypoints = [], routeNote = '',
+  geology = EMPTY_GEOLOGY_SNAPSHOT, geologyLayerStatus = 'unavailable', geologyContactDistanceM = null,
+}) {
   const xM = sim.pos.x;
   const yM = sim.pos.y;
   const m = sim.metrics();
@@ -351,12 +363,10 @@ export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints =
       elevation,
       slope,
     },
-    geology: geology ? {
-      status: geology.status ?? 'unavailable',
-      unitCode: geology.status === 'ok' ? geology.unit?.code ?? null : null,
-      unitName: geology.status === 'ok' ? geology.unit?.name ?? null : null,
-      onBoundary: geology.status === 'ok' ? Boolean(geology.onBoundary) : false,
-    } : { status: 'unavailable', unitCode: null, unitName: null, onBoundary: false },
+    geology: geology ?? EMPTY_GEOLOGY_SNAPSHOT,
+    geologyLayerStatus,
+    geologyContactDistanceM: Number.isFinite(geologyContactDistanceM) && geologyContactDistanceM >= 0
+      ? geologyContactDistanceM : null,
     route: {
       a: { xM: sim.route.a.x, yM: sim.route.a.y },
       b: { xM: sim.route.b.x, yM: sim.route.b.y },

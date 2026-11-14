@@ -189,6 +189,14 @@ export function lookCamera(camera, deltaX, deltaY, sensitivity = 0.0025) {
   return camera;
 }
 
+export function setFirstPersonLook(camera, { yawRad, pitchRad }) {
+  if (camera.mode !== 'first-person') throw new TypeError('A first-person camera is required');
+  const yaw = finite(yawRad, 'yawRad');
+  const pitch = finite(pitchRad, 'pitchRad');
+  camera.yawRad = yaw;
+  camera.pitchRad = Math.min(FIRST_PERSON_MAX_PITCH_RAD, Math.max(FIRST_PERSON_MIN_PITCH_RAD, pitch));
+}
+
 /** Converts forward/back and strafe input to a normalized local-world movement vector. */
 export function cameraRelativeMovement(yawRad, { up = false, down = false, left = false, right = false } = {}) {
   const forward = (up ? 1 : 0) - (down ? 1 : 0);

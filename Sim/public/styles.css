@@ -159,3 +159,8 @@ input[type=number] { width: 64px; background: #101014; color: #eee; border: 1px 
 .layer table { border-collapse: collapse; width: 100%; } .layer td { vertical-align: top; padding: 1px 4px 1px 0; } .layer td:first-child { color: #9a948f; white-space: nowrap; }
 .status-bad { color: #ffb36b; } .status-ok { color: #e8e6e3; }
 a { color: #8ec9ff; }
+
+#rover-gallery figure { margin: 12px 0; }
+#rover-gallery img { display: block; width: 100%; height: auto; border-radius: 4px; }
+#rover-gallery figcaption { margin-top: 6px; font-size: 12px; }
+#rover-gallery button { margin-top: 4px; }

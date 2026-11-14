@@ -16,6 +16,18 @@
 
 **[KULLANICI BİLDİRDİ]** Alparslan regresyon kontrollerinin tümünün geçtiğini söyledi. Ayrıca 13 Kasım'da kullanıcı simülasyonun açıldığını, arayüzde “Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor)” uyarısını gördüğünü ve mevcut 3D görünümün hedef FPS deneyimine yakın olmadığını bildirdi. Bu kullanıcı gözlemleri bağımsız runtime kabulü değildir.
 
+## Güncel yürütme kararı — 14 Kasım 2026
+
+**Dosya ve Git ile doğrulandı:** Çalışma dalı `alparslan/stage14-kinematics-visuals-integration`, HEAD `18b4137`. Stage 13 rig pozları `653bf73`, Stage 14 suit/eklem ayrıntıları `e14b661`, renderer/kamera entegrasyonu `502d76c` ve son koordinat/HUD/view-model düzeltmeleri `18b4137` ile kaynakta mevcut. Aşağıdaki eski “Stage 13 sıradaki iş” ve “önce Stage 6” ifadeleri tarihsel plan olarak okunur; bu yürütme kararı onların yerine geçer. Stage 6 yeni USGS adayının ürün özelinde düşey datum kanıtı gelene kadar `needs_review` durumunda kalır; kullanıcı bu turda Stage 6 üzerinde çalışma istemedi.
+
+**Alparslan — sıradaki entegrasyon görevi: Stage 13/14 görsel kabulü.** Sahip olduğu dosya kümesi `Sim/public/js/main.js`, `Sim/public/js/view/3d/renderer.js`, `camera.js`, `Sim/scripts/smoke-e2e.mjs` ve görsel kabul raporudur; bu aşamada yalnız inceleme/planlama yapılır. Başlangıç, yürüyüş, sıçrama yükseliş/tepe/iniş, iniş toparlanması, duraklatma, bilinmeyen temas ve 2D fallback için mevcut smoke kapsamını ve eksik görüntüleri kaydeder. Kabul: her durum için gerçek tarayıcı gözlemi/görüntüsüyle alt kadrajdaki kolların ve gövdenin okunabilirliği, kesilme/örtüşme, kot bilinmezliği uyarısı ve fallback sonucu açıkça geçer/kalır diye raporlanır. Statik kod incelemesi veya mevcut PNG tek başına görsel kabul değildir. Uygulama/test çalıştırma ve kod değişikliği, kullanıcı ayrıca açıkça istemeden bu görev kapsamında yapılmaz; kusur bulunursa düzeltme ayrı tek kabul ölçütlü işe ayrılır.
+
+**Efe — paralel bağımsız rig denetimi.** Salt okunur dosya sınırı `Sim/public/js/view/3d/astronaut-rig.js` ve `Sim/test/astronaut-rig.test.mjs`; Alparslan'ın entegrasyon dosyalarını düzenlemez. `timeS`, hızlar, `grounded`, `airborne`, `phase`, `landingRecovery`, `landingRecoveryFrac` ve `groundContactStatus` girdileri için idle/walk/ascent/apex/descent/landing/unknown pozlarının deterministik beklenenlerini ve first-person parça listesini kısa bir denetim matrisiyle Alparslan'a verir. Kabul: her pozun girdi koşulu, beklenen eklem/alt kadraj davranışı ve bilinmeyen temas sınırı kaynak satırıyla gösterilir; fiziksel suit biyomekaniği iddiası kurulmaz. Görsel kabulde rig kaynaklı kusur bulunursa yalnız kendi rig dosyası/test kümesi için ayrı branch ve düzeltme görevi açılır; aynı dosyada eşzamanlı çalışma yapılmaz.
+
+**Doğrulama ayrımı:** Bu plan için kaynak/Git statik olarak incelendi; mevcut Stage 13/14 entegrasyonu bu turda uygulama, smoke veya birim testiyle çalıştırılmadı. Önceki test sayıları yeni görsel kabulün sonucu değildir. Entegrasyon ve son kabul sahibi Alparslan'dır.
+
+**Teslim ve paylaşım:** Alparslan ve Efe kendi görevleri bittiğinde yalnız ilgili dosyaları `git status` ve staged diff ile denetleyip kısa ömürlü kendi dallarında açıklayıcı commit atar ve remote'a push eder. Kullanıcıya commit hash'i, push sonucu ve çalıştırılmamış testleri açıkça bildirirler; push hatasında yerel commit'i paylaşılmış gibi sunmazlar. Mevcut kullanıcı belge, ekran görüntüsü, TIFF ve `.crdownload` değişiklikleri görev commit'lerine eklenmez. Efe'nin çıktısı yalnız inceleme raporuysa, commit ancak göreve ait bir dosya değişikliği gerçekten oluşturulmuşsa yapılır.
+
 ## 14 Kasım 2026 — USGS DTM migration bağımsız inceleme kararı
 
 **Durum: FAIL / kabul edilmedi.** `eb385ea` üzerindeki `codex/data-jezero-1m-dtm` commit’i yeni USGS Mars 2020 TRN HiRISE DTM Mosaic’e geçişi ve TIFF pencereli yükleyici/provider’ı ekledi; commit remote’a push edilmişti. Bağımsız inceleme, Stage 6 veri kaynağı kabulü için aşağıdaki engelleri buldu. Stage 13 hâlâ ayrı Efe görevidir, ancak şu anki sıradaki kod işi değildir: önce Alparslan bu blokları giderir ve bağımsız kabul ister.
@@ -25,7 +37,7 @@
 - Resmî ürün etiketi/SIS, provenance, datum ve lisans-kullanım QC kapısı kapatılmadı. USGS release sayfası hak bilgisini tam olarak “This work is marked with CC0 1.0 Universal” diye verir ([USGS data release](https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic)); bu kaynak ifadesi manifest/doğrulayıcıya bağlanmalı, dosya/ürün kimliği ve kullanım kaydı ayrıca doğrulanmalıdır.
 - Yeni migration için bağımsız kabul testi/çalıştırması yapılmadı. Stage 8–12 için geçmişte kaydedilmiş test sonuçları yeni terrain kabulü değildir.
 
-**Tek sonraki kod görevi (Alparslan):** çıkarıcıyı TIFF tag’leri/strip ve compression düzeni doğrulanmadan veri üretmeyecek biçimde fail-closed yap; manifestte kaynak, ürün kimliği, datum, lisans ve kullanım şartını birincil kayda bağla; kanonik frame/footprint ve raster dönüşümünü sayısal test/rezidüel kanıtıyla doğrula; ardından bağımsız review ve açıkça istenen kabul çalıştırmasına sun. HiRISE fallback ve legacy IMG/JP2’nin geçersiz olduğu kullanıcı bildirimi korunur. Stage 13 sonrasında ayrı işler olarak kalır.
+**Tarihsel Stage 6 kod görevi (Alparslan):** çıkarıcıyı TIFF tag’leri/strip ve compression düzeni doğrulanmadan veri üretmeyecek biçimde fail-closed yap; manifestte kaynak, ürün kimliği, datum, lisans ve kullanım şartını birincil kayda bağla; kanonik frame/footprint ve raster dönüşümünü sayısal test/rezidüel kanıtıyla doğrula; ardından bağımsız review ve açıkça istenen kabul çalıştırmasına sun. Güncel yürütme önceliği belgenin başındadır.
 
 İnceleme anında working tree’de legacy IMG/JP2 silme kayıtları ile camera/renderer/test/screenshot değişiklikleri ve TIFF/`.crdownload` untracked dosyaları vardı. Bunlar `eb385ea`’e veya yalnız notları kapsayan commit’e atfedilmez.
 
@@ -70,7 +82,7 @@ Veri katmanlarında kaynak, ürün/sürüm, atıf/lisans bilgisi, birim, düşey
 
 Tahminler bugünden ileriye yönelik odaklı çalışma saatidir; iki kişilik ekibin toplamı belirtilmedikçe Alparslan’ın entegrasyon/uygulama emeği içindir. İş paketleri kişinin daha önce belirli bir 3D kütüphanesini kullanmış olmasına bağlanmaz; kapsam, kabul ölçütü ve dosya sahipliği açıktır.
 
-Aşama numaraları yürütme sırası değildir. **Güncel durum (14 Kasım 2026):** Stage 8–12 tamamlandı (`f5259d2`, `9819da2`, `fbc623f`, `8054b1a`, `58660f0`; önceki test/FPS kayıtları tarihsel kabul raporlarıdır). Kullanıcı önceki DTM/orto dosyalarının geçersiz olduğunu bildirdi ve yeni 1 m GeoTIFF ekledi. `eb385ea` migration’ı bağımsız incelemede FAIL aldı; extractor, ürün metadata/provenance, lisans, frame/dönüşüm ve raster QC blokları kapatılmadan provider kabul edilmiş sayılmaz. Önce bu Stage 6 düzeltmeleri ve bağımsız kabul, sonra Stage 13 rig kinematiği ayrı branch’te yürür. Fallback davranışı korunur yalnız doğrulanmış ve kullanılabilir provider’a; geçersiz bildirilen yerel IMG/JP2 aktif provider/fallback değildir. Uygun provider yoksa yüzey katmanı `unavailable` kalır. Orto dosyası gelmedi; decoder/alignment ayrı iştir.
+Aşama numaraları yürütme sırası değildir. **Güncel durum (14 Kasım 2026):** Stage 8–12 tarihsel kabul kayıtlarına sahiptir; Stage 13/14 kodu ve entegrasyonu `653bf73`, `e14b661`, `502d76c` ve `18b4137` içinde bulunur. Güncel görsel kabul açık kalır; sonraki Alparslan/Efe görevleri bu belgenin başındaki yürütme kararındadır. Yeni USGS GeoTIFF adayının düşey referansı ürün özelinde kanıtlanmadığı için `needs_review` sürer; eski HiRISE fallback kodda korunur. Ortogörüntü decoder/hizalaması ayrı iştir.
 
 ### 1. MVP kapsamını sabitleme — TAMAMLANDI
 
@@ -188,7 +200,7 @@ Aşama numaraları yürütme sırası değildir. **Güncel durum (14 Kasım 2026
 - **Sahip:** Alparslan (simülasyon, config, kamera ve entegrasyon koordinatörü).
 - **Doğrulama:** Commit `58660f0` ile uygulandı; bağımsız `npm test` 29/29, `npm run smoke` 32/32 (59.3 FPS). Efe'nin `astronaut-rig.js` dosyasına dokunulmadı.
 
-### 13. Düşük Yerçekimi EVA Loping ve Sıçrama/İniş Poz Kinematiği (Efe)
+### 13. Düşük Yerçekimi EVA Loping ve Sıçrama/İniş Poz Kinematiği (Efe) — KODDA TAMAMLANDI; GÖRSEL KABUL AÇIK
 
 - **Amaç:** Apollo/Mars EVA araştırmalarındaki düşük yerçekimi sıçramalı yürüyüş döngüsü (loping gait), zıplamada havada süzülme (apex balance pose) ve inişte diz bükme/darbe emme (landing squash & recover) pozları. First-person view-model kollarda nefes ve adım salınımı.
 - **Dosya Sınırı:** Yalnızca `Sim/public/js/view/3d/astronaut-rig.js` ve buna ait birim testleri.
@@ -203,6 +215,12 @@ Aşama numaraları yürütme sırası değildir. **Güncel durum (14 Kasım 2026
 - **Sahip:** Efe (bağımsız astronot rig ve animasyon kinematiği).
 - **Bağımlılık:** Stage 10 astronot rig temeli ve Stage 12 movement API girdileri. Raster/provider migration’ına teknik bağımlılığı yoktur. Ayrı clone/branch’te, `astronaut-rig.js` ve kendi test dosyalarıyla paralel yürütülebilir; ortak OneDrive checkout’unda eşzamanlı Git işlemi yapılmaz.
 - **Kabul:** Deterministik çıktı: aynı hareket durum parametreleri için aynı eklem açıları/poz transformları üretilir. Bilinmeyen veya tanımsız girdide nötr güvenli poza döner. WebGL veya DOM nesnesi üretmez. Birim testleri yalnız kullanıcı test çalıştırmaya izin verirse çalıştırılır; varsayılan iş akışına test çalıştırma dahil değildir.
+
+### 14. EVA suit ayrıntıları ve first-person entegrasyonu — KODDA MEVCUT; GÖRSEL KABUL AÇIK
+
+- **Dosya/Git kanıtı:** `e14b661` rig'e eldiven/göğüs ünitesi ve zincirli eklem verisi ekledi; `502d76c` kask/ayak bileği, kamera ve renderer entegrasyonunu; `18b4137` koordinat, HUD ve 1:1 first-person view-model düzeltmelerini içerir.
+- **Sınır:** Rig geometrisi ve pozları sunum amaçlıdır. Atmosfer shader'ı çevresel görseldir; Jezero anlık ölçümü veya astronot hareketine atmosfer kuvveti kanıtı değildir.
+- **Açık kabul:** Yürüyüş, sıçrama evreleri, iniş, duraklatma ve bilinmeyen yüzey temasında gerçek görüntü incelenmeden kadraj/örtüşme kalitesi kabul edilmiş sayılmaz. Başlıktaki Alparslan görsel kabulü ve Efe rig denetimi bu açık için tanımlanmıştır.
 
 ### Ayrı, bloke etmeyen veri/görsel işi — HiRISE JP2 ortogörüntü decode ve hizalama
 
@@ -224,7 +242,7 @@ Her bağımsız iş bir kabul ölçütü ve belirli bir dosya kümesiyle tanıml
 
 PLACES kaynağı, yeni raster geçişi, orto decoder/alignment, attribution/manifest QA, demo anlatısı ve Stage 13 rig animasyonu ayrı kabul ölçütlü şeritlerdir. `public/js/main.js`, `config.js`, `geo/` frame varsayımları ve snapshot/provider sözleşmeleri entegrasyon sıcak noktalarıdır: Alparslan koordine eder ve aynı anda tek sahibi olur. Rota hesabı halen `geo` ile `simulation` arasında dağılmıştır; yeni `route/` modülü açmayın. Stage 8 demo akışı tamamlanmıştır; bu eski “sıradaki Stage 8 planlama” ifadesi güncel değildir. Stage 6 metadata/QC ve extractor blokları kapatılıp bağımsız kabul alınana kadar Stage 13 paralel başlatılmaz; sonrasında ayrı branch/dosya kümesinde yürür. Orto dosyası henüz verilmediğinden decoder/alignment bağımsız iştir.
 
-### Güncel iş bölümü: Stage 8–12 tamamlandı; raster migration ve Stage 13 paralel şeritler
+### Tarihsel iş bölümü: Stage 8–12 sonrası raster migration ve Stage 13 planı
 
 | Sahip | Görev paketi | Dosya sınırı | Kabul ölçütü |
 |---|---|---|---|
@@ -256,7 +274,7 @@ Gerçek eşzamanlı çalışma/commit için her takım üyesi ve coding AI kendi
 - AI’lar her önemli, gözden geçirilebilir görev aşamasında ilgili değişiklikleri ayrı commit etsin; büyük işleri tek commit’e yığmasın. Commit öncesi `git status` ve staged diff kontrol edilsin; ilgisiz kullanıcı değişiklikleri eklenmesin. Kullanıcı onayı gereken durumda onay olmadan commit/push yapılmasın. Push başarısızsa hash ve engel raporlansın. Güvenlik/sertifika doğrulaması kapatılmasın.
 - Commit author kimliği AI’yı belirtmeli ve bir insanı taklit etmemeli. Ana dal entegrasyon sahibi tarafından PR/diff incelemesiyle birleştirilmeli. Testler yalnız kullanıcı istediğinde çalıştırılmalı; çalıştırılmayan test başarılıymış gibi raporlanmamalı.
 
-## Yeni raster geçişi ve kalan işler — 14 Kasım 2026
+## Tarihsel raster geçişi ve kalan işler — 14 Kasım 2026
 
 | Sahip | Uygulama durumu | Yarışma verisinden önce kalan |
 |---|---|---|

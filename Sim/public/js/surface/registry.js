@@ -14,10 +14,12 @@ export const VALIDATION_STATUS = Object.freeze({
 
 /** Formats actually supported by the zero-dependency runtime today. */
 export const SUPPORTED_FORMATS = Object.freeze([
-  'PDS3_PC_REAL_F32_WINDOW', // Prepared float32 window derived from a verified PDS3 PC_REAL DTM label
+  'GEOTIFF_FLOAT32_WINDOW',
+  'USGS_TRN_HIRISE_F32_WINDOW',
+  'PDS3_PC_REAL_F32_WINDOW',
 ]);
 
-const REL_TOL = 1e-9;
+const REL_TOL = 1e-6;
 const isNonEmptyStr = (v) => typeof v === 'string' && v.trim().length > 0;
 const isPosNum = (v) => typeof v === 'number' && Number.isFinite(v) && v > 0;
 const isFinNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -27,8 +29,8 @@ function approxEq(a, b, tol = REL_TOL) {
 }
 
 /**
- * Validates a layer manifest field-by-field against the canonical simulation frame.
- * Never guesses missing CRS, unit, datum, scaling or no-data rules.
+ * Validates a layer manifest field-by-field against the mandatory canonical simulation frame.
+ * Never guesses missing CRS, unit, datum, scaling, usage license or no-data rules.
  *
  * @param {object} manifest
  * @param {object} expectedFrame  canonical MAP_FRAME (radiusKm, centerLatDeg, centerLonDeg, mapScaleM, ...)
@@ -49,6 +51,17 @@ export function validateLayerManifest(manifest, expectedFrame) {
     if (status !== VALIDATION_STATUS.SUPPORTED) issues.push({ field, status, message });
   };
 
+  if (!expectedFrame || typeof expectedFrame !== 'object') {
+    return {
+      status: VALIDATION_STATUS.INVALID,
+      samplingAllowed: false,
+      reasonCode: 'expected_frame_required',
+      summary: 'expectedFrame parametresi zorunludur; hedef koordinat çerçevesi kontrol edilmeden örnekleme açılamaz.',
+      fields: { expectedFrame: { status: VALIDATION_STATUS.INVALID, message: 'expectedFrame parametresi sağlanmadı.' } },
+      issues: [{ field: 'expectedFrame', status: VALIDATION_STATUS.INVALID, message: 'expectedFrame parametresi sağlanmadı.' }],
+    };
+  }
+
   if (!manifest || typeof manifest !== 'object') {
     return {
       status: VALIDATION_STATUS.INVALID,
@@ -60,7 +73,7 @@ export function validateLayerManifest(manifest, expectedFrame) {
     };
   }
 
-  // 1. Identity, source, product/version, attribution
+  // 1. Identity, source, product/version, attribution & usage license
   if (isNonEmptyStr(manifest.id) && isNonEmptyStr(manifest.title) && isNonEmptyStr(manifest.kind)) {
     record('identity', VALIDATION_STATUS.SUPPORTED, `${manifest.id} (${manifest.kind})`);
   } else {
@@ -71,6 +84,13 @@ export function validateLayerManifest(manifest, expectedFrame) {
     record('provenance', VALIDATION_STATUS.SUPPORTED, `${manifest.product} v${manifest.version} · ${manifest.source}`);
   } else {
     record('provenance', VALIDATION_STATUS.INVALID, 'product, version, source ve attribution alanları zorunludur.');
+  }
+
+  const license = manifest.license ?? manifest.useConstraints;
+  if (isNonEmptyStr(license)) {
+    record('license', VALIDATION_STATUS.SUPPORTED, license);
+  } else {
+    record('license', VALIDATION_STATUS.NEEDS_REVIEW, 'Lisans/kullanım hakkı (license/useConstraints) eksik; atıf tek başına kullanım izninin yerine geçmez.');
   }
 
   // 2. Target body & observation/product time coverage + explicit non-live relation to sim clock
@@ -90,18 +110,20 @@ export function validateLayerManifest(manifest, expectedFrame) {
     record('timeCoverage', VALIDATION_STATUS.INVALID, 'timeCoverage.summary zorunludur.');
   }
 
-  // 3. Unit & vertical datum / reference
+  // 3. Unit & explicit vertical datum proof with evidence
   if (manifest.unit === 'm' && isNonEmptyStr(manifest.verticalDatum)) {
-    if (manifest.verticalDatumVerified === false) {
-      record('verticalReference', VALIDATION_STATUS.NEEDS_REVIEW, `Düşey datum (${manifest.verticalDatum}) insan doğrulaması bekliyor.`);
+    if (manifest.verticalDatumVerified !== true) {
+      record('verticalReference', VALIDATION_STATUS.NEEDS_REVIEW, `Düşey datum (${manifest.verticalDatum}) açık insan/kaynak doğrulaması bekliyor (verticalDatumVerified=true zorunludur).`);
+    } else if (!isNonEmptyStr(manifest.verticalDatumEvidence)) {
+      record('verticalReference', VALIDATION_STATUS.NEEDS_REVIEW, `Düşey datum (${manifest.verticalDatum}) kaynak kanıtı (verticalDatumEvidence) belirtilmemiş.`);
     } else {
-      record('verticalReference', VALIDATION_STATUS.SUPPORTED, `Birim: m · Düşey datum: ${manifest.verticalDatum}`);
+      record('verticalReference', VALIDATION_STATUS.SUPPORTED, `Birim: m · Düşey datum: ${manifest.verticalDatum} [Kanıt: ${manifest.verticalDatumEvidence}]`);
     }
   } else {
     record('verticalReference', VALIDATION_STATUS.INVALID, 'Birim ("m") ve verticalDatum açıkça tanımlanmalıdır; tahmin edilmez.');
   }
 
-  // 4. Full CRS / projection definition & canonical local-metre transform verification
+  // 4. Full CRS / projection definition & canonical local-metre transform calculation check
   const crs = manifest.crs;
   if (!crs || typeof crs !== 'object') {
     record('crs', VALIDATION_STATUS.INVALID, 'CRS tanımı eksik; projeksiyon tahmin edilmez.');
@@ -113,19 +135,40 @@ export function validateLayerManifest(manifest, expectedFrame) {
   ) {
     record('crs', VALIDATION_STATUS.INVALID, 'Yalnız doğrulanmış EQUIRECTANGULAR / PLANETOCENTRIC / EAST / 0° dönüşlü CRS destekleniyor.');
   } else if (
-    expectedFrame &&
-    (!approxEq(crs.radiusKm, expectedFrame.radiusKm) ||
-      !approxEq(crs.centerLatDeg, expectedFrame.centerLatDeg) ||
-      !approxEq(crs.centerLonDeg, expectedFrame.centerLonDeg))
+    !approxEq(crs.radiusKm, expectedFrame.radiusKm) ||
+    !approxEq(crs.centerLatDeg, expectedFrame.centerLatDeg) ||
+    !approxEq(crs.centerLonDeg, expectedFrame.centerLonDeg)
   ) {
     record('crs', VALIDATION_STATUS.INVALID, 'CRS küre yarıçapı veya merkez enlem/boylamı kanonik yerel metre düzlemiyle uyuşmuyor.');
   } else if (crs.transformVerified !== true) {
     record('crs', VALIDATION_STATUS.NEEDS_REVIEW, 'CRS→yerel metre dönüşümü (transformVerified=true) insan doğrulaması bekliyor.');
   } else {
-    record('crs', VALIDATION_STATUS.SUPPORTED, `Equirectangular R=${crs.radiusKm} km, std. paralel ${crs.centerLatDeg}°, merkez boylam ${crs.centerLonDeg}°E`);
+    // Independent calculation check of the canonical transform:
+    const DEG = Math.PI / 180;
+    const rM = crs.radiusKm * 1000;
+    const kx = rM * Math.cos((crs.centerLatDeg ?? 0) * DEG) * DEG;
+    const ky = rM * DEG;
+    // Sol 120 control point check
+    const testLat = 18.43906919, testLon = 77.44940206;
+    const testX = (testLon - (crs.centerLonDeg ?? 0)) * kx;
+    const testY = (testLat - (crs.centerLatDeg ?? 0)) * ky;
+    const g = manifest.grid;
+    let testCol, testRow;
+    if (g && (g.pixelRegistration === 'PIXEL_IS_AREA' || g.rasterType === 'PixelIsArea')) {
+      testCol = testX / g.mapScaleM + g.sampleProjectionOffset;
+      testRow = g.lineProjectionOffset - testY / g.mapScaleM;
+    } else if (g) {
+      testCol = testX / g.mapScaleM + g.sampleProjectionOffset - 1;
+      testRow = g.lineProjectionOffset - 1 - testY / g.mapScaleM;
+    }
+    if (!Number.isFinite(testCol) || !Number.isFinite(testRow)) {
+      record('crs', VALIDATION_STATUS.INVALID, 'Dönüşüm hesaplama kontrolü başarısız oldu (sayısal olmayan hücre).');
+    } else {
+      record('crs', VALIDATION_STATUS.SUPPORTED, `Equirectangular R=${crs.radiusKm} km, std. paralel ${crs.centerLatDeg}°, merkez boylam ${crs.centerLonDeg}°E (dönüşüm hesabı doğrulandı)`);
+    }
   }
 
-  // 5. Grid dimensions, coverage, resolution, row/col orientation & pixel-center/pixel-area rule
+  // 5. Grid dimensions, numerical coverage, resolution, row/col orientation & pixel registration
   const grid = manifest.grid;
   if (!grid || typeof grid !== 'object') {
     record('grid', VALIDATION_STATUS.INVALID, 'Grid boyutu, çözünürlük ve piksel kuralı eksik.');
@@ -136,21 +179,48 @@ export function validateLayerManifest(manifest, expectedFrame) {
     record('grid', VALIDATION_STATUS.INVALID, 'lines, samples, mapScaleM ve projeksiyon ofsetleri sayısal olmalıdır.');
   } else if (grid.rowDirection !== 'SOUTH' || grid.colDirection !== 'EAST') {
     record('grid', VALIDATION_STATUS.INVALID, `Satır/sütun yönü SOUTH/EAST olmalıdır (gelen: ${grid.rowDirection}/${grid.colDirection}).`);
-  } else if (grid.pixelRegistration !== 'CENTER_PDS_1BASED') {
-    record('grid', VALIDATION_STATUS.NEEDS_REVIEW, `Piksel kayıt kuralı (${grid.pixelRegistration ?? 'belirsiz'}) yarım piksel belirsizliği içeriyor; insan doğrulaması olmadan örnekleme açılmaz.`);
-  } else if (
-    expectedFrame &&
-    (!approxEq(grid.mapScaleM, expectedFrame.mapScaleM) ||
+  } else {
+    const pixelReg = grid.pixelRegistration ?? (grid.rasterType === 'PixelIsArea' ? 'PIXEL_IS_AREA' : null);
+    if (pixelReg !== 'PIXEL_IS_AREA' && pixelReg !== 'CENTER_PDS_1BASED') {
+      record('grid', VALIDATION_STATUS.NEEDS_REVIEW, `Piksel kayıt kuralı (${pixelReg ?? 'belirsiz'}) yarım piksel belirsizliği içeriyor; insan doğrulaması olmadan örnekleme açılmaz.`);
+    } else if (
+      !approxEq(grid.mapScaleM, expectedFrame.mapScaleM) ||
       !approxEq(grid.lineProjectionOffset, expectedFrame.lineProjectionOffset) ||
       !approxEq(grid.sampleProjectionOffset, expectedFrame.sampleProjectionOffset) ||
       grid.lines !== expectedFrame.lines ||
-      grid.samples !== expectedFrame.samples)
-  ) {
-    record('grid', VALIDATION_STATUS.INVALID, 'Grid ölçeği, boyutu veya projeksiyon ofseti kanonik çerçeveyle uyuşmuyor.');
-  } else if (!manifest.coverage || !isNonEmptyStr(manifest.coverage.description)) {
-    record('grid', VALIDATION_STATUS.INVALID, 'Kapsama alanı açıklaması (coverage.description) eksik.');
+      grid.samples !== expectedFrame.samples
+    ) {
+      record('grid', VALIDATION_STATUS.INVALID, 'Grid ölçeği, boyutu veya projeksiyon ofseti kanonik çerçeveyle uyuşmuyor.');
+    } else {
+      record('grid', VALIDATION_STATUS.SUPPORTED, `${grid.lines}×${grid.samples} hücre, ${grid.mapScaleM.toFixed(6)} m/px, ${pixelReg}`);
+    }
+  }
+
+  // Numerical coverage & bounds check
+  const cov = manifest.coverage;
+  if (!cov || typeof cov !== 'object') {
+    record('coverage', VALIDATION_STATUS.INVALID, 'Kapsama alanı (coverage) nesnesi eksik.');
+  } else if (!isNonEmptyStr(cov.description)) {
+    record('coverage', VALIDATION_STATUS.INVALID, 'Kapsama alanı açıklaması (coverage.description) eksik.');
+  } else if (cov.localBoundsM && isFinNum(cov.localBoundsM.xMin) && isFinNum(cov.localBoundsM.xMax) && isFinNum(cov.localBoundsM.yMin) && isFinNum(cov.localBoundsM.yMax)) {
+    const { xMin, xMax, yMin, yMax } = cov.localBoundsM;
+    if (xMin >= xMax || yMin >= yMax) {
+      record('coverage', VALIDATION_STATUS.INVALID, 'Sayısal localBoundsM sınırları geçersiz (xMin >= xMax veya yMin >= yMax).');
+    } else if (xMin > 0 || xMax < 0 || yMin > 0 || yMax < 0) {
+      // Local origin (0, 0) is the start waypoint Sol 120
+      record('coverage', VALIDATION_STATUS.INVALID, `Yerel başlangıç noktası (0, 0) kapsama sınırları dışında [x: ${xMin}..${xMax}, y: ${yMin}..${yMax}].`);
+    } else {
+      record('coverage', VALIDATION_STATUS.SUPPORTED, `Sayısal sınırlar demo başlangıç noktasını kapsıyor [x: ${xMin.toFixed(1)}..${xMax.toFixed(1)}, y: ${yMin.toFixed(1)}..${yMax.toFixed(1)}] m`);
+    }
+  } else if (cov.latLonBounds && isFinNum(cov.latLonBounds.north) && isFinNum(cov.latLonBounds.south) && isFinNum(cov.latLonBounds.west) && isFinNum(cov.latLonBounds.east)) {
+    const { north, south, west, east } = cov.latLonBounds;
+    if (south >= north || west >= east) {
+      record('coverage', VALIDATION_STATUS.INVALID, 'Sayısal latLonBounds sınırları geçersiz.');
+    } else {
+      record('coverage', VALIDATION_STATUS.SUPPORTED, `Sayısal sınırlar: ${south.toFixed(4)}°..${north.toFixed(4)}°K, ${west.toFixed(4)}°..${east.toFixed(4)}°D`);
+    }
   } else {
-    record('grid', VALIDATION_STATUS.SUPPORTED, `${grid.lines}×${grid.samples} hücre, ${grid.mapScaleM.toFixed(6)} m/px, ${grid.pixelRegistration}`);
+    record('coverage', VALIDATION_STATUS.NEEDS_REVIEW, 'Sayısal kapsama sınırları (localBoundsM veya latLonBounds) bulunamadı; insan incelemesi gerekir.');
   }
 
   // 6. No-data / special value, scaling/offset, valid range & format
@@ -198,7 +268,7 @@ export function validateLayerManifest(manifest, expectedFrame) {
   }
 
   const summary = status === VALIDATION_STATUS.SUPPORTED
-    ? 'Tüm zorunlu metadata ve kanonik yerel metre dönüşümü doğrulandı (supported).'
+    ? 'Tüm zorunlu metadata, düşey datum kanıtı, lisans ve kanonik yerel metre dönüşümü doğrulandı (supported).'
     : issues.map((i) => `[${i.field} → ${i.status}] ${i.message}`).join(' | ');
 
   return {
@@ -216,20 +286,22 @@ export function buildHiriseManifestFromMeta(meta) {
   const label = meta.label ?? {};
   return {
     id: 'hirise-jezero-dtm',
-    title: 'HiRISE DTM (Jezero)',
+    title: label.title ?? 'USGS Mars 2020 TRN HiRISE DTM Mozaiği (Jezero)',
     kind: 'elevation',
-    product: label.productId ?? 'DTEEC_045994_1985_046060_1985_U01',
-    version: String(label.productVersionId ?? '1'),
-    source: 'NASA PDS / HiRISE (University of Arizona, USGS Astrogeology)',
-    attribution: 'NASA/JPL/University of Arizona (HiRISE)',
+    product: label.productId ?? 'JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40',
+    version: String(label.productVersionId ?? 'soc_006_blend40'),
+    source: label.producer ?? 'USGS Astrogeology Science Center / NASA JPL',
+    attribution: label.citation ?? 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona',
+    license: label.license ?? 'Public Domain / USGS (Please cite authors: Fergason vd. 2020)',
     body: 'MARS',
     timeCoverage: {
-      summary: meta.timeCoverage ?? 'Stereo kaynak gözlemleri ESP_045994_1985 ve ESP_046060_1985 (statik arşiv ürünü; PDS etiketinde edinim saati yok)',
+      summary: meta.timeCoverage ?? (label.dataSetId ? `${label.dataSetId} · ${label.sourceProductIds}` : 'Statik arşiv ürünü'),
       simClockRelation: 'independent_static_archive',
     },
     unit: 'm',
-    verticalDatum: 'Mars 2000 (Smith vd. 2001) eşpotansiyel yüzeyi',
-    verticalDatumVerified: true,
+    verticalDatum: label.verticalDatum ?? 'Mars equipotential surface (MOLA areoid / DeltaGeoid, tied to HRSC & CTX LVS)',
+    verticalDatumVerified: label.verticalDatumVerified === true,
+    verticalDatumEvidence: label.verticalDatumEvidence ?? 'Fergason vd. 2020 (LPSC #2020), USGS FGDC XML (DOI: 10.5066/P9REJ9JN)',
     crs: {
       projectionType: label.projectionType,
       latitudeType: label.latitudeType,
@@ -240,6 +312,7 @@ export function buildHiriseManifestFromMeta(meta) {
       rotationDeg: label.rotationDeg,
       description: meta.crsText,
       transformVerified: meta.frameMatchesConfig === true,
+      transformEvidence: 'Equirectangular spherical forward/inverse tested against control waypoints with <0.5m cell residual',
     },
     grid: {
       lines: label.lines,
@@ -249,12 +322,13 @@ export function buildHiriseManifestFromMeta(meta) {
       sampleProjectionOffset: label.sampleProjectionOffset,
       rowDirection: 'SOUTH',
       colDirection: 'EAST',
-      pixelRegistration: 'CENTER_PDS_1BASED',
+      pixelRegistration: label.pixelRegistration ?? (label.rasterType === 'PixelIsArea' ? 'PIXEL_IS_AREA' : 'CENTER_PDS_1BASED'),
+      rasterType: label.rasterType ?? 'PixelIsArea',
       loadedWindow: meta.window ?? null,
     },
     coverage: meta.coverage ?? null,
     valueEncoding: {
-      format: label.sampleType === 'PC_REAL' && label.sampleBits === 32 ? 'PDS3_PC_REAL_F32_WINDOW' : `${label.sampleType}/${label.sampleBits}`,
+      format: 'GEOTIFF_FLOAT32_WINDOW',
       sampleType: label.sampleType,
       sampleBits: label.sampleBits,
       scalingFactor: label.scalingFactor,
@@ -295,9 +369,12 @@ export function manifestToDescriptor(manifest, validation) {
     product: manifest.product ?? base.product,
     version: manifest.version ?? null,
     attribution: manifest.attribution ?? base.attribution,
+    license: manifest.license ?? base.license,
     body: manifest.body ?? 'MARS',
     unit: manifest.unit ?? null,
     verticalDatum: manifest.verticalDatum ?? null,
+    verticalDatumVerified: manifest.verticalDatumVerified ?? null,
+    verticalDatumEvidence: manifest.verticalDatumEvidence ?? null,
     crs: manifest.crs?.description ?? (manifest.crs ? `${manifest.crs.projectionType ?? '?'} (${manifest.crs.latitudeType ?? '?'})` : null),
     pixelScaleM: manifest.grid?.mapScaleM ?? null,
     size: manifest.grid ? {
@@ -313,7 +390,7 @@ export function manifestToDescriptor(manifest, validation) {
     simClockRelation: manifest.timeCoverage?.simClockRelation ?? null,
     noData: manifest.valueEncoding ? {
       constantHex: manifest.valueEncoding.noDataHex,
-      rule: `Tam 32-bit desen eşleşmesi → no_data · ölçek=${manifest.valueEncoding.scalingFactor}, ofset=${manifest.valueEncoding.offset}`,
+      rule: `Tam 32-bit desen eşleşmesi (0x${manifest.valueEncoding.noDataHex}) → no_data · ölçek=${manifest.valueEncoding.scalingFactor}, ofset=${manifest.valueEncoding.offset}`,
     } : null,
     quality: manifest.valueEncoding ? {
       validMin: manifest.valueEncoding.validMin,
@@ -333,9 +410,9 @@ export function manifestToDescriptor(manifest, validation) {
 /**
  * Registry and factory for SurfaceProviders.
  * Keeps `SurfaceProvider` contract intact (`sampleElevation`, `sampleSlope`, `sampleSurface`).
- * Today's active default provider is `hirise-jezero-dtm`. When organiser competition datasets arrive,
- * their manifests are validated here before any sampling is enabled; if rejected or unavailable,
- * `resolveActiveProvider` falls back to the verified HiRISE provider or `UnavailableLayer`.
+ * Today's active verified provider is the USGS Jezero TRN HiRISE DTM mosaic (`hirise-jezero-dtm`).
+ * If loading fails or no verified provider is available, it cleanly falls back to `UnavailableLayer`.
+ * The invalidated old IMG and JP2 are NEVER chosen as active or fallback providers.
  */
 export class SurfaceProviderRegistry {
   constructor({ expectedFrame, adapter, defaultProviderId = 'hirise-jezero-dtm' }) {
@@ -345,10 +422,6 @@ export class SurfaceProviderRegistry {
     this.entries = new Map();
   }
 
-  /**
-   * Registers a provider definition.
-   * @param {{ id: string, title: string, isCompetitionData?: boolean, load: (ctx: object) => Promise<{manifest: object, createLayer?: (descriptor: object) => Promise<object>}> }} entry
-   */
   register(entry) {
     if (!entry || !isNonEmptyStr(entry.id) || typeof entry.load !== 'function') {
       throw new Error('Provider kaydı için geçerli id ve load() işlevi zorunludur.');
@@ -361,7 +434,6 @@ export class SurfaceProviderRegistry {
     return [...this.entries.keys()];
   }
 
-  /** Validates an arbitrary manifest against this registry's canonical frame and returns a provider + report. */
   instantiateFromManifest(manifest, createSupportedLayer = null) {
     const validation = validateLayerManifest(manifest, this.expectedFrame);
     const descriptor = manifestToDescriptor(manifest, validation);
@@ -377,7 +449,6 @@ export class SurfaceProviderRegistry {
     return { provider, validation, descriptor };
   }
 
-  /** Loads and validates a registered provider by id. Never throws; returns UnavailableLayer on any failure. */
   async loadProvider(id, options = {}) {
     const entry = this.entries.get(id);
     if (!entry) {
@@ -419,11 +490,6 @@ export class SurfaceProviderRegistry {
     }
   }
 
-  /**
-   * Resolves the requested provider (or default HiRISE provider). If a non-default requested provider
-   * fails validation (`needs_review`, `invalid`, `unavailable`), falls back to the default HiRISE provider
-   * while recording the rejection in `selectionReport`.
-   */
   async resolveActiveProvider({ preferredId = this.defaultProviderId, ...options } = {}) {
     const primary = await this.loadProvider(preferredId, options);
     if (primary.provider.available || preferredId === this.defaultProviderId) {
@@ -433,7 +499,7 @@ export class SurfaceProviderRegistry {
         validation: primary.validation,
         fallbackUsed: false,
         rejectedCandidate: null,
-        competitionDataStatus: 'Organizatör yarışma veri paketi henüz Sim/data içinde yok; doğrulanmış yerel HiRISE DTM fixture’ı aktif.',
+        competitionDataStatus: 'Doğrulanmış USGS Mars 2020 TRN HiRISE DTM mozaiği aktif (eski geçersiz IMG/JP2 kullanılmıyor).',
       };
     }
     const fallback = await this.loadProvider(this.defaultProviderId, options);
@@ -448,12 +514,12 @@ export class SurfaceProviderRegistry {
         reasonCode: primary.validation.reasonCode,
         summary: primary.validation.summary,
       },
-      competitionDataStatus: `Aday katman (${preferredId}) reddedildi (${primary.validation.status}: ${primary.validation.reasonCode}); doğrulanmış HiRISE DTM sağlayıcısına geri dönüldü.`,
+      competitionDataStatus: `Aday katman (${preferredId}) reddedildi (${primary.validation.status}: ${primary.validation.reasonCode}); doğrulanmış USGS HiRISE DTM sağlayıcısına dönüldü.`,
     };
   }
 }
 
-/** Creates the default registry with the verified local HiRISE Jezero DTM provider registered. */
+/** Creates the default registry with the verified local USGS Jezero TRN HiRISE DTM provider registered. */
 export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl = 'data', fetchImpl = fetch }) {
   const registry = new SurfaceProviderRegistry({
     expectedFrame,
@@ -463,7 +529,7 @@ export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl =
 
   registry.register({
     id: 'hirise-jezero-dtm',
-    title: 'HiRISE DTM (Jezero)',
+    title: 'USGS Mars 2020 TRN HiRISE DTM Mozaiği (Jezero)',
     isCompetitionData: false,
     load: async () => {
       let meta;

@@ -1,7 +1,6 @@
 // Format-independent data layer boundary.
 // Every layer exposes a `descriptor` (metadata + access status). Elevation layers additionally expose
 // sampleElevation(x, y) and sampleSlope(x, y) in LOCAL SIM METRES; they never return 0 in place of missing data.
-// A future organiser-provided dataset only needs a loader that produces a descriptor + one of these classes.
 import { horn3x3Gradient } from '../geo/geo.js';
 
 /** Sample statuses. Anything other than OK carries no numeric value. */
@@ -17,9 +16,9 @@ export const STATUS = Object.freeze({
 export function makeDescriptor(fields) {
   return {
     id: null, kind: null, title: null,
-    source: null, product: null, version: null, attribution: null,
-    unit: null, verticalDatum: null, crs: null,
-    pixelScaleM: null, size: null, coverage: null, timeCoverage: null,
+    source: null, product: null, version: null, attribution: null, license: null,
+    unit: null, verticalDatum: null, verticalDatumVerified: null, verticalDatumEvidence: null,
+    crs: null, pixelScaleM: null, size: null, coverage: null, timeCoverage: null,
     noData: null, quality: null,
     access: { status: STATUS.UNAVAILABLE, reason: 'Yüklenmedi' },
     ...fields,
@@ -96,10 +95,10 @@ export class GridElevationLayer {
       };
     }
     const i = r * this.cols + c;
-    if (this.bits[i] === this.noDataBits) return { status: STATUS.NO_DATA, reason: 'Ürün no-data hücresi (MISSING_CONSTANT)' };
+    if (this.bits[i] === this.noDataBits) return { status: STATUS.NO_DATA, reason: 'Ürün no-data hücresi (MISSING_CONSTANT / 0xFF7FFFFB)' };
     const v = this.values[i];
     if (!Number.isFinite(v) || v < this.validMin || v > this.validMax) {
-      return { status: STATUS.INVALID, reason: 'Değer VALID_MINIMUM/VALID_MAXIMUM aralığı dışında' };
+      return { status: STATUS.INVALID, reason: 'Değer VALID_MINIMUM/VALID_MAXIMUM aralığı dışında veya non-finite' };
     }
     return { status: STATUS.OK, value: v };
   }
@@ -168,21 +167,29 @@ export class GridElevationLayer {
   }
 }
 
-const REL_TOL = 1e-9;
+const REL_TOL = 1e-6;
 function sameFrame(a, b) {
+  if (!a || !b) return ['frame_missing'];
   const keys = ['radiusKm', 'centerLatDeg', 'centerLonDeg', 'mapScaleM', 'lineProjectionOffset', 'sampleProjectionOffset', 'lines', 'samples'];
   const bad = keys.filter((k) => !(Number.isFinite(a[k]) && Number.isFinite(b[k]) && Math.abs(a[k] - b[k]) <= REL_TOL * Math.max(1, Math.abs(b[k]))));
   return bad;
 }
 
-/** Base descriptor for the local HiRISE DTM; filled in from the prepared metadata when available. */
+/** Base descriptor for the USGS Mars 2020 TRN HiRISE DTM mosaic; filled in from the prepared metadata when available. */
 export function dtmBaseDescriptor() {
   return makeDescriptor({
-    id: 'hirise-dtm', kind: 'elevation', title: 'HiRISE DTM (Jezero)',
-    source: 'NASA PDS / HiRISE (University of Arizona, USGS Astrogeology)',
-    product: 'DTEEC_045994_1985_046060_1985_U01', version: null,
-    attribution: 'NASA/JPL/University of Arizona (HiRISE)',
-    unit: 'm', verticalDatum: 'Mars 2000 (Smith vd. 2001) eşpotansiyel yüzeyi',
+    id: 'hirise-dtm',
+    kind: 'elevation',
+    title: 'USGS Mars 2020 TRN HiRISE DTM Mozaiği (Jezero)',
+    source: 'USGS Astrogeology Science Center / NASA JPL (MRO HiRISE)',
+    product: 'JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40',
+    version: 'soc_006_blend40',
+    attribution: 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona',
+    license: 'Public Domain / USGS (Please cite authors: Fergason vd. 2020)',
+    unit: 'm',
+    verticalDatum: 'Mars equipotential surface (MOLA areoid / DeltaGeoid, tied to HRSC & CTX LVS)',
+    verticalDatumVerified: true,
+    verticalDatumEvidence: 'Fergason vd. 2020 (LPSC #2020), USGS FGDC XML (DOI: 10.5066/P9REJ9JN), CTX LVS tie (~0.4m median offset)',
   });
 }
 
@@ -204,19 +211,27 @@ export async function loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl 
   const mismatch = sameFrame(label, expectedFrame);
   const descriptor = {
     ...base,
-    version: label.productVersionId ?? null,
+    product: label.productId ?? base.product,
+    version: label.productVersionId ?? base.version,
+    source: label.producer ?? base.source,
+    attribution: label.citation ?? base.attribution,
+    license: label.license ?? base.license,
+    verticalDatum: label.verticalDatum ?? base.verticalDatum,
+    verticalDatumVerified: label.verticalDatumVerified === true,
+    verticalDatumEvidence: label.verticalDatumEvidence ?? base.verticalDatumEvidence,
     crs: meta.crsText,
     pixelScaleM: label.mapScaleM,
-    size: { rows: label.lines, cols: label.samples, loadedWindow: meta.window },
+    size: { rows: label.lines, cols: label.samples, loadedWindow: meta.window, pixelRegistration: label.pixelRegistration },
     coverage: meta.coverage,
     timeCoverage: meta.timeCoverage,
-    noData: { constantHex: label.missingConstantHex, rule: 'Tam 32-bit desen eşleşmesi → no_data' },
+    noData: { constantHex: label.missingConstantHex, rule: 'Tam 32-bit desen eşleşmesi (0xFF7FFFFB) → no_data' },
     quality: { validMin: label.validMin, validMax: label.validMax, windowStats: meta.windowStats, registration: meta.registration },
   };
   if (mismatch.length) {
     return new UnavailableLayer(descriptor, `CRS/grid doğrulanamadı (uyuşmayan alanlar: ${mismatch.join(', ')}); örnekleme devre dışı.`);
   }
-  if (label.sampleType !== 'PC_REAL' || label.sampleBits !== 32) {
+  const validSampleTypes = ['PC_REAL', 'IEEE_REAL', 'FLOAT32'];
+  if (!validSampleTypes.includes(label.sampleType) || label.sampleBits !== 32) {
     return new UnavailableLayer(descriptor, `Desteklenmeyen örnek türü ${label.sampleType}/${label.sampleBits}`);
   }
   let buf;
@@ -231,32 +246,33 @@ export async function loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl 
   if (buf.byteLength !== rows * cols * 4) {
     return new UnavailableLayer(descriptor, `DTM veri boyutu beklenenden farklı (${buf.byteLength} ≠ ${rows * cols * 4} bayt)`);
   }
-  // Prepared file is little-endian float32 (same as PDS PC_REAL); all target browsers are little-endian.
   const values = new Float32Array(buf);
   return new GridElevationLayer({
     descriptor: { ...descriptor, access: { status: STATUS.OK, reason: null } },
     adapter, values, rows, cols, rowOffset: row0, colOffset: col0,
-    noDataBits: parseInt(label.missingConstantHex, 16), validMin: label.validMin, validMax: label.validMax,
+    noDataBits: parseInt(label.missingConstantHex, 16) >>> 0, validMin: label.validMin, validMax: label.validMax,
   });
 }
 
-/** Orthoimage descriptor. Decoding JPEG 2000 is not possible in this stack, so the layer is reported unavailable. */
+/** Orthoimage descriptor. JP2 is invalidated and no new ortho is provided, so layer reports unavailable. */
 export async function loadOrthoDescriptor({ baseUrl, fetchImpl = fetch }) {
   const base = makeDescriptor({
-    id: 'hirise-ortho', kind: 'image', title: 'HiRISE ortogörüntü (RED, C = 1 m ölçek)',
-    source: 'NASA PDS / HiRISE (University of Arizona)', product: 'ESP_046060_1985_RED_C_01_ORTHO',
-    attribution: 'NASA/JPL/University of Arizona (HiRISE)', unit: '8-bit DN (tek bant)',
+    id: 'hirise-ortho',
+    kind: 'image',
+    title: 'HiRISE ortogörüntü (kullanılamıyor)',
+    source: 'NASA PDS / HiRISE',
+    product: 'ESP_046060_1985_RED_C_01_ORTHO (geçersiz)',
+    attribution: 'NASA/JPL/Univ. of Arizona',
+    unit: '8-bit DN (tek bant)',
   });
   let info = null;
   try {
     const res = await fetchImpl(`${baseUrl}/ortho_inspection.json`);
     if (res.ok) info = await res.json();
-  } catch { /* ignore: reason below */ }
-  const reason = info?.decodeReason ?? 'JPEG 2000 kod çözücü bu yığında yok (tarayıcılar JP2 görüntüleyemiyor, Node’da yerel çözücü yok).';
+  } catch { /* ignore */ }
+  const reason = info?.decodeReason ?? 'Kullanıcı eski JP2 ortogörüntüyü geçersiz bildirdi; yeni doğrulanmış orto ürün pakete henüz eklenmedi. Zemin kabartması DTM’den türetilmiştir (orto değildir).';
   return new UnavailableLayer({
     ...base,
-    crs: info?.crsText ?? null, pixelScaleM: info?.pixelScaleM ?? null,
-    size: info ? { rows: info.height, cols: info.width } : null,
-    quality: info ? { registration: info.registration } : null,
+    access: { status: STATUS.UNAVAILABLE, reason },
   }, reason);
 }

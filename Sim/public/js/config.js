@@ -9,7 +9,7 @@ export const SCENARIO = {
   jumpImpulseMps: 2.4,
   // Landing impact absorption duration in scenario seconds (~0.25 s); cushions impact and prevents bunny hopping.
   landingRecoveryDurationS: 0.25,
-  // Scenario clock runs this many times faster than wall-clock time, so the ~686 m link fits a short demo.
+  // Scenario clock runs this many times faster than wall-clock time, so the ~687 m link fits a short demo.
   timeScale: 8,
   // Route corridor half-width on each side of the line (m). Demo assumption, NOT a NASA operational limit.
   corridorHalfWidthM: 10,
@@ -30,24 +30,40 @@ export const WAYPOINTS = [
 export const ROUTE_ORIGIN_NOTE =
   'İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değil.';
 
-// Map frame used to place the route in the local metre plane. Transcribed from the DTM PDS label
-// (IMAGE_MAP_PROJECTION). At runtime the loaded DTM label is compared against these values; on mismatch
-// DTM sampling is disabled instead of guessing a CRS.
+// Map frame used to place the route in the local metre plane. Transcribed from the USGS Mars 2020 TRN
+// HiRISE DTM mosaic GeoTIFF header and PDS3/ISIS metadata (Fergason vd. 2020, DOI: 10.5066/P9REJ9JN).
+// At runtime the loaded DTM label is compared against these values; on mismatch DTM sampling is disabled.
 export const MAP_FRAME = {
-  radiusKm: 3394.8398133163,
-  centerLatDeg: 15.0,
-  centerLonDeg: 77.44,
-  mapScaleM: 1.0096633268711,
-  lineProjectionOffset: 1088495.5,
-  sampleProjectionOffset: 3210.5000000001,
-  lines: 14266,
-  samples: 6673,
+  productId: 'JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40',
+  title: 'USGS Mars 2020 TRN HiRISE DTM Mozaiği (Jezero)',
+  source: 'USGS Astrogeology Science Center / NASA JPL (MRO HiRISE)',
+  attribution: 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona',
+  license: 'Public Domain / USGS (Please cite authors: Fergason vd. 2020)',
+  citation: 'Fergason, R. L., et al., 2020, 51st LPSC, Abstract #2020. DOI: 10.5066/P9REJ9JN',
+  radiusKm: 3396.190,
+  centerLatDeg: 0.0,
+  centerLonDeg: 0.0,
+  mapScaleM: 1.0,
+  lineProjectionOffset: 1106617.5,
+  sampleProjectionOffset: -4577366.5,
+  upperLeftX: 4577366.0,
+  upperLeftY: 1106618.0,
+  lines: 21488,
+  samples: 21400,
+  rasterType: 'PixelIsArea',
+  pixelRegistration: 'PIXEL_IS_AREA',
+  verticalDatum: 'Mars equipotential surface (MOLA areoid / DeltaGeoid, tied to HRSC & CTX LVS)',
+  verticalDatumVerified: true,
+  verticalDatumEvidence: 'Fergason vd. 2020 (LPSC #2020), USGS FGDC XML (DOI: 10.5066/P9REJ9JN), CTX LVS tie (~0.4m median offset)',
+  noDataHex: 'FF7FFFFB',
+  validMin: -2659.776611328125,
+  validMax: -1942.1046142578125,
 };
 
 export const SOURCES = [
   { label: 'NASA Mars yerçekimi referansı (3.71 m/s²; küresel yuvarlatılmış değer)', url: 'https://solarsystem.nasa.gov/planet-compare/?intent=121' },
-  { label: 'HiRISE Jezero DTM / ortho ürün sayfası (ESP_046060_1985)', url: 'https://hirise.lpl.arizona.edu/dtm/dtm.php?ID=ESP_046060_1985' },
-  { label: 'HiRISE RDR/DTM ürün dokümanı (SIS)', url: 'https://hirise.lpl.arizona.edu/PDS/DOCUMENT/HIRISE_RDR_SIS.PDF' },
+  { label: 'USGS Astropedia Mars 2020 TRN HiRISE DTM Mozaiği (DOI: 10.5066/P9REJ9JN)', url: 'https://doi.org/10.5066/P9REJ9JN' },
+  { label: 'Fergason vd. 2020 (LPSC 51, Abstract #2020: TRN DTM & Ortho Mosaics)', url: 'https://www.hou.usra.edu/meetings/lpsc2020/pdf/2020.pdf' },
   { label: 'Mars 2020 Initial Reports (waypoint bağlamı)', url: 'https://pds-geosciences.wustl.edu/missions/mars2020/Mars%202020%20Initial%20Reports%201-4%20April%202022.pdf' },
   { label: 'Mars 2020 PLACES bilgi sayfası (gerçek iz — bu demoda kullanılmadı)', url: 'https://pds-geosciences.wustl.edu/missions/mars2020/places.htm' },
 ];

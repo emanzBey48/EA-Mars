@@ -39,10 +39,14 @@ function layerCard(d) {
     ['Metadata doğrulaması', valBadge],
     ['Ürün', esc(d.product) + (d.version ? ` (sürüm ${esc(d.version)})` : '')],
     ['Gövde', esc(d.body ?? 'MARS')],
-    ['Kaynak', esc(d.source)], ['Atıf', esc(d.attribution)],
-    ['Birim', esc(d.unit)], ['Düşey datum', esc(d.verticalDatum)], ['CRS', esc(d.crs)],
-    ['Piksel ölçeği', d.pixelScaleM ? `${d.pixelScaleM.toFixed(6)} m/piksel (HiRISE "C" = 1 m sınıfı)` : '—'],
-    ['Boyut / piksel kuralı', d.size ? `${d.size.rows} × ${d.size.cols} hücre` + (d.size.loadedWindow ? ` · yüklenen pencere ${d.size.loadedWindow.rows} × ${d.size.loadedWindow.cols}` : '') + (d.size.pixelRegistration ? ` · ${esc(d.size.pixelRegistration)} (satır:${esc(d.size.rowDirection)}, sütun:${esc(d.size.colDirection)})` : '') : '—'],
+    ['Kaynak', esc(d.source)],
+    ['Atıf', esc(d.attribution)],
+    ['Lisans / kullanım', esc(d.license ?? 'USGS / Public Domain (Please cite authors)')],
+    ['Birim', esc(d.unit)],
+    ['Düşey datum', esc(d.verticalDatum) + (d.verticalDatumEvidence ? ` <span class="muted small">(${esc(d.verticalDatumEvidence)})</span>` : '')],
+    ['CRS', esc(d.crs)],
+    ['Piksel ölçeği', d.pixelScaleM ? `${d.pixelScaleM.toFixed(4)} m/piksel (1 m TRN mozaik)` : '—'],
+    ['Boyut / piksel kuralı', d.size ? `${d.size.rows} × ${d.size.cols} hücre` + (d.size.loadedWindow ? ` · yüklenen pencere ${d.size.loadedWindow.rows} × ${d.size.loadedWindow.cols}` : '') + (d.size.pixelRegistration ? ` · ${esc(d.size.pixelRegistration)}` : '') : '—'],
     ['Kapsama', esc(d.coverage?.description)],
     ['Zaman kapsamı', esc(d.timeCoverage) + (d.simClockRelation === 'independent_static_archive' ? ' · simülasyon saatinden bağımsız statik arşiv verisi (canlı/eşzamanlı değil)' : '')],
     ['No-data', d.noData ? `${esc(d.noData.constantHex)} — ${esc(d.noData.rule)}` : '—'],
@@ -59,9 +63,9 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
   $('route-note').textContent = routeOriginNote;
   $('route-wps').innerHTML = waypoints.map((w) =>
     `<li><b>${w.label}</b>: ${w.latDeg.toFixed(8)}°K, ${w.lonDeg.toFixed(8)}°D (planetosentrik) → yerel (${w.local.x.toFixed(1)}, ${w.local.y.toFixed(1)}) m</li>`).join('') +
-    `<li>Düz çizgi uzunluğu (projeksiyon düzleminde): ${routeLengthM.toFixed(1)} m · Kaynak: Mars 2020 Initial Reports (PDS)</li>`;
+    `<li>Düz çizgi uzunluğu (yerel projeksiyon düzleminde): ${routeLengthM.toFixed(1)} m · Kaynak: Mars 2020 Initial Reports (PDS)</li>`;
   $('sources').innerHTML = sources.map((s) => `<li><a href="${s.url}" target="_blank" rel="noopener">${s.label}</a></li>`).join('') +
-    '<li>Görüntü/veri: NASA/JPL/University of Arizona (HiRISE).</li>';
+    '<li>Görüntü/veri: NASA / JPL-Caltech / University of Arizona / USGS Astrogeology Science Center.</li>';
   $('v-speed').textContent = `${scenario.walkSpeedMps} m/s senaryo hızı × ${scenario.timeScale} zaman hızlandırma (gerçek Mars yürüyüş hızı iddiası değil). 3D düşey ivme: ${scenario.marsGravityMps2} m/s² (NASA küresel referansı; Jezero yerel ölçümü değil). Space sıçrama girdisi ${scenario.jumpImpulseMps} m/s oyun varsayımıdır, suit performansı değildir.`;
 
   function renderLayerPanel(layers, terrain, currentCorridorM = corridorHalfWidthM) {
@@ -70,21 +74,21 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       : '';
     $('layers').innerHTML = regBanner + [layers.dtm.descriptor, layers.ortho?.descriptor].filter(Boolean).map(layerCard).join('');
     const notes = [];
-    if (!layers.ortho?.available) notes.push('Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor).');
+    if (!layers.ortho?.available) notes.push('Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor / geçersiz bildirildi).');
     if (!layers.dtm.available) notes.push(`DTM kullanılamıyor: ${layers.dtm.descriptor.access.reason}`);
     const legend = $('legend');
     if (terrain) {
       const grad = terrain.ramp.map(([t, c]) => `rgb(${c.join(',')}) ${t * 100}%`).join(',');
       legend.innerHTML = `<b>Zemin: DTM’den türetilmiş gölgeli kabartma + kot renklendirmesi</b> (ortogörüntü değil; görsel amaçlı)` +
         `<div class="bar" style="background:linear-gradient(90deg,${grad})"></div>` +
-        `<div class="row"><span>${terrain.zMin.toFixed(1)} m</span><span>Mars 2000 datumu</span><span>${terrain.zMax.toFixed(1)} m</span></div>` +
+        `<div class="row"><span>${terrain.zMin.toFixed(1)} m</span><span>MOLA areoid / DeltaGeoid</span><span>${terrain.zMax.toFixed(1)} m</span></div>` +
         `<div><span class="swatch"></span>${routeOriginNote}</div><div><span class="swatch corr"></span>senaryo koridoru (±${currentCorridorM} m, güvenlik sınırı değil) · <span class="swatch nd"></span>no-data</div>`;
     } else {
       legend.innerHTML = `<b>Zemin yok</b> — raster verisi kullanılamıyor; yalnız metre ızgarası.<div><span class="swatch"></span>${routeOriginNote}</div><div><span class="swatch corr"></span>senaryo koridoru (güvenlik sınırı değil)</div>`;
     }
     const rb = $('raster-banner'); rb.hidden = notes.length === 0; rb.textContent = notes.join(' ');
     $('v-calc-note').textContent = layers.dtm.available
-      ? `Kaynak: ${layers.dtm.descriptor.product}. Kot: en yakın DTM hücresi (Mars 2000 datumu, m). Eğim: aynı hücrede 3×3 Horn, hücre ${layers.dtm.cellSizeM.toFixed(4)} m; 9 hücrenin hepsi geçerli değilse eğim üretilmez. Konum↔hücre eşlemesinde ±0,5 piksel (≈0,7 m) kayıt belirsizliği vardır (bkz. Hizalama).`
+      ? `Kaynak: ${layers.dtm.descriptor.product}. Kot: en yakın DTM hücresi (MOLA areoid / DeltaGeoid datumu, m). Eğim: aynı hücrede 3×3 Horn, hücre ${layers.dtm.cellSizeM.toFixed(2)} m; 9 hücrenin hepsi geçerli değilse eğim üretilmez.`
       : 'DTM katmanı yüklenmediği için kot ve eğim hesaplanmıyor.';
   }
 
@@ -105,7 +109,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
 
     const e = surface.elevation;
     const s = surface.slope;
-    const ef = fmtSample(e, 2, 'm (Mars 2000 datumu)');
+    const ef = fmtSample(e, 2, 'm (MOLA areoid / DeltaGeoid)');
     if (!ef.ok) ef.text = `Yükseklik bilinmiyor — ${ef.text}`;
     const sf = fmtSample(s, 1, '°');
     $('v-elev').innerHTML = `<span class="${ef.ok ? 'status-ok' : 'status-bad'}">${esc(ef.text)}</span>` +

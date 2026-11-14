@@ -1,90 +1,94 @@
 {
   "generatedBy": "scripts/extract-dtm.mjs",
-  "generatedAt": "2026-11-12T16:19:15.078Z",
+  "generatedAt": "2026-11-14T08:08:52.074Z",
   "sourceFile": {
-    "name": "DTEEC_045994_1985_046060_1985_U01.IMG",
-    "bytes": 380814764,
-    "modified": "2026-11-12T13:11:18.026Z"
+    "name": "JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.tif",
+    "bytes": 1839545409,
+    "modified": "2026-11-14T07:22:34.319Z"
   },
   "dataFile": "dtm_subset.f32",
   "dataEncoding": "float32 little-endian, satır öncelikli, no-data bit deseni korunmuş",
   "label": {
-    "productId": "DTEEC_045994_1985_046060_1985_U01",
-    "productVersionId": "1",
-    "dataSetId": "MRO-M-HIRISE-5-DTM-V1.0",
-    "sourceProductIds": "(ESP_045994_1985, ESP_046060_1985)",
-    "producer": "ALFRED MCEWEN, USGS-ASTROGEOLOGY",
-    "recordBytes": 26692,
-    "imagePointer": 2,
-    "lines": 14266,
-    "samples": 6673,
+    "productId": "JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40",
+    "productVersionId": "soc_006_blend40",
+    "dataSetId": "Mars 2020 Terrain Relative Navigation (TRN) HiRISE DTM Mosaic",
+    "sourceProductIds": "6 stereo pairs: Jezero_E, Jezero_N, Jezero_C, Jezero_DL, Jezero_W, Jezero_CR (7 components)",
+    "producer": "USGS Astrogeology Science Center (Fergason, Hare, Mayer, Galuszka, Redding, Smith, Shinaman) in collab. with NASA JPL",
+    "recordBytes": 85600,
+    "imagePointer": 1,
+    "firstStripOffset": 172609,
+    "lines": 21488,
+    "samples": 21400,
     "bands": 1,
     "sampleBits": 32,
     "sampleType": "PC_REAL",
     "offset": 0,
     "scalingFactor": 1,
     "missingConstantHex": "FF7FFFFB",
-    "validMin": -2679.2,
-    "validMax": -2388.31,
-    "note": "Pixel values in this file represent elevations in meters above the martian equipotential surface (Mars 2000 Datum) defined by Smith, et al. (2001). Conversion from pixel units to geophysical units is given by the keyvalues for SCALING_FACTOR and OFFSET. This DTM was produced using ISIS and SOCET Set (copyright BAE Systems) software as described in Kirk et al. (2008).",
+    "validMin": -2659.776611328125,
+    "validMax": -1942.1046142578125,
     "projectionType": "EQUIRECTANGULAR",
     "latitudeType": "PLANETOCENTRIC",
     "positiveLongitude": "EAST",
-    "radiusKm": 3394.8398133163,
-    "centerLatDeg": 15,
-    "centerLonDeg": 77.44,
+    "radiusKm": 3396.19,
+    "centerLatDeg": 0,
+    "centerLonDeg": 0,
     "rotationDeg": 0,
-    "mapScaleM": 1.0096633268711,
-    "lineProjectionOffset": 1088495.5,
-    "sampleProjectionOffset": 3210.5000000001,
-    "minLatDeg": 18.305293550569,
-    "maxLatDeg": 18.548391096554,
-    "westLonDeg": 77.3833804,
-    "eastLonDeg": 77.50109494
+    "mapScaleM": 1,
+    "upperLeftX": 4577366,
+    "upperLeftY": 1106618,
+    "lineProjectionOffset": 1106617.5,
+    "sampleProjectionOffset": -4577366.5,
+    "rasterType": "PixelIsArea",
+    "pixelRegistration": "PIXEL_IS_AREA",
+    "verticalDatum": "Mars equipotential surface (MOLA areoid / DeltaGeoid, tied to HRSC & CTX LVS)",
+    "verticalDatumVerified": true,
+    "verticalDatumEvidence": "Fergason vd. 2020 (LPSC #2020), USGS FGDC XML (DOI: 10.5066/P9REJ9JN), CTX LVS tie (~0.4m median offset)",
+    "minLatDeg": 18.306799449686565,
+    "maxLatDeg": 18.669315006877746,
+    "westLonDeg": 77.22293307697142,
+    "eastLonDeg": 77.58396402093508,
+    "license": "Public Domain / USGS (Please cite authors: Fergason vd. 2020)",
+    "citation": "Fergason, R. L., et al., 2020, 51st LPSC, Abstract #2020. DOI: 10.5066/P9REJ9JN"
   },
   "frameMatchesConfig": true,
-  "crsText": "Equirectangular, küre R=3394.8398133163 km (merkez enlemdeki yerel yarıçap), merkez meridyen 77.44°E, standart enlem 15°, planetosentrik, doğu-pozitif",
+  "crsText": "Equirectangular, küre R=3396.19 km, merkez meridyen 0°E, standart enlem 0°, planetosentrik, doğu-pozitif",
   "window": {
-    "row0": 5915,
-    "col0": 3242,
-    "rows": 1669,
-    "cols": 1129,
+    "row0": 13147,
+    "col0": 12923,
+    "rows": 1676,
+    "cols": 1135,
     "marginCells": 500
   },
   "coverage": {
-    "description": "Yüklenen alt küme: satır 5915–7583, sütun 3242–4370 (0 tabanlı). Ürünün tamamı 14266×6673 hücre, enlem 18.3053–18.5484°, boylam 77.3834–77.5011°E.",
+    "description": "Yüklenen alt küme: satır 13147–14822, sütun 12923–14057 (0 tabanlı). Ürünün tamamı 21488×21400 hücre, enlem 18.3068–18.6693°, boylam 77.2229–77.5840°E.",
     "localBoundsM": {
-      "xMin": -505.79134195219183,
-      "xMax": 634.1185540852799,
-      "yMin": -1179.532125690952,
-      "yMax": 505.5959668569267
+      "xMin": -500.8804674297571,
+      "xMax": 634.1195325702429,
+      "yMin": -1175.2488485651556,
+      "yMax": 500.75115143484436
     },
     "latLonBounds": {
-      "north": 18.447602292188243,
-      "south": 18.419161855245324,
-      "west": 77.44056452883264,
-      "east": 77.46048181170927
+      "north": 18.447517164808104,
+      "south": 18.419242031065906,
+      "west": 77.44095190355284,
+      "east": 77.4601000400668
     }
   },
-  "timeCoverage": "Stereo kaynak gözlemleri (ESP_045994_1985, ESP_046060_1985); edinim tarihleri bu PDS etiketinde yok.",
+  "timeCoverage": "Mars 2020 Terrain Relative Navigation (TRN) HiRISE DTM Mosaic · 6 stereo pairs: Jezero_E, Jezero_N, Jezero_C, Jezero_DL, Jezero_W, Jezero_CR (7 components)",
   "windowStats": {
-    "valid": 1884301,
+    "valid": 1902260,
     "noData": 0,
     "invalid": 0,
-    "min": -2592.83154296875,
-    "max": -2546.7431640625
+    "min": -2592.678955078125,
+    "max": -2547.8369140625
   },
   "registration": {
     "checked": true,
-    "sameDims": true,
-    "sameCrs": true,
-    "jp2RasterType": "PixelIsArea",
-    "pdsConvention": "PDS3: 1 tabanlı LINE/SAMPLE piksel merkezi; X=(SAMPLE−SAMPLE_PROJECTION_OFFSET)·MAP_SCALE, Y=(LINE_PROJECTION_OFFSET−LINE)·MAP_SCALE",
-    "jp2MinusPdsCenterOffsetPx": {
-      "col": 0.5,
-      "row": 0.5
-    },
-    "note": "Aynı boyut ve CRS: evet. JP2 GeoTIFF (PixelIsArea) ile DTM PDS etiketi arasında piksel merkezinde 0.500 sütun / 0.500 satır fark var (≈0.71 m). Uygulama örneklenen katman olan DTM’nin PDS etiketini esas alır; bu yarım piksellik belirsizlik konum/kot gösteriminde belirtilir."
+    "rasterType": "PixelIsArea",
+    "pixelRegistration": "PIXEL_IS_AREA",
+    "convention": "GeoTIFF PixelIsArea: hücre merkezi = (X_ul + (col + 0.5)*scale, Y_ul - (row + 0.5)*scale); continuous col = X - 4577366.5, row = 1106617.5 - Y",
+    "note": "GeoTIFF PixelIsArea hücre merkezi dönüşümü doğrulanmıştır. No-data değeri 0xFF7FFFFB tam bit deseniyle korunmuştur."
   },
   "waypointCells": [
     {
@@ -93,34 +97,34 @@
         "x": 0,
         "y": 0
       },
-      "row": 6415,
-      "col": 3742,
-      "rowF": 6415.256988395238,
-      "colF": 3742.4504935864275
+      "row": 13647,
+      "col": 13423,
+      "rowF": 13647.251151434844,
+      "colF": 13423.380467429757
     },
     {
       "id": "sol164-roubion",
       "local": {
-        "x": 128.69232254761562,
-        "y": -674.0284385364503
+        "x": 133.28508485015482,
+        "y": -674.2965113387909
       },
-      "row": 7083,
-      "col": 3870,
-      "rowF": 7082.834408113034,
-      "colF": 3869.9111224144817
+      "row": 14322,
+      "col": 13557,
+      "rowF": 14321.547662773635,
+      "colF": 13556.665552279912
     }
   ],
   "routeCheck": {
-    "lengthM": 686.204,
+    "lengthM": 687.343,
     "samples": 681,
     "nonOkElevationSamples": 0,
     "slopeSamples": 681,
-    "elevMin": -2588.546,
-    "elevMax": -2568.352,
-    "elevStart": -2569.435,
-    "elevEnd": -2588.449,
-    "slopeMeanDeg": 4.691,
-    "slopeP90Deg": 8.36,
-    "slopeMaxDeg": 18.904
+    "elevMin": -2589.359,
+    "elevMax": -2567.98,
+    "elevStart": -2568.087,
+    "elevEnd": -2584.916,
+    "slopeMeanDeg": 4.446,
+    "slopeP90Deg": 8.003,
+    "slopeMaxDeg": 18.41
   }
 }

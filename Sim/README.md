@@ -69,41 +69,41 @@ Görev kabul ölçütleri ve daha ayrıntılı render/snapshot sözleşmesi depo
 
 ## Koordinatlar ve veri kararları
 
-- **Yerel düzlem:** x doğu, y kuzey, metre; orijin Sol 120 / WB1. Düzlem, DTM etiketindeki equirectangular
-  harita düzleminin orijine kaydırılmış hâlidir (küre R = 3394.8398 km, merkez meridyen 77.44°E, standart enlem 15°).
-  Bu projeksiyonda ölçek 15°’de doğrudur; ~18.4°K’de doğu-batı mesafeleri ≈ %1.8 fazla, kuzey-güney mesafeleri doğrudur.
-- **Piksel dönüşümü (PDS3 kuralı):** 1 tabanlı LINE/SAMPLE piksel merkezidir;
-  `X = (SAMPLE − SAMPLE_PROJECTION_OFFSET)·MAP_SCALE`, `Y = (LINE_PROJECTION_OFFSET − LINE)·MAP_SCALE`.
-  Kodda 0 tabanlı `(row, col)` = `(LINE−1, SAMPLE−1)`; hücre merkezleri tam sayılardır, satır güneye artar.
-- **JP2 karşılaştırması:** JP2 GeoTIFF anahtarları aynı CRS’i ve boyutu bildiriyor; ancak `PixelIsArea` olarak okunduğunda
-  JP2 piksel merkezleri DTM etiketine göre 0.5 sütun doğuda / 0.5 satır güneyde (≈0.71 m). Örneklenen katman DTM olduğu için
-  DTM etiketi esas alındı; bu yarım piksellik kayıt belirsizliği arayüzde belirtiliyor.
-- **Doğrulama:** Waypointler (6415, 3742) ve (7083, 3870) hücrelerine düşüyor; çizgi 686.204 m; 681 örneğin tamamı geçerli,
-  kot −2588.546…−2568.352 m, eğim ort. 4.691°, P90 8.36°, maks. 18.904° (`data/dtm_subset.json` → `routeCheck`).
-- **No-data:** `MISSING_CONSTANT 16#FF7FFFFB#` tam bit deseniyle → `no_data`; `VALID_MINIMUM/MAXIMUM` dışı → `invalid`.
+- **Yerel düzlem:** x doğu, y kuzey, metre; orijin Sol 120 / WB1. Düzlem, DTM mozaik başlığındaki equirectangular
+  harita düzleminin orijine kaydırılmış hâlidir (küre R = 3396.190 km, merkez meridyen 0.0°E, standart enlem 0.0°, planetosentrik).
+  Bu projeksiyonda ölçek ekvatorda (0°) doğrudur; ~18.4°K’de doğu-batı mesafeleri ≈ %5.4 fazla (1 / cos 18.4°), kuzey-güney mesafeleri doğrudur.
+- **Piksel dönüşümü (GeoTIFF PixelIsArea kuralı):**
+  Hücre merkezi (0 tabanlı satır/sütun):
+  `X = 4577366.5 + col`, `Y = 1106617.5 - row`.
+  Ters dönüşüm: `col = X - 4577366.5`, `row = 1106617.5 - Y`.
+  Hücre indeksi: `Math.round(col)`, `Math.round(row)`.
+- **Düşey datum:** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid; HRSC Level 5 ve CTX LVS DTM referanslı).
+- **Doğrulama:** Waypointler (13647, 13423) ve (14322, 13557) hücrelerine düşüyor; çizgi 687.343 m; 681 örneğin tamamı geçerli,
+  kot −2589.359…−2567.980 m, eğim ort. 4.446°, P90 8.003°, maks. 18.410° (`data/dtm_subset.json` → `routeCheck`).
+- **No-data:** `MISSING_CONSTANT` `0xFF7FFFFB` tam 32-bit bit deseniyle → `no_data`; `VALID_MINIMUM/MAXIMUM` dışı → `invalid`.
   Asla 0 ile değiştirilmez. Eğim: 3×3 Horn; dokuz hücreden biri geçersizse değer üretilmez.
-- **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere (satır 5915–7583, sütun 3242–4370) yüklenir; dışı
+- **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere (satır 13147–14822, sütun 12923–14057, 1,902,260 hücre, ~7.6 MB) yüklenir; dışı
   `out_of_bounds` (“yüklenen alt kümenin dışında”) olarak raporlanır.
-- **Ortogörüntü devre dışı:** Bu bağımlılıksız yığında JPEG 2000 kod çözücü yok. Zemin, DTM’den türetilmiş gölgeli kabartma +
-  kot renklendirmesidir ve ortogörüntü olarak adlandırılmaz.
-- **Yarışma verisi ve manifest doğrulaması:** Şu anda `Sim/data` içinde yalnızca doğrulanmış yerel HiRISE DTM fixture’ı vardır;
-  organizatörün yarışma verisi henüz mevcut değildir. Yeni bir katman eklendiğinde `public/js/surface/registry.js` içindeki
-  `validateLayerManifest` CRS, birim, düşey datum, piksel kayıt kuralı (`CENTER_PDS_1BASED`), ölçek/ofset ve no-data alanlarını
-  alan bazında denetler (`supported`, `needs_review`, `unavailable`, `invalid`). Belirsiz veya uyumsuz katmanlar sessizce
-  örneklenmez ve kot asla `0` ile doldurulmaz; uygulama doğrulanmış HiRISE sağlayıcısına veya `UnavailableLayer` durumuna geri dönerek oynanabilir kalır.
+- **Ortogörüntü durumu:** Eski JP2 kullanıcı tarafından geçersiz bildirildi; bağımlılıksız yığında yeni doğrulanmış orto pakete henüz eklenmedi.
+  Zemin, DTM’den türetilmiş gölgeli kabartma + kot renklendirmesidir ve ortogörüntü olarak adlandırılmaz.
+- **Manifest doğrulaması:** `public/js/surface/registry.js` içindeki `validateLayerManifest` CRS, birim, düşey datum kanıtı,
+  lisans/kullanım şartı, sayısal sınır kapsama ve piksel kayıt kuralını zorunlu `expectedFrame` parametresiyle alan bazında denetler (`supported`, `needs_review`, `unavailable`, `invalid`).
+  Belirsiz veya uyumsuz katmanlar sessizce örneklenmez ve kot asla `0` ile doldurulmaz; geçersiz bildirilen eski IMG/JP2 fallback olarak seçilmez,
+  doğrulanmış sağlayıcı yoksa katman açıkça `UnavailableLayer` durumunda kalır.
 
 ## Değer etiketleri
 
-- **Arşiv ürünü:** HiRISE DTM `DTEEC_045994_1985_046060_1985_U01` (m, Mars 2000 datumu), ortho `ESP_046060_1985_RED_C_01_ORTHO` (kullanılamıyor).
+- **Arşiv ürünü:** USGS Mars 2020 TRN HiRISE DTM Mozaiği `JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40` (m, MOLA areoid / DeltaGeoid datumu).
 - **Hesaplanan:** oyuncu konumunda en yakın hücre kotu; 3×3 Horn eğimi.
 - **Senaryo/UI:** konum, 1.2 m/s × 8 zaman hızlandırma, senaryo saati, ilerleme, sapma, ±10 m koridor.
 - **Rota kökeni:** İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değil (PLACES kullanılmadı).
 
 ## Kaynaklar
 
-- HiRISE Jezero ürünü: https://hirise.lpl.arizona.edu/dtm/dtm.php?ID=ESP_046060_1985
-- HiRISE RDR/DTM SIS: https://hirise.lpl.arizona.edu/PDS/DOCUMENT/HIRISE_RDR_SIS.PDF
+- USGS Astropedia TRN HiRISE DTM: https://doi.org/10.5066/P9REJ9JN
+- Fergason vd. 2020 (LPSC #2020): https://www.hou.usra.edu/meetings/lpsc2020/pdf/2020.pdf
+- NASA Mars Yerçekimi Referansı: https://solarsystem.nasa.gov/planet-compare/?intent=121
 - Mars 2020 Initial Reports: https://pds-geosciences.wustl.edu/missions/mars2020/Mars%202020%20Initial%20Reports%201-4%20April%202022.pdf
 - PLACES: https://pds-geosciences.wustl.edu/missions/mars2020/places.htm
 
-Görüntü/veri: NASA/JPL/University of Arizona (HiRISE).
+Görüntü/veri: NASA / JPL-Caltech / University of Arizona / USGS Astrogeology Science Center.

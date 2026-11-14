@@ -14,6 +14,12 @@
 
 **[KULLANICI BİLDİRDİ]** Etkinlik tarihleri 14–15 Kasım 2026 olarak bildirildi; bu tarih bilgisi resmi takvimden bağımsız doğrulanmış değildir.
 
+## Son bağımsız Stage 13 ve runtime doğrulaması — 14 Kasım 2026
+
+Stage 13 `astronaut-rig.js`/test teslimi bu daldaki mevcut koddur; bu doğrulama turunda kaynak değişmedi. Stage 13'e özel testler 7/7, `npm test` 241/241 geçti. Smoke testi önce sandbox'ın `127.0.0.1:9333` Edge DevTools bağlantısını `EACCES` ile engellemesi nedeniyle sayfa hedefi bulamadı; ardından `Sim/data/legacy-hirise/dtm_subset.f32` dosyasının gerçek raster yerine 132 baytlık Git LFS pointer'ı olduğu anlaşıldı. Yalnız bu LFS nesnesi çekildi; dosya 7.537.204 bayta ulaştı ve `git lfs fsck --objects --dry-run` başarılı oldu. Smoke yerel loopback erişimi olan çalıştırmada 32 kontrolden 26'sını geçti.
+
+**Alparslan'ın takip etmesi gereken smoke bulguları:** İlk 2D→3D açılışında terrain mesh, smoke'un 10 saniyelik bekleme penceresi içinde görünmedi (ölçülen ilk geçiş 10,975 ms; tekrar 2D→3D geçişi başarılı). Buna bağlı rig/mesh tanıları 6b/6i/6l boş kaldı. Kontrol 6h geçerli yüzey örneği (`sample=ok`) varken `grounded=false` ve kamera yönü testinde yaklaşık −4,45 m ilerleme bildirdi. Kontrol 5b, arşiv izi açıklamasındaki “güvenli rota bilgisi içermez” uyarısını smoke metin kontrolüne dahil etmiyor. Bu 6 başarısız kabul maddesi Stage 13 saf rig birim testlerinin başarısızlığı değildir; renderer/simülasyon/UI entegrasyon sahibi Alparslan'ın incelemesi gerekir. Smoke ekran görüntüleri HEAD'deki halleriyle geri yüklendi; kod değişmedi.
+
 **[KULLANICI BİLDİRDİ]** Alparslan regresyon kontrollerinin tümünün geçtiğini söyledi. Ayrıca 13 Kasım'da kullanıcı simülasyonun açıldığını, arayüzde “Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor)” uyarısını gördüğünü ve mevcut 3D görünümün hedef FPS deneyimine yakın olmadığını bildirdi. Bu kullanıcı gözlemleri bağımsız runtime kabulü değildir.
 
 ## ÜRÜN YÖNÜ GÜNCELLEMESİ — Minimap, otomatik rota ve tüm Mars kapsamı (14 Kasım 2026, akşam)
@@ -121,6 +127,8 @@ Dosya sahipliği kuralı korunur: **Efe** saf modüller (`route/`, `geo/`), doğ
 **Alparslan — sıradaki görev:** (1) Stage 15–18 (`c10e885`, `4bd5967`, `f223414`) kamera, rig, alt beden görünürlüğü ve Mars güneş aydınlatması ile 19B/20B/22B/24A için görsel kabul ve `smoke-e2e.mjs` senkronizasyonu (**25B**); (2) Efe'nin **23A/23B** modülleri teslim edildiğinde minimap rota/ısı haritası/`explainCell()` bağlantısı (**24B**) ve ardından 3D/HUD bağlantısı (**25**).
 
 **Efe — Stage 16 ve 19A–22A teslimleri; sıradaki 23A–23D görevleri:** Stage 16 `8e7173c`, Stage 19A–22A hazırlık paketleri (`c5d0e51`, `48e330b`, `d1abe35`, `4d6bd10`) kodda mevcut. Alparslan `04f12f4` ile 19B, 20B ve 22B'yi bağladı; 21B ortomozaik kaplaması hizalama kanıtı olmadığı için kapalı tutuldu. Efe'nin sıradaki bağımsız görevleri **23A** (`cost-model.js`), **23B** (`pathfinder.js` + `pathfinder.worker.js`), **23C** (`validate-route-planner.mjs`) ve **23D** (yeni commitler için birim test/regresyon eşlemesi) paketleridir.
+
+**Alparslan'ın son paylaşımları (14 Kasım 2026):** `origin/codex/stage24-minimap`, `origin/codex/stage24-minimap-selection`, `origin/codex/camera-eye-xy-alignment` ve Mars güneş geometrisi commitleri zaten bu dalın geçmişindeydi. Yeni `codex/camera-eye-test-expectations` (`a135d08`) kamera testi beklentisini 1,48 m'ye eşitledi; `codex/first-person-viewmodel-pose` (`3ff4976`) first-person torso/kol view-model pozuna rig hareketi ekledi, alt beden/world rig pozunu değiştirmedi. Bu iki kaynak commiti içeri alındı. Remote'daki `6c54f0e`/`25063e7` yol haritası kopyaları 23A/B/C'yi hâlâ açık gösterdiği için mevcut, daha güncel yol haritasının yerine alınmadı; burada yalnız güncel durum kaydedildi. Bu turda test, smoke veya tarayıcı çalıştırılmadı.
 
 **Doğrulama ayrımı:** Bu turda Git kaydı, README, ilgili kaynaklar ve audit statik olarak incelendi. Yeni commitler (`04f12f4..f223414`) için bu bağımsız incelemede test, smoke, uygulama veya tarayıcı çalıştırılmadı. Son runtime/görsel kabul sahibi Alparslan'dır; kullanıcı test yasağı sürdüğü için yeni test çalıştırılmaz.
 

@@ -264,6 +264,9 @@ export function hingedPart3D(id, rotationRad, extraOffset = [0, 0, 0]) {
 /**
  * Calculates hierarchical kinematics for a child part attached to a parent joint (e.g. glove on arm).
  * The child rotates with its own local joint rotation (wrist) and is carried by the parent's pivot rotation (shoulder).
+ * The returned rotationRad is the true orientation composition R = R_parent * R_child (child applied
+ * first, Euler order X then Y then Z as in rotateEuler), re-extracted to Euler angles. It is not a
+ * component-wise sum, which only approximates the composition for small angles.
  *
  * @param {string} childId
  * @param {string} parentId
@@ -309,18 +312,12 @@ export function chainedLimbPart(childId, parentId, parentRotationRad, childLocal
     finalCenter[2] - child.center[2],
   ];
 
-  // 7. Combined orientation: parent rotation + child local rotation
-  const rotationRad = [
-    parentRotationRad[0] + childLocalRotationRad[0],
-    parentRotationRad[1] + childLocalRotationRad[1],
-    parentRotationRad[2] + childLocalRotationRad[2],
-  ];
+  // 7. Combined orientation: true matrix composition R = R_parent * R_child (child applied first)
+  const rotationRad = matrixToEuler(
+    multiply3x3(eulerToMatrix(parentRotationRad), eulerToMatrix(childLocalRotationRad))
+  );
 
   return { offset, rotationRad };
-}
-
-function hingedPart(id, angleRad) {
-  return hingedPart3D(id, [angleRad, 0, 0]);
 }
 
 function rotateEuler([x, y, z], [rx, ry, rz]) {
@@ -332,6 +329,35 @@ function rotateEuler([x, y, z], [rx, ry, rz]) {
   const z2 = -sy * x + cy * z1;
   const cz = Math.cos(rz), sz = Math.sin(rz);
   return [cz * x2 - sz * y1, sz * x2 + cz * y1, z2];
+}
+
+// R = Rz(rz) * Ry(ry) * Rx(rx) applied to column vectors, matching rotateEuler's X -> Y -> Z order.
+// Verified against rotateEuler: Rx gives (y1, z1), Ry gives (x2, z2), Rz gives (x3, y3) with the same
+// sign conventions as the standard right-handed axis matrices.
+function eulerToMatrix([rx, ry, rz]) {
+  const cx = Math.cos(rx), sx = Math.sin(rx);
+  const cy = Math.cos(ry), sy = Math.sin(ry);
+  const cz = Math.cos(rz), sz = Math.sin(rz);
+  return [
+    [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
+    [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
+    [-sy, cy * sx, cy * cx],
+  ];
+}
+
+function multiply3x3(a, b) {
+  return a.map((row) => [0, 1, 2].map((col) => row[0] * b[0][col] + row[1] * b[1][col] + row[2] * b[2][col]));
+}
+
+// Inverse of eulerToMatrix for the same convention. Gimbal lock (|R[2][0]| ~ 1) sets rz = 0.
+function matrixToEuler(r) {
+  const clean = (v) => (Object.is(v, -0) ? 0 : v);
+  const clamped = Math.max(-1, Math.min(1, r[2][0]));
+  const ry = clean(-Math.asin(clamped));
+  if (Math.abs(r[2][0]) > 0.999999) {
+    return [clean(Math.atan2(-r[1][2], r[1][1])), ry, 0];
+  }
+  return [clean(Math.atan2(r[2][1], r[2][2])), ry, clean(Math.atan2(r[1][0], r[0][0]))];
 }
 
 function fixedPart() {

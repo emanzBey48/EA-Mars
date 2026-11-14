@@ -253,14 +253,15 @@ test('Stage 14: Hierarchical chained limb kinematics (chainedLimbPart)', () => {
   // Shoulder pitch rotation of 0.5 rad: glove must orbit shoulder joint
   const shoulderPitch = 0.5;
   const pitched = chainedLimbPart('leftGlove', 'leftArm', [shoulderPitch, 0, 0], [0, 0, 0]);
-  assert.equal(pitched.rotationRad[0], shoulderPitch);
+  assert.ok(Math.abs(pitched.rotationRad[0] - shoulderPitch) < 1e-9, 'Pure shoulder pitch survives matrix round-trip');
   assert.ok(Math.abs(pitched.offset[1]) > 0.1, 'Glove swung forward/backward with shoulder');
   assert.ok(Math.abs(pitched.offset[2]) > 0.02, 'Glove raised with shoulder swing');
 
-  // Combined shoulder swing + wrist local grip angle: rotations sum cleanly
+  // Combined shoulder swing + wrist local grip angle: true composition stays near the small-angle sum
+  // (exact composition is covered by the dedicated matrix-composition test below)
   const combined = chainedLimbPart('leftGlove', 'leftArm', [shoulderPitch, 0.1, 0], [-0.15, 0.05, 0]);
-  assert.ok(Math.abs(combined.rotationRad[0] - (shoulderPitch - 0.15)) < 1e-12);
-  assert.ok(Math.abs(combined.rotationRad[1] - 0.15) < 1e-12);
+  assert.ok(Math.abs(combined.rotationRad[0] - (shoulderPitch - 0.15)) < 0.1);
+  assert.ok(Math.abs(combined.rotationRad[1] - 0.15) < 0.1);
 });
 
 test('Stage 14: EVA Glove synchronization and grip angle across all animation regimes', () => {
@@ -277,10 +278,10 @@ test('Stage 14: EVA Glove synchronization and grip angle across all animation re
     peakSwingPose.parts.leftGlove.rotationRad[0] * peakSwingPose.parts.rightGlove.rotationRad[0] < 0,
     'At peak stride swing, gloves swing in opposite pitch directions'
   );
-  // Differential swing matches arms
+  // Differential swing follows arms (true rotation composition adds small second-order terms)
   assert.ok(
     Math.abs((peakSwingPose.parts.leftGlove.rotationRad[0] - peakSwingPose.parts.rightGlove.rotationRad[0]) -
-             (peakSwingPose.parts.leftArm.rotationRad[0] - peakSwingPose.parts.rightArm.rotationRad[0])) < 1e-12
+             (peakSwingPose.parts.leftArm.rotationRad[0] - peakSwingPose.parts.rightArm.rotationRad[0])) < 0.05
   );
   // Gloves maintain outward suit-clearance flare
   assert.ok(walkPose.parts.leftGlove.rotationRad[1] > 0);
@@ -343,5 +344,48 @@ test('Stage 14: First-person view-model compatibility across all poses (arms, gl
         );
       }
     }
+  }
+});
+
+test('Stage 14: chainedLimbPart composes parent and child orientation as a true rotation', () => {
+  const near = (actual, expected, msg) => assert.ok(Math.abs(actual - expected) < 1e-9, `${msg}: ${actual} vs ${expected}`);
+  const assertEulerNear = (actual, expected, msg) => expected.forEach((e, i) => near(actual[i], e, `${msg} axis ${i}`));
+
+  // Local reference: explicit axis matrices multiplied as Rz * Ry * Rx (X first, then Y, then Z).
+  const axisX = (a) => [[1, 0, 0], [0, Math.cos(a), -Math.sin(a)], [0, Math.sin(a), Math.cos(a)]];
+  const axisY = (a) => [[Math.cos(a), 0, Math.sin(a)], [0, 1, 0], [-Math.sin(a), 0, Math.cos(a)]];
+  const axisZ = (a) => [[Math.cos(a), -Math.sin(a), 0], [Math.sin(a), Math.cos(a), 0], [0, 0, 1]];
+  const mul = (A, B) => A.map((row) => B[0].map((_, j) => row.reduce((s, a, k) => s + a * B[k][j], 0)));
+  const matVec = (M, v) => M.map((row) => row.reduce((s, m, k) => s + m * v[k], 0));
+  const eulerMatrix = ([rx, ry, rz]) => mul(axisZ(rz), mul(axisY(ry), axisX(rx)));
+  const applyEuler = (euler, v) => matVec(eulerMatrix(euler), v);
+
+  // (1) Zero child rotation returns the parent orientation
+  const parentAngles = [0.3, 0.2, 0.1];
+  const parentOnly = chainedLimbPart('leftGlove', 'leftArm', parentAngles, [0, 0, 0]);
+  assertEulerNear(parentOnly.rotationRad, parentAngles, 'zero child rotation');
+
+  // (2) Same-axis rotations compose additively: Rx(0.3) * Rx(0.2) = Rx(0.5)
+  const sameAxis = chainedLimbPart('leftGlove', 'leftArm', [0.3, 0, 0], [0.2, 0, 0]);
+  assertEulerNear(sameAxis.rotationRad, [0.5, 0, 0], 'same-axis composition');
+
+  // (3) Different axes: result differs from the component sum and matches child-then-parent application
+  const parent = [0.5, 0, 0];
+  const child = [0, 0.5, 0];
+  const mixed = chainedLimbPart('leftGlove', 'leftArm', parent, child);
+  const componentSum = [parent[0] + child[0], parent[1] + child[1], parent[2] + child[2]];
+  assert.ok(
+    mixed.rotationRad.some((angle, i) => Math.abs(angle - componentSum[i]) > 1e-3),
+    'mixed-axis composition must differ from the plain component sum'
+  );
+  const v = [1.2, -0.7, 0.4];
+  const expectedVector = applyEuler(parent, applyEuler(child, v));
+  const actualVector = applyEuler(mixed.rotationRad, v);
+  expectedVector.forEach((e, i) => near(actualVector[i], e, `child-then-parent vector axis ${i}`));
+
+  // (4) All outputs are finite plain numbers
+  for (const result of [parentOnly, sameAxis, mixed]) {
+    assert.ok(result.rotationRad.every((angle) => Number.isFinite(angle)), 'rotationRad must be finite');
+    assert.ok(result.offset.every((value) => Number.isFinite(value)), 'offset must be finite');
   }
 });

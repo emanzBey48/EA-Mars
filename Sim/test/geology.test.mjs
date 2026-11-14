@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import {
   createGeologyIndex, lookupGeologicUnit, lookupGeologicUnitLocal,
   geologicBoundarySegments, geologicBoundarySegmentsToLocal, LOOKUP_STATUS, GEOLOGY_CAVEATS,
+  GEOLOGY_SNAPSHOT_CONTRACT, GEOLOGY_CAVEAT_TR, toGeologySnapshot, createGeologicContactField, nearestGeologicContactM,
 } from '../public/js/geo/geology.js';
 import { WAYPOINTS, MAP_FRAME } from '../public/js/config.js';
 import { adapterFromLabel } from '../public/js/geo/geo.js';
@@ -213,6 +214,127 @@ test('geology: boundary segments flag clip edges and convert to local metres', (
   const p = adapter.latLonToLocal(lat, lon);
   assert.deepEqual(local[0].xy[0], [p.x, p.y]);
   assert.throws(() => geologicBoundarySegmentsToLocal(segs, {}), TypeError);
+});
+
+const snap = (q) => toGeologySnapshot(lookup(realIndex, q.lonDeg ?? q[0], q.latDeg ?? q[1]), realIndex);
+
+test('geology snapshot contract: frozen, exact keys, real WB1/Roubion values', () => {
+  assert.ok(Object.isFrozen(GEOLOGY_SNAPSHOT_CONTRACT) && Object.isFrozen(GEOLOGY_SNAPSHOT_CONTRACT.keys));
+  for (const wp of WAYPOINTS) {
+    const s = snap(wp);
+    assert.deepEqual(Object.keys(s), [...GEOLOGY_SNAPSHOT_CONTRACT.keys]);
+    assert.ok(Object.isFrozen(s) && Object.isFrozen(s.positionalUncertaintyM) && Object.isFrozen(s.candidates));
+    assert.throws(() => { 'use strict'; s.unitCode = 'X'; }, TypeError);
+    assert.equal(s.status, 'ok');
+    assert.equal(s.unitCode, 'Njf');
+    assert.equal(s.unitName, 'Jezero floor unit');
+    assert.equal(s.onBoundary, false);
+    assert.deepEqual(s.candidates, []);
+    assert.deepEqual(s.positionalUncertaintyM, { min: 100, max: 200 });
+    assert.equal(s.mapScale, '1:75,000');
+    assert.equal(s.doi, 'https://doi.org/10.3133/sim3464');
+    assert.equal(s.citation, manifest.citation);
+    assert.equal(s.license, 'not_stated');
+    assert.match(s.caveatTr, /indikatif/);
+    assert.match(s.caveatTr, /100–200 m/);
+    assert.match(s.caveatTr, /saha gerçeği değildir/);
+    assert.match(s.caveatTr, /Mineraloji/);
+    assert.match(s.caveatEn, /not field truth/);
+  }
+  assert.ok(GEOLOGY_CAVEAT_TR.length < 220);
+  // Plain JSON-able data (no functions/undefined): survives a round trip unchanged.
+  assert.deepEqual(JSON.parse(JSON.stringify(snap(WAYPOINTS[0]))), snap(WAYPOINTS[0]));
+});
+
+test('geology snapshot contract: non-ok statuses never fabricate a unit', () => {
+  const outside = toGeologySnapshot(lookup(realIndex, 77.5, 18.5), realIndex);
+  const invalid = toGeologySnapshot(lookup(realIndex, NaN, 18.4), realIndex);
+  const noInput = toGeologySnapshot(undefined, realIndex);
+  const bogus = toGeologySnapshot({ status: 'ok-ish', unit: { code: 'Njf', name: 'x' } }, realIndex);
+  const forged = toGeologySnapshot({ status: 'outside_coverage', unit: { code: 'Njf', name: 'x' } }, realIndex);
+  assert.equal(outside.status, 'outside_coverage');
+  assert.equal(invalid.status, 'invalid_input');
+  assert.equal(noInput.status, 'invalid_input');
+  assert.equal(bogus.status, 'invalid_input');
+  for (const s of [outside, invalid, noInput, bogus, forged]) {
+    assert.equal(s.unitCode, null); assert.equal(s.unitName, null); assert.equal(s.onBoundary, false);
+    assert.deepEqual(s.candidates, []);
+    assert.deepEqual(Object.keys(s), [...GEOLOGY_SNAPSHOT_CONTRACT.keys]);
+    assert.match(s.caveatTr, /indikatif/);
+  }
+  const idx = createGeologyIndex(collection([
+    feat('Q', 'Right', { type: 'Polygon', coordinates: [sq(10, 0, 20, 10)] }, 7),
+    feat('P', 'Left', { type: 'Polygon', coordinates: [sq(0, 0, 10, 10)] }, 3),
+  ]));
+  const amb = toGeologySnapshot(lookup(idx, 10, 5), idx);
+  assert.equal(amb.status, 'ambiguous');
+  assert.equal(amb.unitCode, null);
+  assert.equal(amb.onBoundary, true);
+  assert.deepEqual(amb.candidates, [
+    { featureId: 3, unitCode: 'P', unitName: 'Left' }, { featureId: 7, unitCode: 'Q', unitName: 'Right' },
+  ]);
+  assert.ok(Object.isFrozen(amb.candidates[0]));
+  const edge = toGeologySnapshot(lookup(idx, 0, 5), idx); // exactly on an edge, single unit
+  assert.equal(edge.status, 'ok');
+  assert.equal(edge.onBoundary, true);
+  const noIndex = toGeologySnapshot(lookup(idx, 5, 5), null); // missing provenance -> nulls, caveats stay
+  assert.equal(noIndex.citation, null); assert.equal(noIndex.mapScale, null); assert.equal(noIndex.doi, null);
+  assert.match(noIndex.caveatTr, /indikatif/);
+});
+
+// Independent reference: segment distances straight from raw GeoJSON rings, local plane via adapter, no clip edges.
+function bruteForceContactM(geojson, bbox, ad, xM, yM) {
+  const eps = 1e-9;
+  const onClip = (a, b) => [0, 2].some((k) => Math.abs(a[0] - bbox[k]) <= eps && Math.abs(b[0] - bbox[k]) <= eps)
+    || [1, 3].some((k) => Math.abs(a[1] - bbox[k]) <= eps && Math.abs(b[1] - bbox[k]) <= eps);
+  let best = Infinity;
+  for (const f of geojson.features) {
+    for (const rings of (f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates)) {
+      for (const ring of rings) {
+        for (let i = 0; i + 1 < ring.length; i++) {
+          if (onClip(ring[i], ring[i + 1])) continue;
+          const A = ad.latLonToLocal(ring[i][1], ring[i][0]), B = ad.latLonToLocal(ring[i + 1][1], ring[i + 1][0]);
+          const dx = B.x - A.x, dy = B.y - A.y, l2 = dx * dx + dy * dy;
+          const t = l2 ? Math.max(0, Math.min(1, ((xM - A.x) * dx + (yM - A.y) * dy) / l2)) : 0;
+          best = Math.min(best, Math.hypot(xM - A.x - t * dx, yM - A.y - t * dy));
+        }
+      }
+    }
+  }
+  return best;
+}
+
+test('geology: nearest-contact distance matches brute force and excludes clip edges', () => {
+  const field = createGeologicContactField(realIndex, adapter);
+  assert.ok(Object.isFrozen(field));
+  const pts = WAYPOINTS.map((wp) => adapter.latLonToLocal(wp.latDeg, wp.lonDeg));
+  const measured = pts.map((p) => nearestGeologicContactM(field, { xM: p.x, yM: p.y }));
+  pts.forEach((p, i) => {
+    const ref = bruteForceContactM(corridor, realIndex.coverageBbox, adapter, p.x, p.y);
+    assert.ok(Math.abs(measured[i].distanceM - ref) < 1e-6, `${i}: ${measured[i].distanceM} vs ${ref}`);
+  });
+  // Measured through the project's local plane (the earlier audit's ~11.6/~22.1 m used a different projection).
+  assert.ok(Math.abs(measured[0].distanceM - 12.17) < 0.05, `WB1 ${measured[0].distanceM}`);
+  assert.ok(Math.abs(measured[1].distanceM - 22.82) < 0.05, `Roubion ${measured[1].distanceM}`);
+  assert.deepEqual([measured[0].unitCode, measured[1].unitCode], ['Njf', 'Nle']); // contact is with the neighbouring polygon's edge
+  // Random grid points agree with brute force too.
+  for (let i = 0; i < 40; i++) {
+    const x = -2500 + ((i * 7919) % 5000), y = -2500 + ((i * 104729) % 5000);
+    const got = nearestGeologicContactM(field, { xM: x, yM: y });
+    assert.ok(Math.abs(got.distanceM - bruteForceContactM(corridor, realIndex.coverageBbox, adapter, x, y)) < 1e-6);
+  }
+  // Clip edges are not contacts: a single square's only edges are clip edges -> no contact at all.
+  const sqIdx = createGeologyIndex(collection([feat('A', 'Sq', { type: 'Polygon', coordinates: [sq(0, 0, 1, 1)] }, 1)], [0, 0, 1, 1]));
+  const flat = { latLonToLocal: (lat, lon) => ({ x: lon * 1000, y: lat * 1000 }) };
+  assert.equal(nearestGeologicContactM(createGeologicContactField(sqIdx, flat), { xM: 500, yM: 500 }), null);
+  const pair = createGeologyIndex(collection([ // no declared bbox -> union bbox; only the shared edge x=1 is a contact
+    feat('A', 'L', { type: 'Polygon', coordinates: [sq(0, 0, 1, 1)] }, 1),
+    feat('B', 'R', { type: 'Polygon', coordinates: [sq(1, 0, 2, 1)] }, 2),
+  ]));
+  assert.ok(Math.abs(nearestGeologicContactM(createGeologicContactField(pair, flat), { xM: 600, yM: 100 }).distanceM - 400) < 1e-9);
+  for (const bad of [{ xM: NaN, yM: 0 }, {}, undefined]) assert.equal(nearestGeologicContactM(field, bad), null);
+  assert.equal(nearestGeologicContactM(null, { xM: 0, yM: 0 }), null);
+  assert.throws(() => createGeologicContactField(realIndex, {}), TypeError);
 });
 
 test('geology: manifest hashes match the data files after CRLF -> LF normalisation', () => {

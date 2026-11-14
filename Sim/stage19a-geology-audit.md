@@ -20,8 +20,8 @@ Kapsam: `public/js/geo/geology.js`, `test/geology.test.mjs`. Başka dosya deği�
 ## Waypoint sorguları (DOĞRULANDI; brute-force ray-cast ile çapraz doğrulandı)
 | Nokta | Sonuç | En yakın kontak |
 |---|---|---|
-| config Sol 120 / WB1 | ok, Njf (1150), sınır dışı | ~11,6 m |
-| config Sol 164 / Roubion | ok, Njf (1150) | ~22,1 m |
+| config Sol 120 / WB1 | ok, Njf (1150), sınır dışı | 12,17 m (proje yerel düzlemi; ilk tur ~11,6 m) |
+| config Sol 164 / Roubion | ok, Njf (1150) | 22,82 m (proje yerel düzlemi; ilk tur ~22,1 m) |
 | Trek WB1 | Njf | ~6,0 m |
 | Trek Roubion | Njf | ~30,4 m |
 Kontaklar ofset belirsizliğinden (100–200 m) çok yakın; Njf ataması indikatiftir, saha gerçeği değil. Yerel (0,0) ve Sol 164 yerel koordinatı gerçek adapter ile aynı sonucu verir.
@@ -35,7 +35,19 @@ Kontaklar ofset belirsizliğinden (100–200 m) çok yakın; Njf ataması indika
 `mars-trek/manifest.json` key_waypoints ile `config.js` WAYPOINTS arasındaki mesafe (eşdikdörtgen yaklaşım, R=3396190 m): WB1 ~26,0 m; Roubion ~305,1 m. Sol 120–164 arası: config ~686 m, Trek ~368 m. Birim iki varyantta da Njf (fark yok). Roubion 305 m fark kaynak tutarsızlığıdır; hangi koordinatın doğru olduğu bu turda çözülmedi (OLASI: Trek değerleri sondaj/ara nokta farkı). Config değişmedi; Alparslan karar verecek.
 
 ## Test sonuçları
-`cd Sim; node --test test/`: 66 test, 66 geçti, 0 kaldı (önceki 55 + 11 geology). `npm run smoke` çalıştırılmadı.
+`cd Sim; node --test test/geology.test.mjs`: 14/14; `node --test test/` (diğer ajanların eşzamanlı testleri dahil): 69/69. `npm run smoke` çalıştırılmadı.
+Düzeltme: proje yerel düzlemi (`adapterFromLabel(MAP_FRAME, WAYPOINTS[0])`) ile ölçülen en yakın kontak WB1 12,17 m (Njf), Roubion 22,82 m (komşu Nle poligon kenarı); yukarıdaki ~11,6/~22,1 m değerleri farklı projeksiyonla bulunmuştu. Test brute-force ile 1e-6 m'ye eşleşir.
+
+## Karar ve sözleşme (19B için)
+**Sözleşme (uygulandı, `geology.js`):** `GEOLOGY_SNAPSHOT_CONTRACT` (şema `marswalk.geology-snapshot.v1`, alan adı `geology`). `toGeologySnapshot(lookupResult, index)` her zaman aynı 12 anahtarlı, derin dondurulmuş düz nesne döner: `status` (`ok|outside_coverage|invalid_input|ambiguous`), `unitCode`, `unitName`, `onBoundary`, `candidates` (hep dizi; yalnız `ambiguous`'ta dolu: `{featureId, unitCode, unitName}`), `positionalUncertaintyM {min:100,max:200}`, `mapScale '1:75,000'`, `citation`, `doi`, `license 'not_stated'`, `caveatTr`, `caveatEn`. Yalnız `ok` birim taşır; diğer durumlar ve bilinmeyen status `unitCode/unitName: null`. Index yoksa citation/doi/mapScale null kalır, caveat kalır.
+**Belirsizlik kaynağı (DOĞRULANDI):** `sim3464_readme.txt` ve `sim3464_metadata.txt` (`horizpar`): "will have random offsets of about 100-200 meters from the surface operations CTX mosaic". Lisans: `accconst: None`.
+**Caveat metinleri:** TR `GEOLOGY_CAVEAT_TR`: "Harita ölçeğinde (1:75.000) birim ataması indikatiftir; konum belirsizliği ~100–200 m, saha gerçeği değildir. Mineraloji, güvenlik veya geçilebilirlik iddiası yoktur." EN `GEOLOGY_CAVEAT_EN` aynı anlamda. HUD'da atıf ve "lisans belirtilmemiş" ayrıca gösterilmeli.
+**Kontak mesafesi (uygulandı):** `createGeologicContactField(index, adapter)` bir kez kurulur (kırpma kenarları hariç, yerel metre); her karede `nearestGeologicContactM(field, {xM,yM})` → `{distanceM, featureId, unitCode}|null`. UI örneği: "kontağa ~12 m (harita belirsizliği 100–200 m)". Mesafe belirsizlikten küçükse birim ataması zayıf kabul edilmeli; "güvenli/emin" dili kullanılmamalı.
+
+**KARAR BEKLİYOR (sahip: Alparslan) — bunlar öneridir, uygulanmadı:**
+1. Waypoint kaynağı: öneri `config.js` (PDS Initial Reports) kanonik kalsın; Mars Trek koordinatları yalnız "referans" olarak gösterilsin. Ölçülen fark: WB1 ~26 m, Roubion ~305 m (eşdikdörtgen). Birim iki varyantta da Njf; 305 m farkın nedeni çözülmedi (OLASI: Trek ara nokta/sondaj konumu). Jeoloji belirsizliği (100–200 m) WB1 farkından büyük, Roubion farkından küçüktür.
+2. `.gitattributes`: öneri `Sim/data/** -text`. Neden: hash'lenmiş veri dosyalarına hiçbir platformda EOL dönüşümü uygulanmaz (PDF/JSON/GeoJSON dahil); `eol=lf` yalnız metin dosyalarını LF'ye zorlar, ikili dosyalarda gereksiz risk ve auto-detect belirsizliği taşır. Uygulanırsa mevcut CRLF'li çalışma kopyaları yeniden checkout/`git add --renormalize` ile doğrulanmalı (blob'un LF olduğu burada doğrulanmadı).
+3. Manifest hash doğrulayıcısı: kural 2 uygulanana dek metin dosyalarında CRLF→LF normalize edip hash'lemeli (test bugün bunu yapar); ikili dosyalarda (PDF) ham bayt. Kural uygulanınca normalizasyon kaldırılabilir. Manifest boyut/hash'leri LF baytlarına göre doğru; ham CRLF kopyalar uyuşmaz.
 
 ## 19B için açık işler (Alparslan)
 1. Yükleme: `main.js` içinde `fetch('data/usgs-sim3464-geology/jezero_geounits_corridor.geojson')` ve `manifest.json` (public servis yolu doğrulanmalı; veri `Sim/data/` altında, `public/` dışında), ardından `createGeologyIndex(geojson, { source: manifest })`. Başarısız yüklemede jeoloji kartı gizlenir, birim uydurulmaz.

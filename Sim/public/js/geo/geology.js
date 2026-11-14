@@ -20,7 +20,24 @@ export const GEOLOGY_CAVEATS = Object.freeze([
   'Birim kodu yalnız haritalanmış jeolojik birimi gösterir; mineraloji, güvenlik veya geçilebilirlik iddiası değildir.',
 ]);
 
-const SUPPORTED_GEOMETRY = new Set(['Polygon', 'MultiPolygon']);
+// Quoted source: readme/FGDC horizpar "random offsets of about 100-200 meters" (semi-controlled CTX vs surface-ops CTX).
+export const GEOLOGY_POSITIONAL_UNCERTAINTY_M = Object.freeze({ min: 100, max: 200 });
+export const GEOLOGY_LICENSE_NOT_STATED = 'not_stated'; // FGDC accconst "None"; no public-domain statement
+export const GEOLOGY_CAVEAT_TR = 'Harita ölçeğinde (1:75.000) birim ataması indikatiftir; konum belirsizliği ~100–200 m, saha gerçeği değildir. Mineraloji, güvenlik veya geçilebilirlik iddiası yoktur.';
+export const GEOLOGY_CAVEAT_EN = 'Map-scale (1:75,000) unit assignment is indicative; positional uncertainty ~100-200 m; not field truth. No mineralogy, safety or traversability claim.';
+
+// Stable WorldSnapshot field for Stage 19B (suggested name `geology`). Every snapshot has exactly these keys.
+export const GEOLOGY_SNAPSHOT_CONTRACT = Object.freeze({
+  schema: 'marswalk.geology-snapshot.v1',
+  snapshotField: 'geology',
+  keys: Object.freeze([
+    'status', 'unitCode', 'unitName', 'onBoundary', 'candidates', 'positionalUncertaintyM',
+    'mapScale', 'citation', 'doi', 'license', 'caveatTr', 'caveatEn',
+  ]),
+  statuses: Object.freeze(['ok', 'outside_coverage', 'invalid_input', 'ambiguous']),
+});
+
+const SUPPORTED_GEOMETRY =new Set(['Polygon', 'MultiPolygon']);
 
 function deepFreeze(value) {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -229,6 +246,65 @@ export function lookupGeologicUnitLocal(index, adapter, { xM, yM } = {}) {
   }
   const { latDeg, lonDeg } = adapter.localToLatLon(xM, yM);
   return lookupGeologicUnit(index, { lonDeg, latDeg });
+}
+
+const formatScale = (d) => (Number.isFinite(d) ? `1:${String(d).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` : null);
+
+/**
+ * Pure projection of a lookup result to the plain, deep-frozen object 19B puts into WorldSnapshot.geology.
+ * Only status 'ok' carries a unit; outside_coverage / invalid_input / ambiguous never fabricate one (an unknown
+ * status is treated as invalid_input). `candidates` is always an array (non-empty only for 'ambiguous').
+ */
+export function toGeologySnapshot(lookupResult, index) {
+  const r = lookupResult && typeof lookupResult === 'object' ? lookupResult : {};
+  const status = GEOLOGY_SNAPSHOT_CONTRACT.statuses.includes(r.status) ? r.status : LOOKUP_STATUS.INVALID;
+  const ok = status === LOOKUP_STATUS.OK && r.unit && typeof r.unit.code === 'string';
+  const cands = status === LOOKUP_STATUS.AMBIGUOUS && Array.isArray(r.candidates)
+    ? r.candidates.map((c) => ({ featureId: c.featureId, unitCode: c.code, unitName: c.name })) : [];
+  const p = index && index.provenance ? index.provenance : null;
+  return deepFreeze({
+    status,
+    unitCode: ok ? r.unit.code : null,
+    unitName: ok ? r.unit.name : null,
+    onBoundary: ok ? r.onBoundary === true : (status === LOOKUP_STATUS.AMBIGUOUS && Array.isArray(r.candidates)
+      && r.candidates.every((c) => c.relation === 'boundary')),
+    candidates: cands,
+    positionalUncertaintyM: { min: GEOLOGY_POSITIONAL_UNCERTAINTY_M.min, max: GEOLOGY_POSITIONAL_UNCERTAINTY_M.max },
+    mapScale: p ? formatScale(p.scaleDenominator) : null,
+    citation: p ? p.citation : null,
+    doi: p ? p.doi : null,
+    license: GEOLOGY_LICENSE_NOT_STATED,
+    caveatTr: GEOLOGY_CAVEAT_TR,
+    caveatEn: GEOLOGY_CAVEAT_EN,
+  });
+}
+
+/**
+ * Builds a frozen local-metre contact field (geologic contacts only: clipEdge runs are excluded) for repeated
+ * nearest-contact queries. adapter.latLonToLocal(latDeg, lonDeg) -> {x, y}. Build once, query every frame.
+ */
+export function createGeologicContactField(index, adapter) {
+  const segs = geologicBoundarySegmentsToLocal(geologicBoundarySegments(index).filter((s) => !s.clipEdge), adapter);
+  return deepFreeze({
+    schema: 'marswalk.geology-contacts.v1',
+    polylines: segs.map((s) => ({ featureId: s.featureId, unitCode: s.unitCode, xy: s.xy })),
+  });
+}
+
+/** Euclidean distance (m) from (xM, yM) to the nearest contact, or null when input/field is invalid or empty. */
+export function nearestGeologicContactM(field, { xM, yM } = {}) {
+  if (!field || field.schema !== 'marswalk.geology-contacts.v1' || !Number.isFinite(xM) || !Number.isFinite(yM)) return null;
+  let best = null;
+  for (const pl of field.polylines) {
+    for (let i = 0; i + 1 < pl.xy.length; i++) {
+      const [ax, ay] = pl.xy[i], [bx, by] = pl.xy[i + 1];
+      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((xM - ax) * dx + (yM - ay) * dy) / len2)) : 0;
+      const d = Math.hypot(xM - (ax + t * dx), yM - (ay + t * dy));
+      if (!best || d < best.distanceM) best = { distanceM: d, featureId: pl.featureId, unitCode: pl.unitCode };
+    }
+  }
+  return best ? Object.freeze(best) : null;
 }
 
 function onDeclaredBboxEdge(ax, ay, bx, by, bbox) {

@@ -9,8 +9,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AMBIENT_SCALE, MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, MARS_SUN_ANGULAR_RADIUS_RAD,
-  SKY_PARAMS, applyAerialPerspective, encodeOutput, hgLobe, linearToSrgb, luminance, marsHazeColor,
-  marsSkyAmbient, marsSkyRadiance, marsSunDiscRadiance, marsSunIrradiance, srgbToLinear, toneMap,
+  RIG_LIGHT_PARAMS, SKY_PARAMS, applyAerialPerspective, encodeOutput, hgLobe, linearToSrgb, luminance, marsHazeColor,
+  marsSkyAmbient, marsSkyRadiance, marsSunDiscRadiance, marsSunIrradiance, rigAmbientTint, srgbToLinear, toneMap,
 } from '../public/js/view/3d/sky-model.js';
 
 const norm = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
@@ -206,4 +206,39 @@ test('GLSL block is generated from the same constants as the JS mirror (no silen
 test('luminance uses Rec.709 weights', () => {
   assert.ok(Math.abs(luminance([1, 1, 1]) - 1) < 1e-12);
   assert.ok(Math.abs(luminance([1, 0, 0]) - 0.2126) < 1e-12);
+});
+
+test('rig light constants are generated into GLSL from RIG_LIGHT_PARAMS (no silent divergence)', () => {
+  const floatConst = (name) => {
+    const m = new RegExp(`const float ${name} = ([-0-9.e]+);`).exec(MARS_LIGHTING_GLSL);
+    assert.ok(m, `missing const float ${name}`);
+    return Number(m[1]);
+  };
+  const vecConst = (name) => {
+    const m = new RegExp(`const vec3 ${name} = vec3\\(([^)]*)\\);`).exec(MARS_LIGHTING_GLSL);
+    assert.ok(m, `missing const vec3 ${name}`);
+    return m[1].split(',').map((s) => Number(s.trim()));
+  };
+  const close = (a, b) => assert.ok(Math.abs(a - b) <= 1e-7, `${a} vs ${b}`);
+  close(floatConst('RIG_AMBIENT_WARM_KEEP'), RIG_LIGHT_PARAMS.ambientWarmKeep);
+  close(floatConst('RIG_F0'), RIG_LIGHT_PARAMS.dielectricF0);
+  close(floatConst('RIG_SPEC_PEAK'), RIG_LIGHT_PARAMS.specularPeak);
+  close(floatConst('RIG_SPEC_WIDTH_FLOOR'), RIG_LIGHT_PARAMS.specularWidthFloor);
+  close(floatConst('RIG_ENV_STRENGTH'), RIG_LIGHT_PARAMS.envReflectStrength);
+  vecConst('RIG_AMBIENT_COOL_TINT').forEach((v, i) => close(v, RIG_LIGHT_PARAMS.ambientCoolTint[i]));
+  assert.ok(/vec3 rigSkyAmbient\(vec3 ambient\)/.test(MARS_LIGHTING_GLSL), 'missing GLSL rigSkyAmbient');
+});
+
+test('rig ambient: warm sky tint is reduced while luminance is kept; grey input turns neutral-cool', () => {
+  const warm = [0.41, 0.18, 0.10];
+  const out = rigAmbientTint(warm);
+  assert.ok(out[0] / out[2] < warm[0] / warm[2], 'warm ratio not reduced');
+  assert.ok(Math.abs(luminance(out) - luminance(warm)) / luminance(warm) < 0.1, 'luminance drifted too much');
+  const grey = rigAmbientTint([0.2, 0.2, 0.2]);
+  assert.ok(grey[2] > grey[0], 'shaded grey should lean cool (blue >= red)');
+  assert.ok(grey.every((v) => v >= 0), 'ambient must stay non-negative');
+});
+
+test('rig ambient is a pure function of its input (deterministic)', () => {
+  assert.deepEqual(rigAmbientTint([0.3, 0.2, 0.1]), rigAmbientTint([0.3, 0.2, 0.1]));
 });

@@ -10,7 +10,7 @@
 // changes elevation, slope, no-data cells, routes or mesh geometry.
 
 import { firstPersonLookDownFraction, getCameraPosition, getViewProjectionMatrix } from './camera.js';
-import { ASTRONAUT_RIG, FIRST_PERSON_LOWER_BODY_PARTS, FIRST_PERSON_RIG_PARTS, poseAstronautRig } from './astronaut-rig.js';
+import { ASTRONAUT_RIG, FIRST_PERSON_LOWER_BODY_PARTS, FIRST_PERSON_RIG_PARTS, poseAstronautRig, resolvePartMaterial } from './astronaut-rig.js';
 import { MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, SKY_PARAMS, luminance, marsSunIrradiance } from './sky-model.js';
 import { TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS } from './terrain-shading.js';
 import {
@@ -66,7 +66,8 @@ void main() {
   gl_Position = uViewProjection * vec4(worldPosition, 1.0);
 }`;
 
-// Render passes: 0 terrain, 1 guides/lines (emissive), 2 astronaut rig, 3 sky dome, 4 shadow depth only.
+// Render passes: 0 terrain, 1 guides/lines/beacons (emissive), 2 astronaut rig (material-lit), 3 sky dome,
+// 4 shadow depth only, 5 footprint decal (terrain-lit, no emissive).
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
@@ -98,6 +99,8 @@ uniform vec3 uShadowLightDir;
 uniform int uShadowMode;
 uniform float uReceiveShadow;
 uniform vec3 uSkySunDir;
+uniform vec3 uPartAlbedo; // rig pass: linear albedo of the current part (from part.material)
+uniform vec2 uPartRoughMetal; // rig pass: x = roughness, y = metallic
 out vec4 outColor;
 ${MARS_LIGHTING_GLSL}
 ${TERRAIN_SHADING_GLSL}
@@ -200,16 +203,40 @@ void main() {
     return;
   }
 
-  // Pass 2: astronaut EVA suit and first-person view-model arms/gloves/chest pack.
-  vec3 albedo = srgbToLinear(clamp(uBaseColor * vColor, 0.0, 1.0));
+  if (uRenderPass == 5) {
+    // Footprint decal (presentation, görsel iz): dark regolith lit like the terrain. No emissive term, so it
+    // darkens in shadow and never glows; uAlpha * vAlpha gives the per-footprint fade.
+    vec3 decal = srgbToLinear(clamp(uBaseColor * vColor, 0.0, 1.0));
+    float ndotlD = max(dot(normal, sunDir), 0.0);
+    float shadowD = shadowFactor(vWorldPos, normal);
+    vec3 litD = decal * (marsSunIrradiance(sunDir) * (ndotlD * shadowD) + marsSkyAmbient(normal, sunDir));
+    litD = applyAerialPerspective(litD, dist, rayV, skySunDir, HAZE_DENSITY, HAZE_MAX);
+    outColor = finishColor(litD, uAlpha * vAlpha);
+    return;
+  }
+
+  // Pass 2: astronaut EVA suit and first-person view-model. Material = linear albedo, roughness, metallic
+  // (uniforms from part.material). Dielectric parts get a diffuse lobe plus a faint sun/sky specular;
+  // metallic parts (visor, coupling rings) reflect the sky dome with their own albedo as F0.
+  float roughness = clamp(uPartRoughMetal.x, 0.02, 1.0);
+  float metallic = clamp(uPartRoughMetal.y, 0.0, 1.0);
+  vec3 F0 = mix(vec3(RIG_F0), uPartAlbedo, metallic);
+  vec3 diffuseAlbedo = uPartAlbedo * (1.0 - metallic);
   float ndotl = max(dot(normal, sunDir), 0.0);
   float shadow = shadowFactor(vWorldPos, normal);
   vec3 sunIrr = marsSunIrradiance(sunDir);
-  vec3 ambient = marsSkyAmbient(normal, sunDir);
+  vec3 ambient = rigSkyAmbient(marsSkyAmbient(normal, sunDir));
   vec3 halfVec = normalize(sunDir + viewDir);
-  float spec = pow(max(dot(normal, halfVec), 0.0), 32.0) * 0.12 * ndotl * shadow;
-  float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.35;
-  vec3 lit = albedo * (sunIrr * (ndotl * shadow) + ambient) + sunIrr * spec + ambient * rim;
+  float ndoth = max(dot(normal, halfVec), 0.0);
+  float lobeWidth = max(roughness * roughness, RIG_SPEC_WIDTH_FLOOR);
+  float sunLobe = exp(-(1.0 - ndoth) / lobeWidth) * RIG_SPEC_PEAK;
+  vec3 specSun = F0 * sunIrr * (ndotl * shadow * sunLobe);
+  float ndotv = max(dot(normal, viewDir), 0.0);
+  vec3 fresnel = F0 + (1.0 - F0) * pow(1.0 - ndotv, 5.0);
+  float gloss = (1.0 - roughness) * (1.0 - roughness);
+  vec3 envRefl = marsSkyRadiance(reflect(-viewDir, normal), sunDir);
+  vec3 specEnv = fresnel * envRefl * (gloss * RIG_ENV_STRENGTH);
+  vec3 lit = diffuseAlbedo * (sunIrr * (ndotl * shadow) + ambient) + specSun + specEnv;
   lit = applyAerialPerspective(lit, dist, rayV, skySunDir, HAZE_DENSITY, HAZE_MAX);
   outColor = finishColor(lit, uAlpha);
 }`;
@@ -350,6 +377,16 @@ function createAstronautBuffers(gl, locations) {
   return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: indices.length };
 }
 
+// Per-part material uniforms, resolved once from the frozen rig template (linear albedo, roughness, metallic).
+const RIG_MATERIALS = Object.freeze(Object.fromEntries(
+  Object.keys(ASTRONAUT_RIG.parts).map((id) => [id, Object.freeze(resolvePartMaterial(ASTRONAUT_RIG.parts[id]))]),
+));
+function setRigMaterialUniforms(gl, locations, id) {
+  const material = RIG_MATERIALS[id];
+  gl.uniform3fv(locations.partAlbedo, material.albedoLinear);
+  gl.uniform2f(locations.partRoughMetal, material.roughness, material.metallic);
+}
+
 // Presentation-frame placement only; camera eye height and physical lower-body anchor remain 1.48 m.
 const FIRST_PERSON_VIEW_MODEL_ROOT_BELOW_EYE_M = 1.05;
 // Keep the presentation-only upper-body model in front of the near plane. Placing its cuboids
@@ -439,13 +476,16 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     skySunDir: uniform('uSkySunDir'),
     shadowMode: uniform('uShadowMode'),
     receiveShadow: uniform('uReceiveShadow'),
+    partAlbedo: uniform('uPartAlbedo'),
+    partRoughMetal: uniform('uPartRoughMetal'),
   };
   if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || locations.footprintAlpha < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
       !locations.partSize || !locations.partCenter || !locations.partOffset || !locations.partRotationRad ||
       !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass || !locations.alpha ||
       !locations.orthoTexFine || !locations.orthoTexCoarse || !locations.orthoUvFine || !locations.orthoUvCoarse || !locations.orthoMode || !locations.hasOrthoFine || !locations.hasOrthoCoarse ||
-      !locations.lightVP || !locations.shadowMap || !locations.shadowParams || !locations.shadowLightDir || !locations.shadowMode || !locations.receiveShadow || !locations.terrainBounds) {
+      !locations.lightVP || !locations.shadowMap || !locations.shadowParams || !locations.shadowLightDir || !locations.shadowMode || !locations.receiveShadow || !locations.terrainBounds ||
+      !locations.partAlbedo || !locations.partRoughMetal) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
   }
@@ -1072,12 +1112,10 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
             footprintAlphas[i * 6 + vertex] = alpha;
           }
         }
-        gl.uniform1i(locations.renderPass, 1);
+        // Own pass (5): terrain-lit dark decal, no emissive. World-space quads: identity transforms, receives shadow.
+        setIdentityObject(5);
+        gl.uniform1f(locations.receiveShadow, 1);
         gl.uniform1f(locations.alpha, 0.9);
-        gl.uniform3f(locations.objectOffset, 0, 0, 0);
-        gl.uniform1f(locations.headingRad, 0);
-        gl.uniform1f(locations.verticalScale, 1);
-        gl.uniform3f(locations.baseColor, 1, 1, 1);
         gl.disableVertexAttribArray(locations.normal);
         gl.vertexAttrib3f(locations.normal, 0, 0, 1);
         gl.disableVertexAttribArray(locations.color);
@@ -1162,6 +1200,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
           gl.uniform3fv(locations.rootOffset, presentedRootPose.rootOffset);
           gl.uniform3fv(locations.rootRotationRad, presentedRootPose.rootRotationRad);
+          setRigMaterialUniforms(gl, locations, id);
           gl.vertexAttrib3fv(locations.color, part.colorRgb);
           gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
           rigPartsDrawn.push(id);
@@ -1188,6 +1227,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
               gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
               gl.uniform3fv(locations.rootOffset, rigPose.rootOffset);
               gl.uniform3fv(locations.rootRotationRad, rigPose.rootRotationRad);
+              setRigMaterialUniforms(gl, locations, id);
               gl.vertexAttrib3fv(locations.color, part.colorRgb);
               gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
               rigPartsDrawn.push(id);

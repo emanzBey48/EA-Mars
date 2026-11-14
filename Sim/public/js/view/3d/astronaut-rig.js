@@ -48,9 +48,9 @@ const AXIS_SIDE_NOTE = 'Rig local +X is the PHYSICAL LEFT after heading + forwar
   'Use `side` for any user-facing label; ids are kept for backwards compatibility.';
 
 // ---- Palette (visual approach only; not a measured suit/body specification) ------------------
-const SUIT_WHITE = [0.86, 0.85, 0.81]; // warm off-white outer layer, below 1.0 so it does not clip in sunlight
-const SUIT_LIMB_WHITE = [0.84, 0.83, 0.79];
-const HELMET_WHITE = [0.88, 0.87, 0.84];
+const SUIT_WHITE = [0.92, 0.91, 0.88]; // off-white outer layer (sRGB), below 1.0 so it does not clip in sunlight
+const SUIT_LIMB_WHITE = [0.90, 0.89, 0.86];
+const HELMET_WHITE = [0.93, 0.92, 0.89];
 const METAL_GRAY = [0.55, 0.57, 0.60];
 const MODULE_GRAY = [0.58, 0.60, 0.63];
 const GLOVE_DARK = [0.20, 0.22, 0.25];
@@ -644,6 +644,25 @@ function part(id, size, center, pivot, colorRgb, materialKey) {
       metallic: material.metallic,
     },
   };
+}
+
+/**
+ * Pure material resolver for the renderer. Uses `part.material` (linear albedo, roughness, metallic) when it is
+ * valid; otherwise falls back to the legacy path: `colorRgb` (sRGB) converted to linear, matte dielectric.
+ * Returns fresh values; never mutates the frozen rig template.
+ */
+export function resolvePartMaterial(part) {
+  const m = part?.material;
+  const inUnit = (v) => Number.isFinite(v) && v >= 0 && v <= 1;
+  if (m && Array.isArray(m.albedoLinear) && m.albedoLinear.length === 3 && m.albedoLinear.every(inUnit) &&
+      inUnit(m.roughness) && inUnit(m.metallic)) {
+    return { albedoLinear: [...m.albedoLinear], roughness: m.roughness, metallic: m.metallic };
+  }
+  const color = part?.colorRgb;
+  if (!Array.isArray(color) || color.length !== 3 || !color.every(inUnit)) {
+    throw new TypeError('rig part requires a valid material or colorRgb in [0, 1]');
+  }
+  return { albedoLinear: color.map(srgbToLinear), roughness: 0.8, metallic: 0 };
 }
 
 export function hingedPart3D(id, rotationRad, extraOffset = [0, 0, 0]) {

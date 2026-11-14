@@ -29,6 +29,10 @@ export const TERRAIN_SHADING_PARAMS = Object.freeze({
   bedrockSrgb: Object.freeze([0.38, 0.24, 0.19]),
   // Converts the sRGB palette to a linear diffuse reflectance of plausible magnitude (sunum).
   albedoScale: 0.70,
+  // Fraction of the palette's linear chroma kept, at constant luminance (sunum). The warm sky ambient multiplies
+  // the albedo's R/B ratio several times over; without this the ground rendered at saturation ~0.85 (red-orange).
+  // 0.20 brings the rendered mid tone to ~0.55-0.6 saturation (butterscotch/regolith), measured in the browser.
+  paletteChromaKeep: 0.20,
   // Real-slope weighting (tan of the *physical* slope, exaggeration undone): 10° … 35° (sunum).
   slopeTanStart: Math.tan((10 * Math.PI) / 180),
   slopeTanEnd: Math.tan((35 * Math.PI) / 180),
@@ -37,10 +41,11 @@ export const TERRAIN_SHADING_PARAMS = Object.freeze({
   slopeRoughnessGain: 0.60,
   // Micro detail octaves (görsel detay, veri değildir). slopeAmp is the max per-axis slope perturbation
   // of that octave; toneAmp is the max relative albedo change.
+  // Tone amplitudes raised so the near field (0-20 m) shows grain and mottling; still below ~±12 % per octave.
   octaves: Object.freeze([
-    Object.freeze({ wavelengthM: 0.18, slopeAmp: 0.22, toneAmp: 0.07 }),
-    Object.freeze({ wavelengthM: 0.60, slopeAmp: 0.16, toneAmp: 0.06 }),
-    Object.freeze({ wavelengthM: 2.00, slopeAmp: 0.10, toneAmp: 0.05 }),
+    Object.freeze({ wavelengthM: 0.18, slopeAmp: 0.26, toneAmp: 0.12 }),
+    Object.freeze({ wavelengthM: 0.60, slopeAmp: 0.16, toneAmp: 0.10 }),
+    Object.freeze({ wavelengthM: 2.00, slopeAmp: 0.10, toneAmp: 0.07 }),
     Object.freeze({ wavelengthM: 6.50, slopeAmp: 0.05, toneAmp: 0.08 }),
   ]),
   // An octave fades out between wavelength×start and wavelength×end metres from the camera, i.e. before
@@ -71,7 +76,12 @@ const P = TERRAIN_SHADING_PARAMS;
 export const MICRO_DERIVATIVE_BOUND = 1.875; // max |d value-noise / d cell| of the quintic value noise
 export const MICRO_OCTAVE_SEED_STEP = Object.freeze([31.7, 57.3]); // per-octave cell offset (decorrelates octaves)
 
-const paletteLinear = (srgb) => srgb.map((v) => srgbToLinear1(v) * P.albedoScale);
+// Linear palette colour with its luminance preserved and its chroma scaled by paletteChromaKeep.
+const paletteLinear = (srgb) => {
+  const lin = srgb.map((v) => srgbToLinear1(v) * P.albedoScale);
+  const L = lin[0] * LUMA[0] + lin[1] * LUMA[1] + lin[2] * LUMA[2];
+  return lin.map((v) => L + P.paletteChromaKeep * (v - L));
+};
 export const PALETTE_LINEAR = Object.freeze({
   basin: Object.freeze(paletteLinear(P.basinSrgb)),
   delta: Object.freeze(paletteLinear(P.deltaSrgb)),

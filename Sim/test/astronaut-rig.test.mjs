@@ -10,9 +10,50 @@ import {
   strideLengthForSpeedM,
   froudeNumber,
   walkRunTransitionSpeedMps,
+  resolvePartMaterial,
 } from '../public/js/view/3d/astronaut-rig.js';
 
 const STATUS = Object.freeze({ OK: 'ok', NO_DATA: 'no_data', OUT_OF_BOUNDS: 'out_of_bounds', UNAVAILABLE: 'unavailable' });
+
+const srgbToLinearRef = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+
+test('rig material resolver: every part resolves to valid linear albedo, roughness and metallic', () => {
+  for (const [id, part] of Object.entries(ASTRONAUT_RIG.parts)) {
+    const m = resolvePartMaterial(part);
+    assert.equal(m.albedoLinear.length, 3, `${id} albedo length`);
+    assert.ok(m.albedoLinear.every((c) => c >= 0 && c <= 1), `${id} albedo in [0,1]`);
+    assert.ok(m.roughness >= 0 && m.roughness <= 1, `${id} roughness in [0,1]`);
+    assert.ok(m.metallic >= 0 && m.metallic <= 1, `${id} metallic in [0,1]`);
+    // The template's own albedoLinear is the authority when present (4-decimal rounding of sRGB->linear).
+    part.material.albedoLinear.forEach((c, i) => assert.equal(m.albedoLinear[i], c, `${id} albedo channel ${i}`));
+  }
+  assert.equal(resolvePartMaterial(ASTRONAUT_RIG.parts.visor).metallic, 1, 'visor is metallic gold');
+  assert.equal(resolvePartMaterial(ASTRONAUT_RIG.parts.leftWristRing).metallic > 0.5, true, 'coupling rings are metal');
+});
+
+test('rig material resolver: suit reads as off-white in linear light (bright, not beige-tinted)', () => {
+  const torso = resolvePartMaterial(ASTRONAUT_RIG.parts.torso).albedoLinear;
+  assert.ok(torso.every((c) => c > 0.7), `torso linear albedo too dark: ${torso}`);
+  assert.ok(torso[2] <= torso[0] + 0.02, 'torso albedo is not blue-tinted');
+  assert.ok(torso[0] - torso[2] < 0.12, 'torso albedo warmth should stay small (white, not beige)');
+});
+
+test('rig material resolver: falls back to colorRgb (sRGB -> linear, matte) when material is absent or invalid', () => {
+  const fallback = resolvePartMaterial({ colorRgb: [0.5, 0.5, 0.5] });
+  assert.ok(Math.abs(fallback.albedoLinear[0] - srgbToLinearRef(0.5)) < 1e-12);
+  assert.equal(fallback.roughness, 0.8);
+  assert.equal(fallback.metallic, 0);
+  const badRoughness = resolvePartMaterial({ colorRgb: [0.5, 0.5, 0.5], material: { albedoLinear: [1, 1, 1], roughness: 2, metallic: 0 } });
+  assert.equal(badRoughness.roughness, 0.8, 'invalid material is ignored');
+  assert.throws(() => resolvePartMaterial({ colorRgb: [2, 0, 0] }), TypeError);
+  assert.throws(() => resolvePartMaterial({}), TypeError);
+});
+
+test('rig material resolver returns copies, so the frozen template cannot be mutated through it', () => {
+  const m = resolvePartMaterial(ASTRONAUT_RIG.parts.torso);
+  m.albedoLinear[0] = 0;
+  assert.notEqual(ASTRONAUT_RIG.parts.torso.material.albedoLinear[0], 0);
+});
 
 test('astronaut rig: immutable template, coordinate metadata and geometry', () => {
   assert.equal(ASTRONAUT_RIG.metadata.forward, '-Y');

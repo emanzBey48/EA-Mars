@@ -61,13 +61,14 @@ export const SKY_PARAMS = Object.freeze({
   horizonDustStrength: 0.10,
   horizonDustSharpness: 14.0,
   // Forward-scattering aureole: Henyey–Greenstein lobes normalised to 1 at the sun. Presentation.
+  // Narrow lobes (g close to 1) and modest strength: a thin dust-scatter ring around the disc, not a broad glare.
   haloWarmColor: Object.freeze([0.90, 0.62, 0.40]),
-  haloWarmG: 0.75,
-  haloWarmIntensity: 0.40,
+  haloWarmG: 0.92,
+  haloWarmIntensity: 0.18,
   // Tight bluish lobe that strengthens as the sun lowers (PIA19400 qualitative behaviour). Presentation.
   haloBlueColor: Object.freeze([0.30, 0.48, 0.85]),
-  haloBlueG: 0.93,
-  haloBlueIntensity: 0.55,
+  haloBlueG: 0.97,
+  haloBlueIntensity: 0.30,
   // Direct sunlight. Relative units chosen so the full scene sits in 0..1 before the tone curve.
   sunColor: Object.freeze([1.0, 0.93, 0.82]), // presentation: slightly warm, dimmer than Earth
   sunIntensity: 0.45,
@@ -93,6 +94,33 @@ export const SKY_PARAMS = Object.freeze({
   // Emissive guide gain (beacons/lines) so they stay readable after tone mapping. Presentation.
   emissiveGain: 1.5,
 });
+
+/**
+ * Astronaut rig shading (presentation). The rig is lit by the same sun and sky as the terrain, but a white
+ * suit must not turn beige: the warm sky ambient is partly replaced by a neutral, slightly cool tint, and
+ * the materials get a Fresnel/specular response. Values are visual approximations, not suit measurements.
+ */
+export const RIG_LIGHT_PARAMS = Object.freeze({
+  // Fraction of the warm sky ambient kept; the rest is the neutral-cool tint below (shaded faces read grey-blue).
+  ambientWarmKeep: 0.2,
+  ambientCoolTint: Object.freeze([0.90, 0.98, 1.10]),
+  // Dielectric Fresnel reflectance at normal incidence (common ~4 % default).
+  dielectricF0: 0.04,
+  // Peak of the sun specular lobe relative to the sun irradiance (normalised Gaussian in angle).
+  specularPeak: 0.35,
+  // Lower bound of the lobe width (roughness^2), so a mirror-like visor stays finite.
+  specularWidthFloor: 0.004,
+  // Strength of the sky-dome reflection, scaled by gloss (1 - roughness)^2. 1.0 lets the gold visor read as metal
+  // (it reflects the darker lower sky and ground, so a weaker factor left it nearly brown).
+  envReflectStrength: 1.0,
+});
+
+/** Neutral-cool rig ambient (JS mirror of rigSkyAmbient in the GLSL block). Keeps the luminance of `ambient`. */
+export function rigAmbientTint(ambient) {
+  const l = luminance(ambient);
+  const keep = RIG_LIGHT_PARAMS.ambientWarmKeep;
+  return ambient.map((v, i) => keep * v + (1 - keep) * l * RIG_LIGHT_PARAMS.ambientCoolTint[i]);
+}
 
 const LUMA = [0.2126, 0.7152, 0.0722]; // Rec.709
 
@@ -258,7 +286,18 @@ const float EXPOSURE = ${glslFloat(P.exposure)};
 const float EMISSIVE_GAIN = ${glslFloat(P.emissiveGain)};
 const float HAZE_DENSITY = ${glslFloat(P.hazeDensityPerM)};
 const float HAZE_MAX = ${glslFloat(P.hazeMaxAmount)};
+const float RIG_AMBIENT_WARM_KEEP = ${glslFloat(RIG_LIGHT_PARAMS.ambientWarmKeep)};
+const vec3 RIG_AMBIENT_COOL_TINT = ${v3(RIG_LIGHT_PARAMS.ambientCoolTint)};
+const float RIG_F0 = ${glslFloat(RIG_LIGHT_PARAMS.dielectricF0)};
+const float RIG_SPEC_PEAK = ${glslFloat(RIG_LIGHT_PARAMS.specularPeak)};
+const float RIG_SPEC_WIDTH_FLOOR = ${glslFloat(RIG_LIGHT_PARAMS.specularWidthFloor)};
+const float RIG_ENV_STRENGTH = ${glslFloat(RIG_LIGHT_PARAMS.envReflectStrength)};
 
+// Rig-only ambient: keeps the sky luminance but neutralises most of its warm tint (see RIG_LIGHT_PARAMS).
+vec3 rigSkyAmbient(vec3 ambient) {
+  float l = dot(ambient, LUMA709);
+  return RIG_AMBIENT_WARM_KEEP * ambient + (1.0 - RIG_AMBIENT_WARM_KEEP) * l * RIG_AMBIENT_COOL_TINT;
+}
 float hgLobe(float cosTheta, float g) {
   float denom = 1.0 + g * g - 2.0 * g * clamp(cosTheta, -1.0, 1.0);
   return pow(((1.0 - g) * (1.0 - g)) / denom, 1.5);

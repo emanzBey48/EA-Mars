@@ -2,6 +2,7 @@
 // performs no DTM sampling, no simulation rules, and no coordinate math.
 import { STATUS } from '../surface/layers.js';
 import { PHASE, formatClock } from '../simulation/sim.js';
+import { formatRouteDirection } from './route-guidance.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -94,7 +95,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       : 'DTM katmanı yüklenmediği için kot ve eğim hesaplanmıyor.';
   }
 
-  function updateHud(snapshot) {
+  function updateHud(snapshot, { plannedRouteGuidance = null, showPlannedRouteGuidance = false } = {}) {
     const { phase, simTimeS, distanceWalkedM, astronaut, surface, route } = snapshot;
     const ph = $('phase'); ph.textContent = PHASE_TEXT[phase]; ph.className = `phase ${phase}`;
     $('btn-pause').textContent = phase === PHASE.PAUSED ? 'Devam' : 'Duraklat';
@@ -149,6 +150,34 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     if (route.outsideCorridor) banner.textContent = `Rota koridorundan saptınız: segmente ${route.deviationM.toFixed(1)} m (senaryo koridoru ±${route.corridorHalfWidthM} m, güvenlik sınırı değil). Çizgiye geri dönün.`;
     $('arrived-banner').hidden = phase !== PHASE.ARRIVED;
     $('start-hint').hidden = phase !== PHASE.READY;
+
+    const plannedCard = $('planned-route-guidance');
+    const planned = showPlannedRouteGuidance && plannedRouteGuidance?.active ? plannedRouteGuidance : null;
+    plannedCard.hidden = !planned;
+    if (planned) {
+      $('planned-route-next-direction').textContent = `${formatRouteDirection(planned.relativeDeg)} · ${planned.atDestination ? 'hedef nokta' : 'sonraki rota hücresi'}`;
+      $('planned-route-next-distance').textContent = Number.isFinite(planned.distanceM) ? `${planned.distanceM.toFixed(1)} m` : 'bilinmiyor';
+      const walkability = planned.walkability;
+      const score = $('planned-route-score');
+      const slope = $('planned-route-slope');
+      if (walkability?.available) {
+        score.textContent = `${walkability.score}/100 (senaryo puanı)`;
+        score.className = 'status-ok';
+      } else {
+        score.textContent = walkability?.reason ?? 'EVA puanı bilinmiyor.';
+        score.className = 'status-bad';
+      }
+      if (Number.isFinite(walkability?.slopeDeg)) {
+        const threshold = Number.isFinite(walkability.maxSlopeDeg) ? ` (senaryo eşiği ${walkability.maxSlopeDeg.toFixed(0)}°)` : '';
+        slope.textContent = walkability.slopeWarning
+          ? `Eğim uyarısı: ${walkability.slopeDeg.toFixed(1)}°${threshold}`
+          : `Yüzey eğimi: ${walkability.slopeDeg.toFixed(1)}°${threshold}`;
+        slope.className = walkability.slopeWarning ? 'status-bad' : 'status-ok';
+      } else {
+        slope.textContent = 'Yüzey eğimi bilinmiyor.';
+        slope.className = 'status-bad';
+      }
+    }
   }
 
   return { renderLayerPanel, updateHud };

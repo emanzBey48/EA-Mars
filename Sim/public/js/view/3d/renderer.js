@@ -509,7 +509,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null }) {
       const frameStartedAt = collectDiagnostics ? performance.now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -625,6 +625,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       }
       drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24);
       drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1);
+      drawSurfaceLines(plannedRouteLinePositions, 0.08, 0.88, 1, 0.92, 1);
 
       const { astronaut: player } = snapshot;
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
@@ -740,6 +741,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         lastFrameDiagnostics = {
           frameRenderMs: performance.now() - frameStartedAt,
           terrainTriangles: uploadedMesh.indexCount / 3,
+          plannedRouteLineVertexCount: plannedRouteLinePositions instanceof Float32Array ? plannedRouteLinePositions.length / 3 : 0,
           markersDrawn,
           markerTriangles: uploadedMarkerMesh ? uploadedMarkerMesh.indexCount / 3 : 0,
           markerIndexCountDrawn,

@@ -48,6 +48,8 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-right: 4px; color: #000; font-weight: 700; }
 .tag-arch { background: #c9a2ff; } .tag-calc { background: #7fe0a8; } .tag-scn { background: #8ec9ff; } .tag-route { background: #ffd34d; }
 .archive { border-left: 3px solid #c9a2ff; } .computed { border-left: 3px solid #7fe0a8; } .scenario { border-left: 3px solid #8ec9ff; } .route { border-left: 3px solid #ffd34d; }
+.planned-route-guidance { border-left: 3px solid #57d8e5; }
+.planned-route-guidance[hidden] { display: none; }
 .keys { margin: 0; padding-left: 18px; }
 kbd { display: inline-block; min-width: 18px; padding: 0 4px; margin: 0 1px; border: 1px solid #555; border-bottom-width: 2px; border-radius: 3px; background: #2a2a30; font-size: 11px; text-align: center; }
 .buttons { margin-top: 6px; display: flex; gap: 6px; }

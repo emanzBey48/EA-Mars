@@ -22,6 +22,7 @@ import { bindControls } from './input/input.js';
 import { createStops } from './geo/rover-observations.js';
 import { createRoverGallery } from './view/rover-gallery.js';
 import { createHud } from './view/hud.js';
+import { buildPlannedRouteLinePositions, derivePlannedRouteGuidance } from './view/route-guidance.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 import { createMinimap } from './view/minimap/minimap.js';
 
@@ -74,6 +75,7 @@ let endpointRevision = 0;
 const routeWorkerRequests = new Map();
 let routeHeatmap = null;
 let activeRoute = null;
+let plannedRouteLinePositions = new Float32Array();
 
 const mapWrap = $('mapwrap');
 const canvas2d = $('map');
@@ -109,6 +111,7 @@ function showSelectedPoint(kind, point) {
   pendingPlanId = null;
   minimapController.setEndpoints(minimapEndpoints);
   activeRoute = null;
+  plannedRouteLinePositions = new Float32Array();
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
   renderRouteSummary({ status: 'idle', reason: 'Yeni nokta seçildi' });
   minimapStatus.textContent = 'Nokta kaydedildi. Planlama göstergesi güvenli rota sertifikası değildir.';
@@ -169,7 +172,17 @@ function updateHeatmap(data) {
     image.data[p + 2] = 55; image.data[p + 3] = 190;
   }
   context.putImageData(image, 0, 0);
-  return { canvas, bounds: { nwXM: data.nwXM, nwYM: data.nwYM, widthM: data.cols * data.cellSizeM, heightM: data.rows * data.cellSizeM } };
+  return {
+    canvas,
+    bounds: { nwXM: data.nwXM, nwYM: data.nwYM, widthM: data.cols * data.cellSizeM, heightM: data.rows * data.cellSizeM },
+    score: data.score,
+    status: data.status,
+    rows: data.rows,
+    cols: data.cols,
+    nwXM: data.nwXM,
+    nwYM: data.nwYM,
+    cellSizeM: data.cellSizeM,
+  };
 }
 
 function handleRouteWorkerMessage({ data }) {
@@ -205,6 +218,8 @@ function handleRouteWorkerMessage({ data }) {
     const reason = data.reason || data.message || 'işlem başarısız';
     if (pending.kind === 'plan') {
       activeRoute = null;
+      preparePlannedRouteGuide();
+      minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
       renderRouteSummary({ status: 'error', reason });
       minimapStatus.textContent = `Rota planlayıcı: ${reason}`;
     }
@@ -214,6 +229,7 @@ function handleRouteWorkerMessage({ data }) {
   }
   if (data.type === 'result' && pending.kind === 'plan') {
     activeRoute = data.result;
+    preparePlannedRouteGuide();
     minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
     renderRouteSummary(activeRoute);
     minimapStatus.textContent = activeRoute?.status === 'ok'
@@ -290,6 +306,10 @@ function explainMinimapCell(point) {
 function planMinimapRoute() {
   if (!routeWorkerReady || pendingPlanId !== null || pendingInitId !== null || !minimapEndpoints.start || !minimapEndpoints.end) return;
   const id = ++routeWorkerId;
+  activeRoute = null;
+  preparePlannedRouteGuide();
+  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
+  renderRouteSummary({ status: 'pending', reason: 'Rota hesaplanıyor' });
   pendingPlanId = id;
   routeWorkerRequests.set(id, { kind: 'plan', endpointRevision });
   minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi güvenli rota sertifikası değildir.';
@@ -336,6 +356,7 @@ $('minimap-clear-points').addEventListener('click', () => {
   pendingPlanId = null;
   minimapStatus.textContent = 'Noktalar temizlendi. Yeni başlangıç ve bitiş seçerek yeniden planlayın.';
   activeRoute = null;
+  plannedRouteLinePositions = new Float32Array();
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
   renderRouteSummary({ status: 'idle', reason: 'Noktalar temizlendi' });
   updateRouteButton();
@@ -413,7 +434,14 @@ function build3dTerrainOnce() {
   prepareArchiveDisplay();
   geologyLinePositions = buildGeologyLinePositions();
   build3dMarkersOnce();
+  preparePlannedRouteGuide();
   return terrainMesh;
+}
+
+function preparePlannedRouteGuide() {
+  plannedRouteLinePositions = activeRoute?.status === 'ok' && terrainMesh
+    ? buildPlannedRouteLinePositions({ route: activeRoute, surfaceProvider: layers.dtm, displayConfig: terrainMesh.displayConfig })
+    : new Float32Array();
 }
 
 function prepareArchiveDisplay() {
@@ -686,7 +714,16 @@ const roverGallery = createRoverGallery({
 });
 
 function updateHudFromSnapshot(snapshot) {
-  hud.updateHud(snapshot);
+  hud.updateHud(snapshot, {
+    plannedRouteGuidance: derivePlannedRouteGuidance({
+      route: activeRoute,
+      position: snapshot.astronaut,
+      headingRad: snapshot.astronaut.headingRad,
+      surface: snapshot.surface,
+      heatmap: routeHeatmap,
+    }),
+    showPlannedRouteGuidance: activeView === '3d',
+  });
   roverGallery.update(snapshot.astronaut, { firstPerson: activeView === '3d' });
 }
 
@@ -895,6 +932,7 @@ function frame(now) {
         markerMesh: displayedMarkerMesh(),
         archiveLinePositions: $('toggle-archive-traverse').checked ? archiveTraverse3d?.linePositions : null,
         geologyLinePositions: geologyLayerVisible ? geologyLinePositions : null,
+        plannedRouteLinePositions,
       });
       if (!hasElevation) {
         viewStatus.textContent = `DTM yüzey kotu bilinmiyor (${player.elevationStatus}); zemin teması doğrulanamıyor. Kamera yalnız saklanan hareket dünya-Z referansını kullanır; bu güncel yüzey kotu değildir.`;

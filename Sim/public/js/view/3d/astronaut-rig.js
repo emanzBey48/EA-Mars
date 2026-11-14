@@ -59,16 +59,21 @@ const PRESENTATION_STRIDE_LENGTH_M = ASTRONAUT_RIG.metadata.presentationStrideLe
  * A renderer may then apply the whole-rig world transform (including heading) separately.
  *
  * @param {{timeS:number, horizontalSpeedMps:number, verticalSpeedMps:number,
- *   grounded:boolean, airborne?:boolean, groundContactStatus?:string, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
- * @returns {{pose:'idle'|'walk'|'stop'|'airborne'|'unknown', gaitPhaseRad:number, gaitFrequencyHz:number,
+ *   grounded:boolean, airborne?:boolean, landingRecovery?:boolean, landingRecoveryFrac?:number,
+ *   groundContactStatus?:string, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
+ * @returns {{pose:'idle'|'walk'|'stop'|'airborne'|'landing'|'unknown', gaitPhaseRad:number, gaitFrequencyHz:number,
  *   rootOffset:[number,number,number], rootRotationRad:[number,number,number],
- *   parts:Record<string,{offset:[number,number,number],rotationRad:[number,number,number]} >}}
+ *   parts:Record<string,{offset:[number,number,number],rotationRad:[number,number,number]}>}}
  */
 export function poseAstronautRig(state) {
   assertMotionState(state);
 
   const { timeS, horizontalSpeedMps: speed, verticalSpeedMps, grounded, groundContactStatus, phase } = state;
   const contactKnown = groundContactStatus === undefined || groundContactStatus === 'ok';
+  const recFrac = (state.landingRecovery === true || (state.landingRecoveryFrac ?? 0) > 0)
+    ? (state.landingRecoveryFrac !== undefined ? state.landingRecoveryFrac : 1.0)
+    : 0;
+
   let pose;
   if (phase === 'airborne' || state.airborne === true || (contactKnown && !grounded)) {
     pose = 'airborne';
@@ -76,6 +81,8 @@ export function poseAstronautRig(state) {
     pose = 'unknown';
   } else if (phase === 'stop' || phase === 'arrived') {
     pose = 'stop';
+  } else if (recFrac > 0 && speed <= MOVING_SPEED_EPSILON_MPS) {
+    pose = 'landing';
   } else if (speed > MOVING_SPEED_EPSILON_MPS && phase !== 'idle' && phase !== 'ready') {
     pose = 'walk';
   } else {
@@ -90,39 +97,95 @@ export function poseAstronautRig(state) {
   let rootRotationRad = [0, 0, 0];
 
   if (pose === 'walk') {
-    const amplitude = 0.48 * Math.min(1, speed / 1.4);
-    const bob = 0.018 * (1 - Math.cos(2 * gaitPhaseRad));
-    rootOffset = [0, 0, bob];
-    rootRotationRad = [0.025 * cycle, 0, 0];
-    parts.leftArm = hingedPart('leftArm', -0.7 * amplitude * cycle);
-    parts.rightArm = hingedPart('rightArm', 0.7 * amplitude * cycle);
-    parts.leftLeg = hingedPart('leftLeg', amplitude * cycle);
-    parts.rightLeg = hingedPart('rightLeg', -amplitude * cycle);
-    parts.leftBoot = hingedPart('leftBoot', 0.28 * amplitude * cycle);
-    parts.rightBoot = hingedPart('rightBoot', -0.28 * amplitude * cycle);
+    // Apollo/Mars EVA loping gait: wide stride amplitude, pronounced vertical flight bounce (bob),
+    // and rhythmic low-gravity arm counter-swing with pressurized suit clearance.
+    const speedNorm = Math.min(1, speed / 1.4);
+    const amplitude = 0.52 * speedNorm;
+    const lopeBounce = 0.035 * speedNorm * (1 - Math.cos(2 * gaitPhaseRad));
+    const squash = 0.065 * recFrac;
+    rootOffset = [0, 0, lopeBounce - squash];
+
+    const forwardLean = 0.04 * speedNorm;
+    const sway = 0.02 * speedNorm * cycle;
+    rootRotationRad = [forwardLean + 0.03 * speedNorm * cycle, 0, sway];
+
+    const armSwing = 0.72 * amplitude * cycle;
+    const armFlare = 0.06 + 0.15 * recFrac;
+    parts.leftArm = hingedPart3D('leftArm', [-armSwing, armFlare, -0.04 * cycle]);
+    parts.rightArm = hingedPart3D('rightArm', [armSwing, -armFlare, 0.04 * cycle]);
+
+    const legSwing = amplitude * cycle;
+    const legAbsorb = 0.12 * recFrac;
+    const legClearance = 0.03;
+    parts.leftLeg = hingedPart3D('leftLeg', [legSwing - legAbsorb, -legClearance, 0]);
+    parts.rightLeg = hingedPart3D('rightLeg', [-legSwing - legAbsorb, legClearance, 0]);
+
+    const bootSwing = 0.30 * amplitude * cycle;
+    const bootAbsorb = 0.10 * recFrac;
+    parts.leftBoot = hingedPart3D('leftBoot', [bootSwing + bootAbsorb, -legClearance, 0]);
+    parts.rightBoot = hingedPart3D('rightBoot', [-bootSwing + bootAbsorb, legClearance, 0]);
   } else if (pose === 'airborne') {
-    const verticalSign = verticalSpeedMps < 0 ? -1 : 1;
-    rootRotationRad = [0.045 * verticalSign, 0, 0];
-    parts.leftArm = hingedPart('leftArm', -0.42);
-    parts.rightArm = hingedPart('rightArm', -0.42);
-    parts.leftLeg = hingedPart('leftLeg', 0.24 * verticalSign);
-    parts.rightLeg = hingedPart('rightLeg', -0.24 * verticalSign);
-    parts.leftBoot = hingedPart('leftBoot', 0.12 * verticalSign);
-    parts.rightBoot = hingedPart('rightBoot', -0.12 * verticalSign);
+    // Mars low-gravity jump kinematics (0.38g):
+    // 1. Ascent (verticalSpeedMps > 0.5): arms forward/upward, legs trailing backward.
+    // 2. Apex Balance (|verticalSpeedMps| <= 0.5): floating equilibrium, arms flared out, legs soft.
+    // 3. Descent (verticalSpeedMps < -0.5): legs/boots reaching forward to brace for touchdown.
+    const vz = verticalSpeedMps;
+    const tAscent = Math.max(0, Math.min(1, (vz - 0.5) / 1.0));
+    const tDescent = Math.max(0, Math.min(1, (-vz - 0.5) / 1.0));
+    const tApex = 1 - tAscent - tDescent;
+
+    const rootPitch = tAscent * 0.045 - tDescent * 0.04;
+    rootRotationRad = [rootPitch, 0, 0];
+
+    const apexFloat = tApex * 0.012 * Math.sin(timeS * 2.5);
+    rootOffset = [0, 0, apexFloat];
+
+    const leftArmPitch = tAscent * -0.55 + tApex * -0.26 + tDescent * -0.32;
+    const leftArmRoll = tAscent * 0.10 + tApex * 0.20 + tDescent * 0.14;
+    parts.leftArm = hingedPart3D('leftArm', [leftArmPitch, leftArmRoll, 0]);
+    parts.rightArm = hingedPart3D('rightArm', [leftArmPitch, -leftArmRoll, 0]);
+
+    const legPitch = tAscent * 0.22 + tApex * 0.06 - tDescent * 0.26;
+    const legSpread = 0.03 + tApex * 0.02;
+    const stagger = tApex * 0.04;
+    parts.leftLeg = hingedPart3D('leftLeg', [legPitch + stagger, -legSpread, 0]);
+    parts.rightLeg = hingedPart3D('rightLeg', [legPitch - stagger, legSpread, 0]);
+
+    const bootPitch = tAscent * 0.10 + tApex * 0.02 - tDescent * 0.14;
+    parts.leftBoot = hingedPart3D('leftBoot', [bootPitch + stagger * 0.5, -legSpread, 0]);
+    parts.rightBoot = hingedPart3D('rightBoot', [bootPitch - stagger * 0.5, legSpread, 0]);
+  } else if (pose === 'landing') {
+    // Landing squash & recovery: knees flex, torso drops (negative rootOffset Z), arms flare.
+    const squash = -0.065 * recFrac;
+    rootOffset = [0, 0, squash];
+    rootRotationRad = [0.045 * recFrac, 0, 0];
+
+    const armFlare = 0.22 * recFrac;
+    const armPitch = -0.18 * recFrac;
+    parts.leftArm = hingedPart3D('leftArm', [armPitch, armFlare, 0]);
+    parts.rightArm = hingedPart3D('rightArm', [armPitch, -armFlare, 0]);
+
+    const legFlex = -0.18 * recFrac;
+    const bootFlex = 0.14 * recFrac;
+    const legSpread = 0.04 * recFrac;
+    parts.leftLeg = hingedPart3D('leftLeg', [legFlex, -legSpread, 0]);
+    parts.rightLeg = hingedPart3D('rightLeg', [legFlex, legSpread, 0]);
+    parts.leftBoot = hingedPart3D('leftBoot', [bootFlex, -legSpread, 0]);
+    parts.rightBoot = hingedPart3D('rightBoot', [bootFlex, legSpread, 0]);
   } else if (pose === 'stop') {
     // Fixed settled stance: no hidden previous-pose state or transition clock is required.
-    parts.leftArm = hingedPart('leftArm', -0.035);
-    parts.rightArm = hingedPart('rightArm', -0.035);
+    parts.leftArm = hingedPart3D('leftArm', [-0.035, 0.02, 0]);
+    parts.rightArm = hingedPart3D('rightArm', [-0.035, -0.02, 0]);
   } else if (pose === 'unknown') {
     // Static neutral presentation: unknown contact is not visually asserted as ground or flight.
-    parts.leftArm = hingedPart('leftArm', -0.035);
-    parts.rightArm = hingedPart('rightArm', -0.035);
+    parts.leftArm = hingedPart3D('leftArm', [-0.035, 0.02, 0]);
+    parts.rightArm = hingedPart3D('rightArm', [-0.035, -0.02, 0]);
   } else {
     // A small deterministic idle breath freezes naturally when the caller freezes timeS.
     const breath = Math.sin(TAU * 0.22 * timeS);
     rootOffset = [0, 0, 0.006 * breath];
-    parts.leftArm = hingedPart('leftArm', -0.018 * breath);
-    parts.rightArm = hingedPart('rightArm', -0.018 * breath);
+    parts.leftArm = hingedPart3D('leftArm', [-0.018 * breath, 0.02, 0]);
+    parts.rightArm = hingedPart3D('rightArm', [-0.018 * breath, -0.02, 0]);
   }
 
   for (const id of Object.keys(ASTRONAUT_RIG.parts)) {
@@ -136,18 +199,31 @@ function part(id, size, center, pivot, colorRgb) {
   return { id, geometry: 'unitBox', size, center, pivot, colorRgb };
 }
 
-function hingedPart(id, angleRad) {
+export function hingedPart3D(id, rotationRad, extraOffset = [0, 0, 0]) {
   const { center, pivot } = ASTRONAUT_RIG.parts[id];
+  const dx = center[0] - pivot[0];
   const dy = center[1] - pivot[1];
   const dz = center[2] - pivot[2];
-  const cos = Math.cos(angleRad);
-  const sin = Math.sin(angleRad);
-  const rotatedY = cos * dy - sin * dz;
-  const rotatedZ = sin * dy + cos * dz;
+  const [rx, ry, rz] = rotateEuler([dx, dy, dz], rotationRad);
   return {
-    offset: [0, rotatedY - dy, rotatedZ - dz],
-    rotationRad: [angleRad, 0, 0],
+    offset: [rx - dx + extraOffset[0], ry - dy + extraOffset[1], rz - dz + extraOffset[2]],
+    rotationRad: [...rotationRad],
   };
+}
+
+function hingedPart(id, angleRad) {
+  return hingedPart3D(id, [angleRad, 0, 0]);
+}
+
+function rotateEuler([x, y, z], [rx, ry, rz]) {
+  const cx = Math.cos(rx), sx = Math.sin(rx);
+  const y1 = cx * y - sx * z;
+  const z1 = sx * y + cx * z;
+  const cy = Math.cos(ry), sy = Math.sin(ry);
+  const x2 = cy * x + sy * z1;
+  const z2 = -sy * x + cy * z1;
+  const cz = Math.cos(rz), sz = Math.sin(rz);
+  return [cz * x2 - sz * y1, sz * x2 + cz * y1, z2];
 }
 
 function fixedPart() {
@@ -158,7 +234,9 @@ function assertMotionState(state) {
   if (!state || !Number.isFinite(state.timeS) || state.timeS < 0 ||
       !Number.isFinite(state.horizontalSpeedMps) || state.horizontalSpeedMps < 0 ||
       !Number.isFinite(state.verticalSpeedMps) || typeof state.grounded !== 'boolean' ||
-      (state.airborne !== undefined && typeof state.airborne !== 'boolean')) {
+      (state.airborne !== undefined && typeof state.airborne !== 'boolean') ||
+      (state.landingRecovery !== undefined && typeof state.landingRecovery !== 'boolean') ||
+      (state.landingRecoveryFrac !== undefined && (!Number.isFinite(state.landingRecoveryFrac) || state.landingRecoveryFrac < 0))) {
     throw new TypeError('state requires finite timeS, non-negative horizontalSpeedMps, finite verticalSpeedMps, and boolean grounded');
   }
   const phases = ['idle', 'walk', 'stop', 'airborne', 'paused', 'ready', 'running', 'arrived'];

@@ -809,7 +809,7 @@ export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl =
       return {
         manifest,
         createLayer: async (validatedDescriptor) => {
-          const layer = await loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl });
+          const layer = await loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl, preparedMeta: meta });
           if (layer.available) {
             // The prepared rectangular window contains the whole straight demo route.
             // Scan every loaded cell, including cells between the extractor's route samples.
@@ -867,6 +867,7 @@ export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl =
               adapter: bridge.adapter,
               expectedFrame: LEGACY_HIRISE_FRAME,
               fetchImpl,
+              preparedMeta: meta,
             });
             if (layer.available) {
               layer.descriptor = {

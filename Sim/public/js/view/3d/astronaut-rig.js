@@ -120,8 +120,13 @@ export function poseAstronautRig(state) {
     rootOffset = [0, 0, lopeBounce - squash];
 
     const forwardLean = 0.04 * speedNorm;
+    const hipRoll = 0.015 * speedNorm * cycle;
     const sway = 0.02 * speedNorm * cycle;
-    rootRotationRad = [forwardLean + 0.03 * speedNorm * cycle, 0, sway];
+    rootRotationRad = [forwardLean + 0.03 * speedNorm * cycle, hipRoll, sway];
+
+    const helmetRot = [-0.35 * rootRotationRad[0], -0.4 * hipRoll, -0.3 * sway];
+    parts.helmet = hingedPart3D('helmet', helmetRot);
+    parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
 
     const armSwing = 0.72 * amplitude * cycle;
     const armFlare = 0.06 + 0.15 * recFrac;
@@ -139,25 +144,43 @@ export function poseAstronautRig(state) {
     const legSwing = amplitude * cycle;
     const legAbsorb = 0.12 * recFrac;
     const legClearance = 0.03;
-    parts.leftLeg = hingedPart3D('leftLeg', [legSwing - legAbsorb, -legClearance, 0]);
-    parts.rightLeg = hingedPart3D('rightLeg', [-legSwing - legAbsorb, legClearance, 0]);
+    const leftLegRot = [legSwing - legAbsorb, -legClearance, 0];
+    const rightLegRot = [-legSwing - legAbsorb, legClearance, 0];
+    parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
+    parts.rightLeg = hingedPart3D('rightLeg', rightLegRot);
 
     const bootSwing = 0.30 * amplitude * cycle;
     const bootAbsorb = 0.10 * recFrac;
-    parts.leftBoot = hingedPart3D('leftBoot', [bootSwing + bootAbsorb, -legClearance, 0]);
-    parts.rightBoot = hingedPart3D('rightBoot', [-bootSwing + bootAbsorb, legClearance, 0]);
+    const leftAnklePush = cycle > 0 ? 0.12 * amplitude * cycle : 0.04 * amplitude * cycle;
+    const rightAnklePush = -cycle > 0 ? -0.12 * amplitude * cycle : -0.04 * amplitude * cycle;
+    const leftBootTargetPitch = bootSwing + leftAnklePush + bootAbsorb;
+    const rightBootTargetPitch = -bootSwing + rightAnklePush + bootAbsorb;
+    parts.leftBoot = chainedLimbPart('leftBoot', 'leftLeg', leftLegRot, [
+      leftBootTargetPitch - leftLegRot[0],
+      0,
+      0,
+    ]);
+    parts.rightBoot = chainedLimbPart('rightBoot', 'rightLeg', rightLegRot, [
+      rightBootTargetPitch - rightLegRot[0],
+      0,
+      0,
+    ]);
   } else if (pose === 'airborne') {
     // Mars low-gravity jump kinematics (0.38g):
     // 1. Ascent (verticalSpeedMps > 0.5): arms forward/upward, legs trailing backward.
     // 2. Apex Balance (|verticalSpeedMps| <= 0.5): floating equilibrium, arms flared out, legs soft.
     // 3. Descent (verticalSpeedMps < -0.5): legs/boots reaching forward to brace for touchdown.
     const vz = verticalSpeedMps;
-    const tAscent = Math.max(0, Math.min(1, (vz - 0.5) / 1.0));
-    const tDescent = Math.max(0, Math.min(1, (-vz - 0.5) / 1.0));
+    const tAscent = smoothstep01((vz - 0.5) / 1.0);
+    const tDescent = smoothstep01((-vz - 0.5) / 1.0);
     const tApex = 1 - tAscent - tDescent;
 
     const rootPitch = tAscent * 0.045 - tDescent * 0.04;
     rootRotationRad = [rootPitch, 0, 0];
+
+    const helmetRot = [-0.45 * rootPitch - tDescent * 0.06, 0, 0];
+    parts.helmet = hingedPart3D('helmet', helmetRot);
+    parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
 
     const apexFloat = tApex * 0.012 * Math.sin(timeS * 2.5);
     rootOffset = [0, 0, apexFloat];
@@ -178,17 +201,33 @@ export function poseAstronautRig(state) {
     const legPitch = tAscent * 0.22 + tApex * 0.06 - tDescent * 0.26;
     const legSpread = 0.03 + tApex * 0.02;
     const stagger = tApex * 0.04;
-    parts.leftLeg = hingedPart3D('leftLeg', [legPitch + stagger, -legSpread, 0]);
-    parts.rightLeg = hingedPart3D('rightLeg', [legPitch - stagger, legSpread, 0]);
+    const leftLegRot = [legPitch + stagger, -legSpread, 0];
+    const rightLegRot = [legPitch - stagger, legSpread, 0];
+    parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
+    parts.rightLeg = hingedPart3D('rightLeg', rightLegRot);
 
     const bootPitch = tAscent * 0.10 + tApex * 0.02 - tDescent * 0.14;
-    parts.leftBoot = hingedPart3D('leftBoot', [bootPitch + stagger * 0.5, -legSpread, 0]);
-    parts.rightBoot = hingedPart3D('rightBoot', [bootPitch - stagger * 0.5, legSpread, 0]);
+    const leftBootTargetPitch = bootPitch + stagger * 0.5;
+    const rightBootTargetPitch = bootPitch - stagger * 0.5;
+    parts.leftBoot = chainedLimbPart('leftBoot', 'leftLeg', leftLegRot, [
+      leftBootTargetPitch - leftLegRot[0],
+      0,
+      0,
+    ]);
+    parts.rightBoot = chainedLimbPart('rightBoot', 'rightLeg', rightLegRot, [
+      rightBootTargetPitch - rightLegRot[0],
+      0,
+      0,
+    ]);
   } else if (pose === 'landing') {
     // Landing squash & recovery: knees flex, torso drops (negative rootOffset Z), arms flare.
     const squash = -0.065 * recFrac;
     rootOffset = [0, 0, squash];
     rootRotationRad = [0.045 * recFrac, 0, 0];
+
+    const helmetRot = [-0.30 * rootRotationRad[0], 0, 0];
+    parts.helmet = hingedPart3D('helmet', helmetRot);
+    parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
 
     const armFlare = 0.22 * recFrac;
     const armPitch = -0.18 * recFrac;
@@ -205,10 +244,12 @@ export function poseAstronautRig(state) {
     const legFlex = -0.18 * recFrac;
     const bootFlex = 0.14 * recFrac;
     const legSpread = 0.04 * recFrac;
-    parts.leftLeg = hingedPart3D('leftLeg', [legFlex, -legSpread, 0]);
-    parts.rightLeg = hingedPart3D('rightLeg', [legFlex, legSpread, 0]);
-    parts.leftBoot = hingedPart3D('leftBoot', [bootFlex, -legSpread, 0]);
-    parts.rightBoot = hingedPart3D('rightBoot', [bootFlex, legSpread, 0]);
+    const leftLegRot = [legFlex, -legSpread, 0];
+    const rightLegRot = [legFlex, legSpread, 0];
+    parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
+    parts.rightLeg = hingedPart3D('rightLeg', rightLegRot);
+    parts.leftBoot = chainedLimbPart('leftBoot', 'leftLeg', leftLegRot, [bootFlex - legFlex, 0, 0]);
+    parts.rightBoot = chainedLimbPart('rightBoot', 'rightLeg', rightLegRot, [bootFlex - legFlex, 0, 0]);
   } else if (pose === 'stop') {
     // Fixed settled stance: no hidden previous-pose state or transition clock is required.
     const leftArmRot = [-0.035, 0.02, 0];
@@ -229,6 +270,9 @@ export function poseAstronautRig(state) {
     // A small deterministic idle breath freezes naturally when the caller freezes timeS.
     const breath = Math.sin(TAU * 0.22 * timeS);
     rootOffset = [0, 0, 0.006 * breath];
+    const helmetRot = [-0.008 * breath, 0, 0];
+    parts.helmet = hingedPart3D('helmet', helmetRot);
+    parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
     const leftArmRot = [-0.018 * breath, 0.02, 0];
     const rightArmRot = [-0.018 * breath, -0.02, 0];
     parts.leftArm = hingedPart3D('leftArm', leftArmRot);
@@ -353,6 +397,11 @@ function assertMotionState(state) {
 
 function positiveModulo(value, modulus) {
   return ((value % modulus) + modulus) % modulus;
+}
+
+function smoothstep01(x) {
+  const t = Math.max(0, Math.min(1, x));
+  return t * t * (3 - 2 * t);
 }
 
 function createUnitBoxGeometry() {

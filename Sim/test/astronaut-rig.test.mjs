@@ -345,3 +345,34 @@ test('Stage 14: First-person view-model compatibility across all poses (arms, gl
     }
   }
 });
+
+test('Stage 14+: Chained boot-to-leg ankle kinematics and helmet/visor horizon stabilization', () => {
+  const strideLen = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
+  const speed = 1.2;
+  const quarterCycle = 0.25 / (speed / strideLen);
+
+  const walkPose = poseAstronautRig({
+    timeS: quarterCycle,
+    horizontalSpeedMps: speed,
+    verticalSpeedMps: 0,
+    grounded: true,
+    phase: 'walk',
+  });
+
+  // Boots must translate horizontally (offset[1] != 0) with the swinging legs rather than rotating in place
+  assert.ok(Math.abs(walkPose.parts.leftBoot.offset[1]) > 0.12, 'Left boot follows swinging left ankle');
+  assert.ok(Math.abs(walkPose.parts.rightBoot.offset[1]) > 0.12, 'Right boot follows swinging right ankle');
+  assert.ok(
+    walkPose.parts.leftBoot.offset[1] * walkPose.parts.rightBoot.offset[1] < 0,
+    'Left and right boots translate in opposite directions during stride'
+  );
+
+  // Helmet counter-stabilizes against forward torso lean and visor tracks helmet
+  assert.ok(walkPose.parts.helmet.rotationRad[0] < 0, 'Helmet counter-pitches to keep gaze level');
+  assert.deepEqual(
+    walkPose.parts.visor.rotationRad,
+    walkPose.parts.helmet.rotationRad,
+    'Visor rotation stays locked to helmet'
+  );
+  assert.ok(Math.abs(walkPose.parts.visor.offset[1]) > 0, 'Visor orbits neck pivot with helmet');
+});

@@ -5,7 +5,7 @@ const MIN_PITCH_RAD = (5 * Math.PI) / 180;
 const MAX_PITCH_RAD = (85 * Math.PI) / 180;
 const FIRST_PERSON_MIN_PITCH_RAD = (-85 * Math.PI) / 180;
 const FIRST_PERSON_MAX_PITCH_RAD = (85 * Math.PI) / 180;
-const FIRST_PERSON_EYE_HEIGHT_M = 1.75; // presentation/game camera choice; not suit anthropometry
+const FIRST_PERSON_EYE_HEIGHT_M = 1.75;
 const FIRST_PERSON_FOV_Y_RAD = (80 * Math.PI) / 180; // 80 deg vertical FOV for natural exploration vista
 
 function finite(value, name) {
@@ -38,11 +38,27 @@ function perspective(fovYRad, aspect, nearM, farM) {
   ]);
 }
 
-function lookAt(eye, target) {
+function lookAt(eye, target, rollRad = 0) {
   // Z is up in Marswalk's local surface frame.
   const zAxis = normalize3([eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]]);
-  const xAxis = normalize3(cross3([0, 0, 1], zAxis));
-  const yAxis = cross3(zAxis, xAxis);
+  let xAxis = normalize3(cross3([0, 0, 1], zAxis));
+  let yAxis = cross3(zAxis, xAxis);
+  if (rollRad !== 0) {
+    const cr = Math.cos(rollRad);
+    const sr = Math.sin(rollRad);
+    const rx = [
+      xAxis[0] * cr + yAxis[0] * sr,
+      xAxis[1] * cr + yAxis[1] * sr,
+      xAxis[2] * cr + yAxis[2] * sr,
+    ];
+    const ry = [
+      yAxis[0] * cr - xAxis[0] * sr,
+      yAxis[1] * cr - xAxis[1] * sr,
+      yAxis[2] * cr - xAxis[2] * sr,
+    ];
+    xAxis = rx;
+    yAxis = ry;
+  }
   return new Float32Array([
     xAxis[0], yAxis[0], zAxis[0], 0,
     xAxis[1], yAxis[1], zAxis[1], 0,
@@ -125,6 +141,7 @@ export function createFirstPersonCamera({
     nearM: finite(nearM, 'nearM'),
     farM: finite(farM, 'farM'),
     dynamicPitchOffsetRad: 0,
+    dynamicRollOffsetRad: 0,
     dynamicEyeOffsetM: 0,
   };
   if (camera.eyeHeightM <= 0) throw new RangeError('eyeHeightM must be greater than zero');
@@ -142,6 +159,7 @@ export function setFirstPersonPose(camera, {
   verticalScale = 1,
   eyeOffsetM = 0,
   pitchOffsetRad = 0,
+  rollOffsetRad = 0,
 }) {
   if (camera.mode !== 'first-person') throw new TypeError('A first-person camera is required');
   camera.xM = finite(xM, 'xM');
@@ -150,9 +168,11 @@ export function setFirstPersonPose(camera, {
   if (scale <= 0) throw new RangeError('verticalScale must be greater than zero');
   const eyeOffset = finite(eyeOffsetM ?? 0, 'eyeOffsetM');
   const pitchOffset = finite(pitchOffsetRad ?? 0, 'pitchOffsetRad');
+  const rollOffset = finite(rollOffsetRad ?? 0, 'rollOffsetRad');
   camera.zDisplay = finite(bodyZDisplay, 'bodyZDisplay') + (camera.eyeHeightM + eyeOffset) * scale;
   camera.dynamicEyeOffsetM = eyeOffset;
   camera.dynamicPitchOffsetRad = pitchOffset;
+  camera.dynamicRollOffsetRad = rollOffset;
   return camera;
 }
 
@@ -234,7 +254,10 @@ export function getViewProjectionMatrix(camera, aspect) {
       eye.yM + Math.sin(camera.yawRad) * cosPitch,
       eye.zDisplay + Math.sin(effectivePitch),
     ];
-    return multiply4(perspective(camera.fovYRad, aspect, camera.nearM, camera.farM), viewFromEye(eye, target));
+    return multiply4(
+      perspective(camera.fovYRad, aspect, camera.nearM, camera.farM),
+      viewFromEye(eye, target, camera.dynamicRollOffsetRad || 0),
+    );
   }
   const view = lookAt(
     [eye.xM, eye.yM, eye.zDisplay],
@@ -243,6 +266,6 @@ export function getViewProjectionMatrix(camera, aspect) {
   return multiply4(perspective(camera.fovYRad, aspect, camera.nearM, camera.farM), view);
 }
 
-function viewFromEye(eye, target) {
-  return lookAt([eye.xM, eye.yM, eye.zDisplay], target);
+function viewFromEye(eye, target, rollRad = 0) {
+  return lookAt([eye.xM, eye.yM, eye.zDisplay], target, rollRad);
 }

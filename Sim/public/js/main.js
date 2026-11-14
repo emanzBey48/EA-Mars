@@ -22,6 +22,7 @@ import { createStops } from './geo/rover-observations.js';
 import { createRoverGallery } from './view/rover-gallery.js';
 import { createHud } from './view/hud.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
+import { createMinimap } from './view/minimap/minimap.js';
 
 const $ = (id) => document.getElementById(id);
 const urlParams = new URLSearchParams(window.location.search);
@@ -43,6 +44,7 @@ let terrainMesh = null;
 let markerMesh = null;
 let archiveTraverse = null;
 let archiveTraverse3d = null;
+let archiveTraverseStatus = 'loading';
 let archiveMarkerBase = null;
 let combinedArchiveMarkers = null;
 let markerMeshError = null;
@@ -60,6 +62,7 @@ let geologySegmentsLocal = [];
 let geologyLinePositions = new Float32Array();
 let geologyStatus = 'loading';
 let geologyLayerVisible = true;
+let minimapEndpoints = { start: null, end: null };
 
 const mapWrap = $('mapwrap');
 const canvas2d = $('map');
@@ -72,7 +75,77 @@ const viewStatus = $('view-status');
 const fpReticle = $('fp-reticle');
 const fpHudHint = $('fp-hud-hint');
 const geologyToggle = $('toggle-geology');
+const minimapCanvas = $('minimap-canvas');
+const minimapStartLabel = $('minimap-start');
+const minimapEndLabel = $('minimap-end');
+const minimapStatus = $('minimap-status');
+const minimapGeologyToggle = $('minimap-toggle-geology');
+const minimapArchiveToggle = $('minimap-toggle-archive');
+const minimapLayerStatus = $('minimap-layer-status');
 const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Arazi yüksekliği 3× dikey sunum abartısıdır; yandan ışık da yalnızca görsel kabartma okunurluğu içindir.';
+
+function showSelectedPoint(kind, point) {
+  const label = `${point.xM.toFixed(1)} m doğu, ${point.yM.toFixed(1)} m kuzey (WB1 orijini)`;
+  if (kind === 'start') minimapStartLabel.textContent = label;
+  else minimapEndLabel.textContent = label;
+  minimapEndpoints = { ...minimapEndpoints, [kind]: point };
+  minimapController.setEndpoints(minimapEndpoints);
+  minimapStatus.textContent = 'Nokta kaydedildi. Kapsam/no-data ve hücre yürünebilirliği henüz doğrulanmadı; Stage 23A/23B rota planlayıcı modülleri bekleniyor.';
+  minimapController.setSelectionMode(null);
+  $('minimap-pick-start').setAttribute('aria-pressed', 'false');
+  $('minimap-pick-end').setAttribute('aria-pressed', 'false');
+}
+
+const minimapController = createMinimap({
+  canvas: minimapCanvas,
+  terrain,
+  descriptor: MAP_FRAME,
+  onPointSelected: ({ kind, xM, yM }) => showSelectedPoint(kind, { xM, yM }),
+  onCellClick: () => {
+    minimapStatus.textContent = 'Hücre açıklaması kullanılamıyor: Stage 23A explainCell() henüz mevcut değil.';
+  },
+});
+
+function refreshMinimapOverlays() {
+  minimapController.setOverlays({
+    geologySegments: geologySegmentsLocal,
+    archiveTraverse,
+    geologyVisible: minimapGeologyToggle.checked && geologyLayerVisible,
+    archiveVisible: minimapArchiveToggle.checked && $('toggle-archive-traverse').checked,
+  });
+  const geologyText = geologyStatus === 'ready' ? 'hazır' : geologyStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
+  const archiveText = archiveTraverseStatus === 'ready' ? 'hazır' : archiveTraverseStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
+  minimapLayerStatus.textContent = `Jeoloji: ${geologyText} · Arşiv izi: ${archiveText}`;
+}
+
+function setMinimapPickMode(kind) {
+  minimapController.setSelectionMode(kind);
+  $('minimap-pick-start').setAttribute('aria-pressed', String(kind === 'start'));
+  $('minimap-pick-end').setAttribute('aria-pressed', String(kind === 'end'));
+  minimapStatus.textContent = `${kind === 'start' ? 'Başlangıç' : 'Bitiş'} koordinatını seçin. Seçim geçilebilirlik veya rota üretmez.`;
+}
+
+$('minimap-pick-start').addEventListener('click', () => setMinimapPickMode('start'));
+$('minimap-pick-end').addEventListener('click', () => setMinimapPickMode('end'));
+$('minimap-fit').addEventListener('click', () => minimapController.fit());
+$('minimap-clear-points').addEventListener('click', () => {
+  minimapEndpoints = { start: null, end: null };
+  minimapStartLabel.textContent = 'Seçilmedi';
+  minimapEndLabel.textContent = 'Seçilmedi';
+  minimapController.setEndpoints(minimapEndpoints);
+  minimapController.setSelectionMode(null);
+  $('minimap-pick-start').setAttribute('aria-pressed', 'false');
+  $('minimap-pick-end').setAttribute('aria-pressed', 'false');
+  minimapStatus.textContent = 'Noktalar temizlendi. Rota planlayıcı Stage 23A/23B modülleri olmadığı için kullanılamıyor.';
+});
+minimapGeologyToggle.addEventListener('change', () => {
+  geologyLayerVisible = minimapGeologyToggle.checked;
+  geologyToggle.checked = geologyLayerVisible;
+  refreshMinimapOverlays();
+  updateHud();
+});
+minimapArchiveToggle.addEventListener('change', refreshMinimapOverlays);
+refreshMinimapOverlays();
 
 try {
   if (forceWebgl2Failure) throw new Error('Test-only forced WebGL2 initialization failure');
@@ -170,11 +243,15 @@ async function loadArchiveTraverse() {
     archiveTraverse = prepareArchiveTraverse(traverse, stops, adapter, {
       ...sim.route, corridorHalfWidthM: sim.corridorHalfWidthM,
     });
+    archiveTraverseStatus = 'ready';
     prepareArchiveDisplay();
     const { polylineLengthM, straightLengthM } = archiveTraverse.comparison;
     status.textContent = `Sürüş arşivi: Sol 116 Site 4 Drive 1250 → Sol 157 Site 6 Drive 0. Sol 120 ve 164 görüntü kayıtlarına aittir. Yerel harita düzleminde arşiv izi ${polylineLengthM.toFixed(0)} m, senaryo düz hattı ${straightLengthM.toFixed(0)} m.`;
+    refreshMinimapOverlays();
   } catch (error) {
+    archiveTraverseStatus = 'unavailable';
     status.textContent = 'MMGIS sürüş arşivi kullanılamıyor.';
+    refreshMinimapOverlays();
     console.warn('MMGIS sürüş arşivi yüklenemedi:', error);
   }
 }
@@ -349,6 +426,7 @@ async function loadGeology() {
     geologySegmentsLocal = uniqueGeologySegments(geologyContactField.polylines);
     if (terrainMesh) geologyLinePositions = buildGeologyLinePositions();
     geologyStatus = 'ready';
+    refreshMinimapOverlays();
     updateHud();
   } catch (error) {
     geologyIndex = null;
@@ -356,6 +434,7 @@ async function loadGeology() {
     geologySegmentsLocal = [];
     geologyLinePositions = new Float32Array();
     geologyStatus = 'unavailable';
+    refreshMinimapOverlays();
     console.warn('USGS jeoloji katmanı kullanılamıyor:', error);
     updateHud();
   }
@@ -421,7 +500,13 @@ async function loadRoverGallery() {
 }
 
 void loadRoverGallery();
-geologyToggle?.addEventListener('change', () => { geologyLayerVisible = geologyToggle.checked; updateHud(); });
+geologyToggle?.addEventListener('change', () => {
+  geologyLayerVisible = geologyToggle.checked;
+  minimapGeologyToggle.checked = geologyLayerVisible;
+  refreshMinimapOverlays();
+  updateHud();
+});
+$('toggle-archive-traverse').addEventListener('change', refreshMinimapOverlays);
 void loadGeology();
 void loadArchiveTraverse();
 
@@ -495,11 +580,16 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
   if (layers.dtm.available) {
     try {
       terrain = buildTerrainImage(layers.dtm);
+      minimapController.setTerrain(terrain);
     } catch (error) {
+      minimapController.setTerrain(null);
       viewStatus.textContent = `2D DTM görseli hazırlanamadı; metre ızgarası kullanılacak. ${error.message}`;
       viewStatus.hidden = false;
     }
+  } else {
+    minimapController.setTerrain(null);
   }
+  minimapController.setDescriptor(layers.dtm.descriptor);
   updateViewControls();
   hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
   updateHud();

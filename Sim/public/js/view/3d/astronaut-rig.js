@@ -1,5 +1,14 @@
 // Presentation-only astronaut part geometry and deterministic pose generation.
 
+export const FIRST_PERSON_RIG_PARTS = Object.freeze([
+  'torso',
+  'chestPack',
+  'leftArm',
+  'rightArm',
+  'leftGlove',
+  'rightGlove',
+]);
+
 /**
  * Immutable, renderer-independent rig template. All dimensions, colors, and proportions are visual
  * design units only; they do not describe a real suit, human body, or biomechanical model.
@@ -19,15 +28,20 @@ export const ASTRONAUT_RIG = deepFreeze({
     forwardHeadingOffsetRad: Math.PI / 2,
     geometryDescription: 'Low-poly cuboids; no physical or suit-biomechanics claim',
     presentationStrideLengthM: 1.25,
+    firstPersonParts: FIRST_PERSON_RIG_PARTS,
   },
   geometry: createUnitBoxGeometry(),
   parts: {
     torso: part('torso', [0.44, 0.34, 0.58], [0, 0, 0.99], [0, 0, 0.99], [0.94, 0.43, 0.08]),
+    chestPack: part('chestPack', [0.26, 0.14, 0.22], [0, -0.23, 0.99], [0, 0, 0.99], [0.85, 0.88, 0.92]),
     helmet: part('helmet', [0.34, 0.31, 0.32], [0, 0, 1.48], [0, 0, 1.34], [0.92, 0.96, 1.0]),
     visor: part('visor', [0.23, 0.035, 0.16], [0, -0.17, 1.48], [0, 0, 1.34], [0.035, 0.12, 0.22]),
     backpack: part('backpack', [0.34, 0.23, 0.43], [0, 0.21, 0.99], [0, 0.21, 0.99], [0.08, 0.58, 0.98]),
+    plssAntenna: part('plssAntenna', [0.035, 0.035, 0.30], [0.12, 0.23, 1.35], [0.12, 0.23, 1.205], [0.75, 0.78, 0.82]),
     leftArm: part('leftArm', [0.19, 0.23, 0.53], [-0.34, 0, 0.96], [-0.27, 0, 1.22], [0.96, 0.53, 0.14]),
     rightArm: part('rightArm', [0.19, 0.23, 0.53], [0.34, 0, 0.96], [0.27, 0, 1.22], [0.96, 0.53, 0.14]),
+    leftGlove: part('leftGlove', [0.13, 0.16, 0.17], [-0.34, -0.02, 0.615], [-0.34, 0, 0.695], [0.20, 0.22, 0.25]),
+    rightGlove: part('rightGlove', [0.13, 0.16, 0.17], [0.34, -0.02, 0.615], [0.34, 0, 0.695], [0.20, 0.22, 0.25]),
     leftLeg: part('leftLeg', [0.21, 0.25, 0.53], [-0.14, 0, 0.40], [-0.14, 0, 0.65], [0.96, 0.53, 0.14]),
     rightLeg: part('rightLeg', [0.21, 0.25, 0.53], [0.14, 0, 0.40], [0.14, 0, 0.65], [0.96, 0.53, 0.14]),
     leftBoot: part('leftBoot', [0.23, 0.34, 0.16], [-0.14, -0.035, 0.09], [-0.14, 0, 0.17], [0.12, 0.18, 0.24]),
@@ -111,8 +125,16 @@ export function poseAstronautRig(state) {
 
     const armSwing = 0.72 * amplitude * cycle;
     const armFlare = 0.06 + 0.15 * recFrac;
-    parts.leftArm = hingedPart3D('leftArm', [-armSwing, armFlare, -0.04 * cycle]);
-    parts.rightArm = hingedPart3D('rightArm', [armSwing, -armFlare, 0.04 * cycle]);
+    const leftArmRot = [-armSwing, armFlare, -0.04 * cycle];
+    const rightArmRot = [armSwing, -armFlare, 0.04 * cycle];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+
+    // EVA gloves follow arms with natural pre-curved inward working grip
+    const leftGrip = [-0.10, 0.05, -0.03 * cycle];
+    const rightGrip = [-0.10, -0.05, 0.03 * cycle];
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, leftGrip);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, rightGrip);
 
     const legSwing = amplitude * cycle;
     const legAbsorb = 0.12 * recFrac;
@@ -142,8 +164,16 @@ export function poseAstronautRig(state) {
 
     const leftArmPitch = tAscent * -0.55 + tApex * -0.26 + tDescent * -0.32;
     const leftArmRoll = tAscent * 0.10 + tApex * 0.20 + tDescent * 0.14;
-    parts.leftArm = hingedPart3D('leftArm', [leftArmPitch, leftArmRoll, 0]);
-    parts.rightArm = hingedPart3D('rightArm', [leftArmPitch, -leftArmRoll, 0]);
+    const leftArmRot = [leftArmPitch, leftArmRoll, 0];
+    const rightArmRot = [leftArmPitch, -leftArmRoll, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+
+    // Hands adapt dynamically across jump regimes
+    const gripPitch = tAscent * -0.08 + tApex * -0.06 + tDescent * -0.12;
+    const gripRoll = tAscent * 0.04 + tApex * 0.08 + tDescent * 0.05;
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [gripPitch, gripRoll, 0]);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [gripPitch, -gripRoll, 0]);
 
     const legPitch = tAscent * 0.22 + tApex * 0.06 - tDescent * 0.26;
     const legSpread = 0.03 + tApex * 0.02;
@@ -162,8 +192,15 @@ export function poseAstronautRig(state) {
 
     const armFlare = 0.22 * recFrac;
     const armPitch = -0.18 * recFrac;
-    parts.leftArm = hingedPart3D('leftArm', [armPitch, armFlare, 0]);
-    parts.rightArm = hingedPart3D('rightArm', [armPitch, -armFlare, 0]);
+    const leftArmRot = [armPitch, armFlare, 0];
+    const rightArmRot = [armPitch, -armFlare, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+
+    // Wrists flex to cushion landing impact
+    const landGrip = [-0.14 * recFrac, 0.06 * recFrac, 0];
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, landGrip);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.14 * recFrac, -0.06 * recFrac, 0]);
 
     const legFlex = -0.18 * recFrac;
     const bootFlex = 0.14 * recFrac;
@@ -174,18 +211,31 @@ export function poseAstronautRig(state) {
     parts.rightBoot = hingedPart3D('rightBoot', [bootFlex, legSpread, 0]);
   } else if (pose === 'stop') {
     // Fixed settled stance: no hidden previous-pose state or transition clock is required.
-    parts.leftArm = hingedPart3D('leftArm', [-0.035, 0.02, 0]);
-    parts.rightArm = hingedPart3D('rightArm', [-0.035, -0.02, 0]);
+    const leftArmRot = [-0.035, 0.02, 0];
+    const rightArmRot = [-0.035, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [-0.08, 0.03, 0]);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08, -0.03, 0]);
   } else if (pose === 'unknown') {
     // Static neutral presentation: unknown contact is not visually asserted as ground or flight.
-    parts.leftArm = hingedPart3D('leftArm', [-0.035, 0.02, 0]);
-    parts.rightArm = hingedPart3D('rightArm', [-0.035, -0.02, 0]);
+    const leftArmRot = [-0.035, 0.02, 0];
+    const rightArmRot = [-0.035, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [-0.08, 0.03, 0]);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08, -0.03, 0]);
   } else {
     // A small deterministic idle breath freezes naturally when the caller freezes timeS.
     const breath = Math.sin(TAU * 0.22 * timeS);
     rootOffset = [0, 0, 0.006 * breath];
-    parts.leftArm = hingedPart3D('leftArm', [-0.018 * breath, 0.02, 0]);
-    parts.rightArm = hingedPart3D('rightArm', [-0.018 * breath, -0.02, 0]);
+    const leftArmRot = [-0.018 * breath, 0.02, 0];
+    const rightArmRot = [-0.018 * breath, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    const idleGrip = [-0.08 - 0.015 * breath, 0.03, 0];
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, idleGrip);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08 - 0.015 * breath, -0.03, 0]);
   }
 
   for (const id of Object.keys(ASTRONAUT_RIG.parts)) {
@@ -209,6 +259,64 @@ export function hingedPart3D(id, rotationRad, extraOffset = [0, 0, 0]) {
     offset: [rx - dx + extraOffset[0], ry - dy + extraOffset[1], rz - dz + extraOffset[2]],
     rotationRad: [...rotationRad],
   };
+}
+
+/**
+ * Calculates hierarchical kinematics for a child part attached to a parent joint (e.g. glove on arm).
+ * The child rotates with its own local joint rotation (wrist) and is carried by the parent's pivot rotation (shoulder).
+ *
+ * @param {string} childId
+ * @param {string} parentId
+ * @param {[number,number,number]} parentRotationRad
+ * @param {[number,number,number]} childLocalRotationRad
+ * @returns {{offset:[number,number,number], rotationRad:[number,number,number]}}
+ */
+export function chainedLimbPart(childId, parentId, parentRotationRad, childLocalRotationRad = [0, 0, 0]) {
+  const parent = ASTRONAUT_RIG.parts[parentId];
+  const child = ASTRONAUT_RIG.parts[childId];
+
+  // 1. Child neutral vector relative to child pivot (e.g. glove center relative to wrist)
+  const dChild = [
+    child.center[0] - child.pivot[0],
+    child.center[1] - child.pivot[1],
+    child.center[2] - child.pivot[2],
+  ];
+  // 2. Rotate child relative to its own pivot by childLocalRotationRad
+  const dChildRot = rotateEuler(dChild, childLocalRotationRad);
+
+  // 3. Child pivot relative to parent pivot (e.g. wrist relative to shoulder)
+  // combined with the locally rotated child offset
+  const dParent = [
+    child.pivot[0] - parent.pivot[0] + dChildRot[0],
+    child.pivot[1] - parent.pivot[1] + dChildRot[1],
+    child.pivot[2] - parent.pivot[2] + dChildRot[2],
+  ];
+
+  // 4. Rotate the entire chain by parentRotationRad (e.g. shoulder rotation)
+  const dParentRot = rotateEuler(dParent, parentRotationRad);
+
+  // 5. Final world-relative position of child center relative to parent pivot
+  const finalCenter = [
+    parent.pivot[0] + dParentRot[0],
+    parent.pivot[1] + dParentRot[1],
+    parent.pivot[2] + dParentRot[2],
+  ];
+
+  // 6. Child offset is difference between final center and neutral center
+  const offset = [
+    finalCenter[0] - child.center[0],
+    finalCenter[1] - child.center[1],
+    finalCenter[2] - child.center[2],
+  ];
+
+  // 7. Combined orientation: parent rotation + child local rotation
+  const rotationRad = [
+    parentRotationRad[0] + childLocalRotationRad[0],
+    parentRotationRad[1] + childLocalRotationRad[1],
+    parentRotationRad[2] + childLocalRotationRad[2],
+  ];
+
+  return { offset, rotationRad };
 }
 
 function hingedPart(id, angleRad) {

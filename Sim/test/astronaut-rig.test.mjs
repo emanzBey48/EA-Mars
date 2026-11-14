@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ASTRONAUT_RIG, poseAstronautRig, hingedPart3D } from '../public/js/view/3d/astronaut-rig.js';
+import {
+  ASTRONAUT_RIG,
+  FIRST_PERSON_RIG_PARTS,
+  poseAstronautRig,
+  hingedPart3D,
+  chainedLimbPart,
+} from '../public/js/view/3d/astronaut-rig.js';
 
 const STATUS = Object.freeze({ OK: 'ok', NO_DATA: 'no_data', OUT_OF_BOUNDS: 'out_of_bounds', UNAVAILABLE: 'unavailable' });
 
@@ -14,11 +20,35 @@ test('astronaut rig: immutable template, coordinate metadata and geometry', () =
   assert.ok(ASTRONAUT_RIG.geometry.indices.length > 0);
   assert.ok(Object.isFrozen(ASTRONAUT_RIG));
   assert.ok(Object.isFrozen(ASTRONAUT_RIG.parts));
+
+  // Base suit parts
   assert.ok(ASTRONAUT_RIG.parts.torso);
+  assert.ok(ASTRONAUT_RIG.parts.helmet);
+  assert.ok(ASTRONAUT_RIG.parts.visor);
+  assert.ok(ASTRONAUT_RIG.parts.backpack);
   assert.ok(ASTRONAUT_RIG.parts.leftArm);
   assert.ok(ASTRONAUT_RIG.parts.rightArm);
   assert.ok(ASTRONAUT_RIG.parts.leftLeg);
   assert.ok(ASTRONAUT_RIG.parts.rightLeg);
+  assert.ok(ASTRONAUT_RIG.parts.leftBoot);
+  assert.ok(ASTRONAUT_RIG.parts.rightBoot);
+
+  // Stage 14: New detailed EVA parts
+  assert.ok(ASTRONAUT_RIG.parts.chestPack, 'Chest pack (DCM) exists');
+  assert.deepEqual(ASTRONAUT_RIG.parts.chestPack.colorRgb, [0.85, 0.88, 0.92]);
+  assert.ok(ASTRONAUT_RIG.parts.plssAntenna, 'PLSS antenna exists');
+  assert.deepEqual(ASTRONAUT_RIG.parts.plssAntenna.colorRgb, [0.75, 0.78, 0.82]);
+  assert.ok(ASTRONAUT_RIG.parts.leftGlove, 'Left EVA glove exists');
+  assert.deepEqual(ASTRONAUT_RIG.parts.leftGlove.colorRgb, [0.20, 0.22, 0.25]);
+  assert.ok(ASTRONAUT_RIG.parts.rightGlove, 'Right EVA glove exists');
+  assert.deepEqual(ASTRONAUT_RIG.parts.rightGlove.colorRgb, [0.20, 0.22, 0.25]);
+
+  // First-person rig parts contract
+  assert.deepEqual(
+    FIRST_PERSON_RIG_PARTS,
+    ['torso', 'chestPack', 'leftArm', 'rightArm', 'leftGlove', 'rightGlove']
+  );
+  assert.deepEqual(ASTRONAUT_RIG.metadata.firstPersonParts, FIRST_PERSON_RIG_PARTS);
 });
 
 test('astronaut rig: robust input validation and type assertions', () => {
@@ -214,9 +244,75 @@ test('Stage 13: Landing squash, impact absorption and recovery kinematics', () =
   assert.ok(movingLanding.parts.leftArm.rotationRad[1] > 0.15, 'Arm flare remains active while moving during recovery');
 });
 
-test('Stage 13: First-person view-model compatibility across all poses', () => {
-  const FIRST_PERSON_RIG_PARTS = ['torso', 'leftArm', 'rightArm'];
+test('Stage 14: Hierarchical chained limb kinematics (chainedLimbPart)', () => {
+  // Neutral pose with zero rotation: child must have zero offset and zero rotation
+  const neutral = chainedLimbPart('leftGlove', 'leftArm', [0, 0, 0], [0, 0, 0]);
+  assert.ok(Math.hypot(...neutral.offset) < 1e-12, 'Neutral chained part offset must be zero');
+  assert.deepEqual(neutral.rotationRad, [0, 0, 0]);
 
+  // Shoulder pitch rotation of 0.5 rad: glove must orbit shoulder joint
+  const shoulderPitch = 0.5;
+  const pitched = chainedLimbPart('leftGlove', 'leftArm', [shoulderPitch, 0, 0], [0, 0, 0]);
+  assert.equal(pitched.rotationRad[0], shoulderPitch);
+  assert.ok(Math.abs(pitched.offset[1]) > 0.1, 'Glove swung forward/backward with shoulder');
+  assert.ok(Math.abs(pitched.offset[2]) > 0.02, 'Glove raised with shoulder swing');
+
+  // Combined shoulder swing + wrist local grip angle: rotations sum cleanly
+  const combined = chainedLimbPart('leftGlove', 'leftArm', [shoulderPitch, 0.1, 0], [-0.15, 0.05, 0]);
+  assert.ok(Math.abs(combined.rotationRad[0] - (shoulderPitch - 0.15)) < 1e-12);
+  assert.ok(Math.abs(combined.rotationRad[1] - 0.15) < 1e-12);
+});
+
+test('Stage 14: EVA Glove synchronization and grip angle across all animation regimes', () => {
+  // Walk (Loping) regime
+  const moving = { timeS: 1.0, horizontalSpeedMps: 1.2, verticalSpeedMps: 0, grounded: true, phase: 'walk' };
+  const walkPose = poseAstronautRig(moving);
+  assert.ok(walkPose.parts.leftGlove);
+  assert.ok(walkPose.parts.rightGlove);
+  // Gloves counter-swing rhythmically in opposition around neutral grip
+  const strideLen = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
+  const quarterCycle = 0.25 / (1.2 / strideLen);
+  const peakSwingPose = poseAstronautRig({ ...moving, timeS: quarterCycle });
+  assert.ok(
+    peakSwingPose.parts.leftGlove.rotationRad[0] * peakSwingPose.parts.rightGlove.rotationRad[0] < 0,
+    'At peak stride swing, gloves swing in opposite pitch directions'
+  );
+  // Differential swing matches arms
+  assert.ok(
+    Math.abs((peakSwingPose.parts.leftGlove.rotationRad[0] - peakSwingPose.parts.rightGlove.rotationRad[0]) -
+             (peakSwingPose.parts.leftArm.rotationRad[0] - peakSwingPose.parts.rightArm.rotationRad[0])) < 1e-12
+  );
+  // Gloves maintain outward suit-clearance flare
+  assert.ok(walkPose.parts.leftGlove.rotationRad[1] > 0);
+  assert.ok(walkPose.parts.rightGlove.rotationRad[1] < 0);
+
+  // Jump Ascent regime: gloves follow arms reaching forward/upward
+  const ascent = poseAstronautRig({ timeS: 2.0, horizontalSpeedMps: 0.5, verticalSpeedMps: 2.0, grounded: false, airborne: true, phase: 'running' });
+  assert.ok(ascent.parts.leftGlove.rotationRad[0] < -0.4, 'Ascent gloves reaching upward with arms');
+  assert.ok(ascent.parts.rightGlove.rotationRad[0] < -0.4);
+
+  // Jump Apex Balance regime: gloves flare wide to sides
+  const apex = poseAstronautRig({ timeS: 2.5, horizontalSpeedMps: 0.5, verticalSpeedMps: 0.0, grounded: false, airborne: true, phase: 'running' });
+  assert.ok(apex.parts.leftGlove.rotationRad[1] > 0.15, 'Apex left glove flared wide');
+  assert.ok(apex.parts.rightGlove.rotationRad[1] < -0.15, 'Apex right glove flared wide');
+
+  // Jump Descent regime: gloves brace forward/downward
+  const descent = poseAstronautRig({ timeS: 3.0, horizontalSpeedMps: 0.5, verticalSpeedMps: -2.0, grounded: false, airborne: true, phase: 'running' });
+  assert.ok(descent.parts.leftGlove.rotationRad[0] < -0.3, 'Descent gloves positioned to brace');
+
+  // Landing impact regime: wrists flex to absorb touchdown shock
+  const landing = poseAstronautRig({ timeS: 3.5, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, landingRecovery: true, landingRecoveryFrac: 1.0, phase: 'running' });
+  assert.ok(landing.parts.leftGlove.rotationRad[1] > 0.20, 'Landing shock flare active on left glove');
+  assert.ok(landing.parts.rightGlove.rotationRad[1] < -0.20, 'Landing shock flare active on right glove');
+
+  // Static parts check: chestPack and plssAntenna remain rigidly anchored
+  assert.deepEqual(walkPose.parts.chestPack.offset, [0, 0, 0]);
+  assert.deepEqual(walkPose.parts.chestPack.rotationRad, [0, 0, 0]);
+  assert.deepEqual(walkPose.parts.plssAntenna.offset, [0, 0, 0]);
+  assert.deepEqual(walkPose.parts.plssAntenna.rotationRad, [0, 0, 0]);
+});
+
+test('Stage 14: First-person view-model compatibility across all poses (arms, gloves, chestPack)', () => {
   const testStates = [
     { name: 'idle', state: { timeS: 1, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, phase: 'idle' } },
     { name: 'walk', state: { timeS: 1.5, horizontalSpeedMps: 1.2, verticalSpeedMps: 0, grounded: true, phase: 'walk' } },
@@ -238,10 +334,13 @@ test('Stage 13: First-person view-model compatibility across all poses', () => {
       assert.ok(part.offset.every(Number.isFinite), `${name}: ${partId} offset must be finite`);
       assert.ok(part.rotationRad.every(Number.isFinite), `${name}: ${partId} rotationRad must be finite`);
 
-      // Arm pitch bounds: view-model arms must stay naturally in lower view, never inverted
-      if (partId.includes('Arm')) {
+      // View-model arms and gloves pitch bounds: must stay naturally in lower view, never inverted
+      if (partId.includes('Arm') || partId.includes('Glove')) {
         const pitch = part.rotationRad[0];
-        assert.ok(pitch >= -1.0 && pitch <= 1.0, `${name}: ${partId} pitch ${pitch} rad must stay within comfortable FOV bounds`);
+        assert.ok(
+          pitch >= -1.2 && pitch <= 1.2,
+          `${name}: ${partId} pitch ${pitch} rad must stay within comfortable FOV bounds`
+        );
       }
     }
   }

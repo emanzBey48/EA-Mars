@@ -91,7 +91,21 @@ function parseProvenance(source, geojson) {
   const doiMatch = citation && citation.match(/https:\/\/doi\.org\/\S+?(?=[\s,;]|$)/);
   const scaleMatch = citation && citation.match(/scale 1:(\d[\d,.]*)/);
   const scaleDenominator = scaleMatch ? Number(scaleMatch[1].replace(/[,.]/g, '')) : null;
+  // Stage 27 (C3): SIM 3464 text/uncertainty apply ONLY to a SIM 3464 source (no source at all = legacy default, or a
+  // source whose title/citation names SIM 3464). Any other source gets generic wording and an UNKNOWN (null)
+  // positional uncertainty unless its manifest states `positional_uncertainty_m: {min, max}`.
+  const isSim3464 = source == null || /SIM\s*3464/i.test(`${s.title ?? ''} ${citation ?? ''}`);
+  const u = s.positional_uncertainty_m;
+  const statedU = u && typeof u === 'object' && Number.isFinite(u.min) && Number.isFinite(u.max) && u.min >= 0 && u.max >= u.min
+    ? { min: u.min, max: u.max } : null;
+  const scaleTxt = formatScale(scaleDenominator);
+  const genericTr = `Harita${scaleTxt ? ` ölçeğinde (${scaleTxt})` : ''} birim ataması indikatiftir; konum belirsizliği ${statedU ? `~${statedU.min}–${statedU.max} m (kaynak beyanı)` : 'kaynakta belirtilmemiş'}; saha gerçeği değildir. Mineraloji, güvenlik veya geçilebilirlik iddiası yoktur.`;
+  const genericEn = `Map${scaleTxt ? `-scale (${scaleTxt})` : ''} unit assignment is indicative; positional uncertainty ${statedU ? `~${statedU.min}-${statedU.max} m (as stated by the source)` : 'not stated by the source'}; not field truth. No mineralogy, safety or traversability claim.`;
   return {
+    sourceProfile: isSim3464 ? 'usgs-sim3464' : 'generic',
+    positionalUncertaintyM: isSim3464 ? GEOLOGY_POSITIONAL_UNCERTAINTY_M : statedU,
+    caveatTr: isSim3464 ? GEOLOGY_CAVEAT_TR : genericTr,
+    caveatEn: isSim3464 ? GEOLOGY_CAVEAT_EN : genericEn,
     title: s.title ?? null,
     datasetVersion: s.dataset_version ?? null,
     citation,
@@ -107,8 +121,10 @@ function parseProvenance(source, geojson) {
     // Not invented: USGS metadata gives accconst "None" and no public-domain statement for this dataset.
     license: typeof s.license === 'string' ? s.license : 'not_stated',
     productName: typeof geojson.name === 'string' ? geojson.name : null,
-    caveats: GEOLOGY_CAVEATS,
-    attribution: citation ? `USGS SIM 3464 — ${citation}` : 'USGS SIM 3464 (Sun & Stack, 2020)',
+    caveats: isSim3464 ? GEOLOGY_CAVEATS : Object.freeze([genericTr]),
+    attribution: isSim3464
+      ? (citation ? `USGS SIM 3464 — ${citation}` : 'USGS SIM 3464 (Sun & Stack, 2020)')
+      : (citation ?? 'kaynak atfı belirtilmemiş'),
   };
 }
 
@@ -269,13 +285,16 @@ export function toGeologySnapshot(lookupResult, index) {
     onBoundary: ok ? r.onBoundary === true : (status === LOOKUP_STATUS.AMBIGUOUS && Array.isArray(r.candidates)
       && r.candidates.every((c) => c.relation === 'boundary')),
     candidates: cands,
-    positionalUncertaintyM: { min: GEOLOGY_POSITIONAL_UNCERTAINTY_M.min, max: GEOLOGY_POSITIONAL_UNCERTAINTY_M.max },
+    // Per-index source metadata when present (C3); no index / legacy index without it -> SIM 3464 defaults (unchanged).
+    positionalUncertaintyM: p && p.sourceProfile === 'generic'
+      ? (p.positionalUncertaintyM ? { min: p.positionalUncertaintyM.min, max: p.positionalUncertaintyM.max } : { min: null, max: null })
+      : { min: GEOLOGY_POSITIONAL_UNCERTAINTY_M.min, max: GEOLOGY_POSITIONAL_UNCERTAINTY_M.max },
     mapScale: p ? formatScale(p.scaleDenominator) : null,
     citation: p ? p.citation : null,
     doi: p ? p.doi : null,
-    license: GEOLOGY_LICENSE_NOT_STATED,
-    caveatTr: GEOLOGY_CAVEAT_TR,
-    caveatEn: GEOLOGY_CAVEAT_EN,
+    license: p && p.sourceProfile === 'generic' && typeof p.license === 'string' ? p.license : GEOLOGY_LICENSE_NOT_STATED,
+    caveatTr: p && p.sourceProfile === 'generic' && typeof p.caveatTr === 'string' ? p.caveatTr : GEOLOGY_CAVEAT_TR,
+    caveatEn: p && p.sourceProfile === 'generic' && typeof p.caveatEn === 'string' ? p.caveatEn : GEOLOGY_CAVEAT_EN,
   });
 }
 

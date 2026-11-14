@@ -10,6 +10,11 @@ import {
   pixelBoundsForBbox, tileCoverageForBbox, crc32, decodePng, encodePng, readPngHeader, buildMosaic, uvMappingForWindow, localToUv,
   parseFgdc, auditInventory, namedWindows, expandBboxMetres, defaultLocalAdapter, runBuild,
 } from '../scripts/build-ortho-mosaic.mjs';
+import {
+  readDtmWindow, windowEdgesLonLat, resampleOrthoToDtm, terrainFromDtm, hillshadeFromTerrain, brightnessGradient,
+  bilinear, correlateAtShift, scanShifts, peakSummary, decideRegistration, runValidation, THRESHOLDS,
+} from '../scripts/validate-ortho-registration.mjs';
+import { EquirectangularProjection } from '../public/js/geo/geo.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DATA = path.join(here, '..', 'data', 'mars-trek');
@@ -302,4 +307,114 @@ test('end-to-end: route window at zoom 17 fails closed on the missing tiles; zoo
   assert.equal(part.manifestOut.missingTiles.length, 6);
   assert.ok(part.manifestOut.mosaic.transparentPixels > 0);
   assert.equal(runBuild({ zoom: 14, window: 'route', marginM: 0, allowMissing: false }).manifestOut.missingTiles.length, 0);
+});
+
+// ---------------------------------------------------------------- Stage 21B-On: ortho <-> DTM registration test
+// Synthetic helpers: smooth fields so that bilinear sub-pixel shifts are well defined.
+const smoothField = (rows, cols) => {
+  const f = new Float32Array(rows * cols);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    f[r * cols + c] = Math.sin(r * 0.31) * 3 + Math.cos(c * 0.23 + r * 0.07) * 2 + Math.sin((r + c) * 0.11);
+  }
+  return f;
+};
+const allValid = (n) => new Uint8Array(n).fill(1);
+const interiorIdx = (rows, cols, m = 6) => {
+  const out = [];
+  for (let r = m; r < rows - m; r++) for (let c = m; c < cols - m; c++) out.push(r * cols + c);
+  return Int32Array.from(out);
+};
+
+test('registration: DTM window read matches the extractor (count, no-data, edge geolocation)', () => {
+  const dd = path.join(here, '..', 'data');
+  const dtm = readDtmWindow(dd);
+  assert.equal(dtm.Z.length, dtm.rows * dtm.cols);
+  assert.equal(dtm.validCount, dtm.meta.windowStats.valid);
+  assert.equal(dtm.validCount, dtm.rows * dtm.cols); // extractor reports zero no-data in this window
+  // edge lon/lat from the PixelIsArea label reproduce the extractor's own coverage bounds (metres)
+  const e = windowEdgesLonLat(dtm), ref = dtm.meta.coverage.latLonBounds, R = 3396190 * Math.PI / 180;
+  for (const k of ['west', 'east', 'north', 'south']) assert.ok(Math.abs(e[k] - ref[k]) * R < 1e-3, `${k} edge drift`);
+});
+
+test('registration: Horn terrain on a plane gives the exact slope; hillshade follows the sun side', () => {
+  const rows = 12, cols = 12;
+  const Z = new Float32Array(rows * cols);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) Z[r * cols + c] = c * 0.5; // rises east at 0.5 m/m
+  const terr = terrainFromDtm({ rows, cols, Z }, 1);
+  const i = 5 * cols + 5;
+  assert.ok(terr.valid[i]);
+  assert.ok(Math.abs(terr.dzdx[i] - 0.5) < 1e-6 && Math.abs(terr.dzdy[i]) < 1e-6);
+  // normal n = (-0.5, 0, 1)/sqrt(1.25); L(az, 45 deg): n.L = (-0.5*sin(az) + cos(az)... ) evaluated analytically
+  const s = Math.SQRT1_2, norm = Math.sqrt(1.25);
+  const expWest = (0.5 * s + s) / norm; // az 270: L = (-s, 0, s)
+  const expEast = (-0.5 * s + s) / norm; // az 90:  L = ( s, 0, s)
+  const hWest = hillshadeFromTerrain(terr, 270, 45), hEast = hillshadeFromTerrain(terr, 90, 45);
+  assert.ok(Math.abs(hWest[i] - expWest) < 1e-6, `west ${hWest[i]} vs ${expWest}`);
+  assert.ok(Math.abs(hEast[i] - expEast) < 1e-6, `east ${hEast[i]} vs ${expEast}`);
+  assert.ok(hWest[i] > hEast[i], 'slope facing west must be brighter under a western sun');
+  // border cells (no 3x3 neighbourhood) are not valid
+  assert.equal(terr.valid[0], 0);
+});
+
+test('registration: correlation recovers a known integer and half-pixel shift on a smooth field', () => {
+  const rows = 80, cols = 80, B = smoothField(rows, cols), Bv = allValid(rows * cols);
+  const idx = interiorIdx(rows, cols);
+  // A(r,c) = B(r - dy, c - dx) with dx=1, dy=-2 -> peak at (1,-2)
+  const A = new Float32Array(rows * cols);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) A[r * cols + c] = bilinear(B, Bv, rows, cols, r + 2, c - 1);
+  const base = { A, indexList: idx, B, Bvalid: Bv, rows, cols, minN: 100 };
+  const hit = correlateAtShift({ ...base, dx: 1, dy: -2 });
+  assert.ok(hit.r > 0.999, `integer peak r=${hit.r}`);
+  assert.ok(correlateAtShift({ ...base, dx: 0, dy: 0 }).r < hit.r);
+  // half-pixel: A sampled at c-0.5 -> peak at dx=0.5
+  const H = new Float32Array(rows * cols);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) H[r * cols + c] = bilinear(B, Bv, rows, cols, r, c - 0.5);
+  const surf = scanShifts({ A: H, indexList: idx, B, Bvalid: Bv, rows, cols, range: 3, step: 0.5, minN: 100 });
+  const pk = peakSummary(surf);
+  assert.equal(pk.top.dx, 0.5);
+  assert.equal(pk.top.dy, 0);
+  assert.ok(pk.top.r > 0.99);
+  assert.equal(surf.length, 169); // 13 x 13 half-pixel grid for +-3 px
+});
+
+test('registration: resampling fails closed (NaN, never zero) on missing or non-opaque tiles', () => {
+  const g = geo(17);
+  const proj = new EquirectangularProjection({ radiusM: 3396190 });
+  // real DTM label offsets, cells around Sol 120 / WB1 (lon 77.4494 E)
+  const dtm = { rows: 4, cols: 4, row0: 13647, col0: 13423, L0: 1106617.5, S0: -4577366.5, cellSizeM: 1 };
+  const none = resampleOrthoToDtm({ dtm, g, proj, tileAt: () => null });
+  assert.equal(none.count, 0);
+  assert.ok(none.values.every(Number.isNaN));
+  const partial = resampleOrthoToDtm({
+    dtm, g, proj,
+    tileAt: () => ({ gray: new Uint8Array(65536).fill(200), alpha: new Uint8Array(65536).fill(0) }),
+  });
+  assert.equal(partial.count, 0, 'alpha 0 must not count as valid');
+  assert.ok(partial.values.every(Number.isNaN));
+});
+
+test('registration: decision is conservative (only a clean, centred, sharp peak is "hizalı")', () => {
+  const good = { top: { dx: 0, dy: 0, r: 0.8, n: 1e5 }, margin: 0.2 };
+  const grad = { top: { dx: 0.5, dy: -0.5, r: 0.6, n: 1e5 }, margin: 0.1 };
+  assert.equal(decideRegistration({ overlapCells: 1e5, hillshade: good, gradient: grad }).verdict, 'hizalı');
+  // off-centre peak
+  assert.equal(decideRegistration({ overlapCells: 1e5, hillshade: { top: { dx: 2, dy: 0, r: 0.8, n: 1e5 }, margin: 0.2 }, gradient: grad }).verdict, 'kanıtlanamadı');
+  // low correlation
+  assert.equal(decideRegistration({ overlapCells: 1e5, hillshade: { top: { dx: 0, dy: 0, r: 0.2, n: 1e5 }, margin: 0.2 }, gradient: grad }).verdict, 'kanıtlanamadı');
+  // ambiguous second peak
+  assert.equal(decideRegistration({ overlapCells: 1e5, hillshade: { top: { dx: 0, dy: 0, r: 0.8, n: 1e5 }, margin: 0.01 }, gradient: grad }).verdict, 'kanıtlanamadı');
+  // too little overlap
+  assert.equal(decideRegistration({ overlapCells: 10, hillshade: good, gradient: grad }).verdict, 'kanıtlanamadı');
+  assert.equal(decideRegistration({ overlapCells: 1e5, hillshade: null, gradient: grad }).verdict, 'kanıtlanamadı');
+  assert.ok(THRESHOLDS.minCorrelation > 0);
+});
+
+test('registration: real DTM vs z17 ortho run does NOT claim alignment (current evidence is insufficient)', () => {
+  const res = runValidation({ range: 3, step: 0.5, wide: 4, wideStride: 3 });
+  assert.equal(res.dtm.validCells, 1902260);
+  assert.equal(res.ortho.tilesLoaded, 54);
+  assert.equal(res.decision.verdict, 'kanıtlanamadı');
+  assert.ok(res.decision.reasons.length >= 1);
+  assert.equal(res.hillshade.perAzimuth.length, 8);
+  assert.equal(res.hillshade.surfaceBest.length, 169);
 });

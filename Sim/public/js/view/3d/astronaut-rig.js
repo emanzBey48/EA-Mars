@@ -158,7 +158,7 @@ export function poseAstronautRig(state) {
     const sway = 0.02 * speedNorm * cycle;
     rootRotationRad = [forwardLean + 0.03 * speedNorm * cycle, hipRoll, sway];
 
-    const helmetRot = [-0.35 * rootRotationRad[0], -0.4 * hipRoll, -0.3 * sway];
+    const helmetRot = [-0.35 * rootRotationRad[0] - 0.008 * breath * idleFade, -0.4 * hipRoll, -0.3 * sway];
     parts.helmet = hingedPart3D('helmet', helmetRot);
     parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
 
@@ -180,7 +180,7 @@ export function poseAstronautRig(state) {
 
     const legSwing = amplitude * cycle;
     const legAbsorb = 0.12 * recFrac;
-    const legClearance = 0.03;
+    const legClearance = 0.03 * ease;
     const leftLegRot = [legSwing - legAbsorb, -legClearance, 0];
     const rightLegRot = [-legSwing - legAbsorb, legClearance, 0];
     parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
@@ -265,7 +265,7 @@ export function poseAstronautRig(state) {
     rootOffset = [0, 0, squash + 0.006 * breath * idleFade];
     rootRotationRad = [0.045 * recFrac, 0, 0];
 
-    const helmetRot = [-0.30 * rootRotationRad[0], 0, 0];
+    const helmetRot = [-0.30 * rootRotationRad[0] - 0.008 * breath * idleFade, 0, 0];
     parts.helmet = hingedPart3D('helmet', helmetRot);
     parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
 
@@ -451,10 +451,12 @@ export function chainedLimbPart(childId, parentId, parentRotationRad, childLocal
     finalCenter[2] - child.center[2],
   ];
 
-  // 7. Combined orientation: true matrix composition R = R_parent * R_child (child applied first)
-  const rotationRad = matrixToEuler(
-    multiply3x3(eulerToMatrix(parentRotationRad), eulerToMatrix(childLocalRotationRad))
-  );
+  // 7. Combined orientation: true matrix composition R = R_parent * R_child (child applied first).
+  // With an identity child rotation the composition is exactly the parent rotation (no matrix round-trip).
+  const childIsIdentity = childLocalRotationRad[0] === 0 && childLocalRotationRad[1] === 0 && childLocalRotationRad[2] === 0;
+  const rotationRad = childIsIdentity
+    ? [parentRotationRad[0], parentRotationRad[1], parentRotationRad[2]]
+    : matrixToEuler(multiply3x3(eulerToMatrix(parentRotationRad), eulerToMatrix(childLocalRotationRad)));
 
   return { offset, rotationRad };
 }

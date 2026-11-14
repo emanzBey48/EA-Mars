@@ -218,7 +218,36 @@ test('prepared data (if present): route samples are all valid DTM cells', { skip
 function syntheticManifest(overrides = {}) {
   const ca = adapter.localToCell(A.x, A.y);
   const cb = adapter.localToCell(B.x, B.y);
+  // Loaded window derived from the waypoint cells (+ margin); local bounds are the exact affine
+  // outer edges of that window, as the validator recomputes them (PixelIsArea, +-0.5 px).
+  const margin = 40;
+  const window = {
+    row0: Math.min(ca.row, cb.row) - margin,
+    col0: Math.min(ca.col, cb.col) - margin,
+    rows: Math.abs(ca.row - cb.row) + 2 * margin + 1,
+    cols: Math.abs(ca.col - cb.col) + 2 * margin + 1,
+  };
+  const nw = adapter.pixelToLocal(window.row0 - 0.5, window.col0 - 0.5);
+  const se = adapter.pixelToLocal(window.row0 + window.rows - 0.5, window.col0 + window.cols - 0.5);
+  const pdsUrl = 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl';
   const base = buildHiriseManifestFromMeta({
+    window,
+    windowStats: { noData: 0, invalid: 0 },
+    routeCheck: { lengthM: Math.hypot(B.x - A.x, B.y - A.y), samples: 700, nonOkElevationSamples: 0 },
+    transformComparison: {
+      sourceUrl: pdsUrl,
+      pdsGrid: {
+        sourceUrl: pdsUrl,
+        lineProjectionOffset: MAP_FRAME.lineProjectionOffset,
+        sampleProjectionOffset: MAP_FRAME.sampleProjectionOffset,
+        mapScaleM: MAP_FRAME.mapScaleM,
+        radiusKm: MAP_FRAME.radiusKm,
+      },
+      tiffGrid: {
+        lineProjectionOffset: MAP_FRAME.upperLeftY - MAP_FRAME.mapScaleM / 2,
+        sampleProjectionOffset: -(MAP_FRAME.upperLeftX + MAP_FRAME.mapScaleM / 2),
+      },
+    },
     label: {
       ...MAP_FRAME,
       productId: 'SYNTHETIC_TEST_MANIFEST',
@@ -263,7 +292,7 @@ function syntheticManifest(overrides = {}) {
     crsText: 'Equirectangular test CRS',
     coverage: {
       description: 'Sentetik test penceresi (yalnız doğrulayıcı testi için)',
-      localBoundsM: { xMin: -240, xMax: 380, yMin: -920, yMax: 240 },
+      localBoundsM: { xMin: nw.x, xMax: se.x, yMin: se.y, yMax: nw.y },
     },
     timeCoverage: 'Sentetik test zaman kapsamı',
     transformControls: [
@@ -280,6 +309,8 @@ test('manifest validator: returns supported for complete verified manifest, need
   const okRes = validateLayerManifest(syntheticManifest(), MAP_FRAME);
   assert.equal(okRes.status, VALIDATION_STATUS.SUPPORTED);
   assert.equal(okRes.samplingAllowed, true);
+  assert.equal(okRes.reasonCode, 'verified');
+  assert.deepEqual(okRes.issues, []);
 
   // Ambiguous pixel registration (e.g. PixelIsArea vs PDS 1-based center) -> needs_review, sampling disabled
   const areaGrid = syntheticManifest({
@@ -289,6 +320,7 @@ test('manifest validator: returns supported for complete verified manifest, need
   assert.equal(areaRes.status, VALIDATION_STATUS.NEEDS_REVIEW);
   assert.equal(areaRes.samplingAllowed, false);
   assert.equal(areaRes.fields.grid.status, VALIDATION_STATUS.NEEDS_REVIEW);
+  assert.equal(areaRes.reasonCode, 'needs_review_grid');
 
   // Unverified scaling/offset -> needs_review, sampling disabled
   const scaled = syntheticManifest({
@@ -298,6 +330,7 @@ test('manifest validator: returns supported for complete verified manifest, need
   assert.equal(scaledRes.status, VALIDATION_STATUS.NEEDS_REVIEW);
   assert.equal(scaledRes.samplingAllowed, false);
   assert.equal(scaledRes.fields.valueEncoding.status, VALIDATION_STATUS.NEEDS_REVIEW);
+  assert.equal(scaledRes.reasonCode, 'needs_review_valueEncoding');
 
   // Unknown CRS or missing unit/no-data -> invalid, sampling disabled
   const badCrs = syntheticManifest({
@@ -336,6 +369,7 @@ test('SurfaceProviderRegistry: rejects unverified candidate manifest (no 0 eleva
   // Direct load of unverified candidate disables sampling and returns UnavailableLayer (zM: null, never 0)
   const direct = await reg.loadProvider('synthetic-unverified-candidate');
   assert.equal(direct.validation.status, VALIDATION_STATUS.NEEDS_REVIEW);
+  assert.equal(direct.validation.reasonCode, 'needs_review_humanReview');
   assert.equal(direct.provider.available, false);
   const surf = direct.provider.sampleSurface(0, 0);
   assert.equal(surf.status, STATUS.UNAVAILABLE);

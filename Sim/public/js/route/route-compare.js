@@ -115,6 +115,21 @@ function paramsFor(id) {
     roughnessRefM: cp.roughnessRefM.value, costK: cp.costK.value, costP: cp.costP.value };
 }
 
+/** Dış tercih takma adları (UI kimlikleri). `flattest` = en düşük eğim (`gentle`). */
+export const ROUTE_PREFERENCE_ALIASES = Object.freeze({ flattest: 'gentle' });
+
+/** Tercih kimliğini kanonik id'ye çevirir (takma ad dahil). Bilinmeyen kimlik için null; fırlatmaz. */
+export function resolveRoutePreferenceId(id) {
+  const canon = Object.prototype.hasOwnProperty.call(ROUTE_PREFERENCE_ALIASES, id) ? ROUTE_PREFERENCE_ALIASES[id] : id;
+  return ROUTE_PREFERENCE_IDS.includes(canon) ? canon : null;
+}
+
+/** Kanonik tercihin sayısal cost parametreleri (planWalkingRoute `params`). Bilinmeyen id için TypeError. */
+export function routePreferenceParams(id) {
+  if (!ROUTE_PREFERENCE_IDS.includes(id)) throw new TypeError(`Bilinmeyen rota tercihi: ${String(id)}`);
+  return paramsFor(id);
+}
+
 const isFiniteNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const numOrNull = (v) => (isFiniteNum(v) ? v : null);
 const errMsg = (err) => { try { return String(err && err.message ? err.message : err); } catch { return 'açıklanamayan hata'; } };

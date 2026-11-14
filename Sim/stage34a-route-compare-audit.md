@@ -87,3 +87,35 @@ Yorum: Jezero'da tercihler arası fark küçüktür; bu 23C bulgusuyla tutarlıd
 - git commit ve push yapılmadı (istenmedi). `git` bu ortamda PATH'te değil; dal ve durum kontrolü yapılamadı.
 - `smoke-e2e.mjs`, tarayıcı/görsel testi ve worker'ın gerçek thread'deki çalışması denenmedi.
 - `main.js`, `config.js`, worker ve diğer mevcut route dosyaları değiştirilmedi.
+
+## Uyumluluk düzeltmesi (Stage 34 → 34B öncesi)
+
+**Sorun (gerçek veride ölçüldü).** `main.js` `plan-walking-route` mesajında `options: { preference, costParams }` ve üst düzey `costParams` (`slopeWeight`/`distanceWeight`) gönderiyordu. Eski worker bunları okumuyordu; `planWalkingRoute` ise `options` içindeki bilinmeyen `preference` anahtarını `invalid_input` ile reddediyordu. Ölçüm (WB1→Roubion, Alparslan mesaj biçimi): üç tercih de `Bilinmeyen options anahtarı: preference` hatası verdi; mesajsız yol 730,505 m / 9,81° çalıştı. `main.js` değişmedi.
+
+**Düzeltme (yalnız `route/pathfinder.worker.js` ve `route/route-compare.js` ek export'ları):**
+- Tercih kimliği sırası: `message.preference` → `message.options.preference` → yok. Takma ad: `flattest` ≡ `gentle`. Bilinmeyen kimlik `Bilinmeyen rota tercihi: X` hatası verir; sessiz varsayılan yok.
+- Tercih yok veya `balanced`: init-window alanı (eski yol). Tercih belirtilmemiş mesaj yanıtı eskisiyle bayt bayt aynıdır (`{type,id,result}`); `balanced` açıkça istenirse yanıta `preference`, `requestedPreference`, `preferenceNote` eklenir.
+- `shortest`/`gentle`: route-compare ön ayar parametreleriyle `buildFieldForWindow` (pencere önbelleği) + `planWalkingRoute`.
+- `message.costParams` ve `options.costParams` yok sayılır; `options`tan `preference` ve `costParams` ayıklanır, bu yüzden model'e sızmaz.
+- `message.budget` artık planner'a iletilir (yoksa değişmez).
+- Yeni `plan-route-variants` `{type,id,startLocal,endLocal,budget?,preferences?}` → `{type:'variants-result', id, result}` (`planRouteVariants`). Takma adlar `preferences` içinde de çözülür.
+- `init-window` değişmedi: yeni pencere önceki alanı/önbelleği temizler; başarısız init de önceki pencereyi bırakmaz.
+- route-compare.js ek export'ları: `ROUTE_PREFERENCE_ALIASES`, `resolveRoutePreferenceId(id)` (bilinmeyen için `null`), `routePreferenceParams(id)`. Mevcut davranış ve testler değişmedi.
+
+**Kapsam dışı (bilinçli):** tercihe özgü heatmap üretilmedi; `init-window` heatmap'i yalnız balanced'dır. Alparslan'ın `ROUTE_PREFERENCES.costParams` tablosu (`slopeWeight`, `distanceWeight`) yok sayılır; tercih farkı yalnız bu kimlikten gelen route-compare ön ayarlarıyla oluşur.
+
+**Gerçek veri (WB1→Roubion, worker üzerinden, `plan-walking-route` ve `plan-route-variants`):**
+
+| Tercih (mesaj) | Çözülen | Uzunluk (m) | Maks eğim (°) | Δ uzunluk vs dengeli (m) | Δ maks eğim (°) | Yanal sapma ort./maks (m) |
+|---|---|---|---|---|---|---|
+| `shortest` | shortest | 730,505 | 10,643 | 0,000 | +0,834 | 4,91 / 24,52 |
+| `balanced` (referans) | balanced | 730,505 | 9,809 | — | — | — |
+| `flattest` (Alparslan) | gentle | 732,161 | 9,274 | +1,657 | −0,535 | 20,23 / 51,04 |
+
+34A bağımsız tablosuyla eşleşir (730,505 / 730,505 / 732,161 m; maks eğim 10,64 / 9,81 / 9,27°). Üç tercih de farklı parametreyle çalışır (`gentle` ≠ `balanced`). Mesajsız yol `balanced` ile aynı yolu üretir.
+
+**Açık noktalar (34B için):**
+- `balanced` açık istendiğinde init-window alanı kullanılır; `main.js` init-window'da `params` göndermediği için bu varsayılan parametrelerdir.
+- `plan-route-variants` ilk çağrıda `balanced` için init alanından ayrı bir alan daha kurar (önbellek anahtarı farklı); ek maliyet ölçülmedi.
+- Testler: `test/pathfinder-worker.test.mjs` 11/11; `node --test test/` 377/377 (başlangıç 366 + 11).
+- Çalıştırılmayanlar: git commit/push yapılmadı; `smoke-e2e.mjs`, tarayıcı/gerçek worker thread ve `main.js` UI akışı denenmedi.

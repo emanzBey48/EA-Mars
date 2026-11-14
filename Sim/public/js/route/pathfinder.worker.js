@@ -1,11 +1,35 @@
 // Worker boundary for route planning. Cost-field preparation stays off the UI thread.
 import { handlePlanMessage } from './pathfinder.js';
 import { buildFieldForWindow, createDemWindow, explainLocal, planWalkingRoute } from './route-service.js';
+import {
+  REFERENCE_PREFERENCE_ID, describeRoutePreference, planRouteVariants,
+  resolveRoutePreferenceId, routePreferenceParams,
+} from './route-compare.js';
 
 function workerError(id, err) {
   let message;
   try { message = String(err && err.message ? err.message : err); } catch { message = 'açıklanamayan hata'; }
   return { type: 'error', id, message };
+}
+
+// main.js `options.preference` / `options.costParams` ve üst düzey `costParams` gönderir. Maliyet modelinde bu
+// alanların karşılığı yoktur; tercih parametreleri yalnız tercih kimliğinden (route-compare) gelir. Bu iki anahtar
+// planWalkingRoute'a ASLA geçmez (planRoute bilinmeyen options anahtarını reddeder).
+const PREFERENCE_OPTION_KEYS = ['preference', 'costParams'];
+
+function plannerOptionsOf(options) {
+  if (options === undefined || options === null || typeof options !== 'object' || Array.isArray(options)) return options;
+  const out = {};
+  for (const k of Object.keys(options)) if (!PREFERENCE_OPTION_KEYS.includes(k)) out[k] = options[k];
+  return out;
+}
+
+// Çözüm sırası: message.preference → message.options.preference → yok (undefined).
+function requestedPreferenceOf(message) {
+  if (message.preference !== undefined) return message.preference;
+  const o = message.options;
+  if (o && typeof o === 'object' && !Array.isArray(o) && o.preference !== undefined) return o.preference;
+  return undefined;
 }
 
 /** Bind the versioned worker protocol; legacy `plan` messages remain supported. */
@@ -44,8 +68,41 @@ export function attachWorker(scope) {
       }
       if (message.type === 'plan-walking-route') {
         if (!window) throw new Error('önce init-window gönderilmeli');
-        const result = planWalkingRoute({ window, field, params, startLocal: message.startLocal, endLocal: message.endLocal, options: message.options });
-        scope.postMessage({ type: 'result', id, result });
+        const requested = requestedPreferenceOf(message);
+        const options = plannerOptionsOf(message.options);
+        const budget = message.budget;
+        if (requested === undefined) {
+          // Tercih belirtilmedi: eski davranış (init-window params + field), mesaj biçimi değişmez.
+          const result = planWalkingRoute({ window, field, params, startLocal: message.startLocal, endLocal: message.endLocal, options, budget });
+          scope.postMessage({ type: 'result', id, result });
+          return;
+        }
+        const preference = resolveRoutePreferenceId(requested);
+        if (preference === null) throw new Error(`Bilinmeyen rota tercihi: ${String(requested)}`);
+        const meta = { type: 'result', id, preference, requestedPreference: requested, preferenceNote: describeRoutePreference(preference).text };
+        if (preference === REFERENCE_PREFERENCE_ID) {
+          // Dengeli = init-window alanı (referans); yeni alan kurulmaz.
+          const result = planWalkingRoute({ window, field, params, startLocal: message.startLocal, endLocal: message.endLocal, options, budget });
+          scope.postMessage({ ...meta, result });
+          return;
+        }
+        // Diğer tercihler kendi ön ayar parametreleriyle; alan window önbelleğinden gelir (aynı params tekrar kurulmaz).
+        const prefParams = routePreferenceParams(preference);
+        const prefField = buildFieldForWindow(window, prefParams);
+        const result = planWalkingRoute({ window, field: prefField, params: prefParams, startLocal: message.startLocal, endLocal: message.endLocal, options, budget });
+        scope.postMessage({ ...meta, result });
+        return;
+      }
+      if (message.type === 'plan-route-variants') {
+        if (!window) throw new Error('önce init-window gönderilmeli');
+        const preferences = Array.isArray(message.preferences)
+          ? message.preferences.map((p) => resolveRoutePreferenceId(p) ?? p)
+          : message.preferences;
+        // planRouteVariants her tercih için planWalkingRoute'u params ile çağırır; alan window önbelleğinden gelir.
+        const result = planRouteVariants({
+          window, startLocal: message.startLocal, endLocal: message.endLocal, budget: message.budget, preferences,
+        });
+        scope.postMessage({ type: 'variants-result', id, result });
         return;
       }
       if (message.type === 'explain-cell') {

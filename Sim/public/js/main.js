@@ -2,6 +2,7 @@
 // immutable WorldSnapshot creation, canvas rendering, input and HUD.
 import { SCENARIO, WAYPOINTS, MAP_FRAME, ROUTE_ORIGIN_NOTE, SOURCES } from './config.js';
 import { adapterFromLabel } from './geo/geo.js';
+import { createGeologyIndex, lookupGeologicUnitLocal, geologicBoundarySegments, geologicBoundarySegmentsToLocal } from './geo/geology.js';
 import { UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
 import { createDefaultSurfaceRegistry } from './surface/registry.js';
 import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
@@ -41,6 +42,11 @@ let renderer3d = null;
 let renderer3dError = null;
 let terrainMeshError = null;
 let terrainMeshBuildMs = null;
+let geologyIndex = null;
+let geologySegmentsLocal = [];
+let geologyLinePositions = new Float32Array();
+let geologyStatus = 'loading';
+let geologyLayerVisible = true;
 
 const mapWrap = $('mapwrap');
 const canvas2d = $('map');
@@ -52,6 +58,7 @@ const viewNote = $('view-note');
 const viewStatus = $('view-status');
 const fpReticle = $('fp-reticle');
 const fpHudHint = $('fp-hud-hint');
+const geologyToggle = $('toggle-geology');
 const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Arazi yüksekliği 3× dikey sunum abartısıdır; yandan ışık da yalnızca görsel kabartma okunurluğu içindir.';
 
 try {
@@ -112,8 +119,26 @@ function build3dTerrainOnce() {
   }
   if (!prepared.indices.length) throw new Error('DTM penceresinde çizilebilir geçerli terrain quad’ı bulunamadı.');
   terrainMesh = prepared;
+  geologyLinePositions = buildGeologyLinePositions();
   build3dMarkersOnce();
   return terrainMesh;
+}
+
+function buildGeologyLinePositions() {
+  if (!geologySegmentsLocal.length) return new Float32Array();
+  const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
+  const positions = [];
+  for (const segment of geologySegmentsLocal) {
+    for (let i = 1; i < segment.xy.length; i++) {
+      const [ax, ay] = segment.xy[i - 1], [bx, by] = segment.xy[i];
+      const a = layers.dtm.sampleElevation(ax, ay), b = layers.dtm.sampleElevation(bx, by);
+      // Do not bridge a missing or invalid DTM sample with invented surface height.
+      if (a.status !== 'ok' || b.status !== 'ok') continue;
+      positions.push(ax, ay, (a.value - referenceElevationM) * verticalScale + 0.04,
+        bx, by, (b.value - referenceElevationM) * verticalScale + 0.04);
+    }
+  }
+  return new Float32Array(positions);
 }
 
 function build3dMarkersOnce() {
@@ -199,14 +224,62 @@ async function selectView(view) {
 }
 
 function buildSnapshot() {
+  const geology = geologyIndex ? lookupGeologicUnitLocal(geologyIndex, adapter, { xM: sim.pos.x, yM: sim.pos.y }) : { status: geologyStatus };
   lastSnapshot = createWorldSnapshot({
     sim,
     surfaceProvider: layers.dtm,
     adapter,
     waypoints,
     routeNote: ROUTE_ORIGIN_NOTE,
+    geology,
   });
   return lastSnapshot;
+}
+
+async function loadGeology() {
+  try {
+    const [geoResponse, manifestResponse] = await Promise.all([
+      fetch('/data/usgs-sim3464-geology/jezero_geounits_corridor.geojson'),
+      fetch('/data/usgs-sim3464-geology/manifest.json'),
+    ]);
+    if (!geoResponse.ok || !manifestResponse.ok) throw new Error(`HTTP ${geoResponse.status}/${manifestResponse.status}`);
+    const [geojson, manifest] = await Promise.all([geoResponse.json(), manifestResponse.json()]);
+    if (!manifest?.coordinate_system?.geojson_export_crs || !manifest?.citation) throw new Error('Provenance incompleta');
+    geologyIndex = createGeologyIndex(geojson, { source: manifest });
+    if (!geologyIndex.counts.acceptedFeatures || geologyIndex.counts.skippedFeatures > 0) {
+      throw new Error('Jeoloji verisinde poligon atlandı; kısmi katman kullanılmadı');
+    }
+    geologySegmentsLocal = geologicBoundarySegmentsToLocal(
+      geologicBoundarySegments(geologyIndex).filter((segment) => !segment.clipEdge), adapter,
+    );
+    geologySegmentsLocal = uniqueGeologySegments(geologySegmentsLocal);
+    if (terrainMesh) geologyLinePositions = buildGeologyLinePositions();
+    geologyStatus = 'ready';
+    updateHud();
+  } catch (error) {
+    geologyIndex = null;
+    geologySegmentsLocal = [];
+    geologyStatus = 'unavailable';
+    console.warn('USGS jeoloji katmanı kullanılamıyor:', error);
+    updateHud();
+  }
+}
+
+function uniqueGeologySegments(segments) {
+  const seen = new Set();
+  const unique = [];
+  for (const segment of segments) {
+    for (let i = 1; i < segment.xy.length; i++) {
+      const a = segment.xy[i - 1], b = segment.xy[i];
+      const ka = `${a[0].toFixed(6)},${a[1].toFixed(6)}`;
+      const kb = `${b[0].toFixed(6)},${b[1].toFixed(6)}`;
+      const key = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push({ ...segment, xy: [a, b] });
+    }
+  }
+  return unique;
 }
 
 const hud = createHud({
@@ -219,6 +292,8 @@ const hud = createHud({
 });
 
 const updateHud = () => hud.updateHud(buildSnapshot());
+geologyToggle?.addEventListener('change', () => { geologyLayerVisible = geologyToggle.checked; updateHud(); });
+void loadGeology();
 
 const { keys } = bindControls({
   mapEl: mapWrap,
@@ -332,7 +407,7 @@ function frame(now) {
   }
   if (activeView === '2d') {
     ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-    render(ctx2d, w, h, { camera, snapshot, terrain });
+    render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [] });
   } else if (renderer3d && terrainMesh) {
     try {
       renderer3d.resize(w, h, dpr);
@@ -390,6 +465,7 @@ function frame(now) {
         camera: camera3d,
         terrainMesh,
         markerMesh: markerMesh || build3dMarkersOnce(),
+        geologyLinePositions: geologyLayerVisible ? geologyLinePositions : null,
       });
       if (!hasElevation) {
         viewStatus.textContent = `DTM yüzey kotu bilinmiyor (${player.elevationStatus}); zemin teması doğrulanamıyor. Kamera yalnız saklanan hareket dünya-Z referansını kullanır; bu güncel yüzey kotu değildir.`;
@@ -406,7 +482,7 @@ function frame(now) {
       viewStatus.textContent = `3D görünüm durdu: ${error.message}. 2D harita kullanılabilir.`;
       viewStatus.hidden = false;
       ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-      render(ctx2d, w, h, { camera, snapshot, terrain });
+      render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [] });
     }
   }
   hudAcc += dt; if (hudAcc > 0.08) { hudAcc = 0; hud.updateHud(snapshot); }

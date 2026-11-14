@@ -62,17 +62,20 @@
           <label><input id="minimap-toggle-geology" type="checkbox" checked> Jeoloji sınırları</label>
           <label><input id="minimap-toggle-archive" type="checkbox" checked> Arşiv sürüş izi</label>
           <label class="disabled-layer"><input type="checkbox" disabled> Ortho — hizalama doğrulanmadı</label>
-          <label class="disabled-layer"><input type="checkbox" disabled> Eğim/puan — Stage 23 bekleniyor</label>
-          <label class="disabled-layer"><input type="checkbox" disabled> Planlanan rota — Stage 23B bekleniyor</label>
+          <label><input id="minimap-toggle-heatmap" type="checkbox"> Yürünebilirlik puanı (planlama göstergesi)</label>
+          <label><input type="checkbox" checked disabled> Planlanan rota</label>
         </div>
         <p id="minimap-layer-status" class="muted small" aria-live="polite">Jeoloji: yükleniyor · Arşiv izi: yükleniyor</p>
-        <p class="muted small">Jeoloji sınırları 1:75.000 ölçekli indikatiftir ve yaklaşık 100–200 m konum belirsizliği taşır. Arşiv izi geçmiş MMGIS sürüş kaydıdır; canlı telemetri veya rota önerisi değildir. Rota uzunluğu, süre ve puan dökümü Stage 23B sonucu olmadan hesaplanamaz.</p>
+        <p class="muted small">Jeoloji sınırları 1:75.000 ölçekli indikatiftir ve yaklaşık 100–200 m konum belirsizliği taşır. Arşiv izi geçmiş MMGIS sürüş kaydıdır; canlı telemetri veya rota önerisi değildir.</p>
         <dl class="minimap-endpoints">
           <dt>Başlangıç</dt><dd id="minimap-start">Seçilmedi</dd>
           <dt>Bitiş</dt><dd id="minimap-end">Seçilmedi</dd>
         </dl>
-        <button id="minimap-plan-route" type="button" disabled>Rota planlayıcı kullanılamıyor</button>
-        <p id="minimap-status" class="muted small" role="status" aria-live="polite">Rota puanlama ve A* Worker modülleri henüz yok; nokta seçimi rota oluşturmaz.</p>
+        <button id="minimap-plan-route" type="button" disabled>Başlangıç ve bitiş seçin</button>
+        <p class="planning-disclaimer">Planlama göstergesi — güvenli rota sertifikası değildir.</p>
+        <dl id="minimap-route-summary" class="minimap-summary" aria-live="polite"><dt>Rota</dt><dd>Henüz hesaplanmadı</dd></dl>
+        <p id="minimap-status" class="muted small" role="status" aria-live="polite">Başlangıç ve bitiş seçin. Bu senaryo planı gerçek rover izi veya güvenlik kararı değildir.</p>
+        <section id="minimap-cell-explanation" class="minimap-cell-explanation" aria-live="polite" hidden></section>
         <p class="muted small">Eflatun tarama no-data/geçersiz hücreleri; koyu boş alan yüklenen DTM altkümesi dışını gösterir. Nokta seçimi bu alanlarda geçilebilirlik anlamına gelmez.</p>
         <p class="muted small">Kaynak: USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona. Ürün: USGS Mars 2020 TRN HiRISE DTM Mozaiği; Fergason vd. 2020, <a href="https://doi.org/10.5066/P9REJ9JN" target="_blank" rel="noreferrer">DOI: 10.5066/P9REJ9JN</a>.</p>
       </section>

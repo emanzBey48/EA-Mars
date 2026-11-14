@@ -39,6 +39,7 @@ export function createMinimap({
     descriptor,
     endpoints: { start: endpoints.start ?? null, end: endpoints.end ?? null },
     overlays: { geologySegments: [], archiveTraverse: null, geologyVisible: false, archiveVisible: false },
+    planning: { heatmap: null, route: null, heatmapVisible: false },
     selectionMode: selectionMode === 'start' || selectionMode === 'end' ? selectionMode : null,
     centerXM: 0,
     centerYM: 0,
@@ -244,6 +245,25 @@ export function createMinimap({
       ctx.restore();
     }
 
+    if (state.planning.heatmapVisible && state.planning.heatmap) {
+      const { canvas: image, bounds: heatBounds } = state.planning.heatmap;
+      if (image && validBounds(heatBounds)) {
+        const p = worldToScreen(heatBounds.nwXM, heatBounds.nwYM);
+        ctx.save(); ctx.globalAlpha = 0.58; ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(image, p.x, p.y, heatBounds.widthM * state.pxPerM, heatBounds.heightM * state.pxPerM);
+        ctx.restore();
+      }
+    }
+    if (state.planning.route?.length) {
+      ctx.save(); ctx.beginPath(); ctx.strokeStyle = '#63e6ff'; ctx.lineWidth = 3;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      state.planning.route.forEach((point, i) => {
+        const p = worldToScreen(point.xM, point.yM);
+        i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
+      });
+      ctx.stroke(); ctx.restore();
+    }
+
     if (!state.terrain?.canvas) {
       ctx.fillStyle = '#ddd';
       ctx.font = '12px system-ui, sans-serif';
@@ -383,6 +403,14 @@ export function createMinimap({
         archiveTraverse: nextOverlays.archiveTraverse ?? null,
         geologyVisible: Boolean(nextOverlays.geologyVisible),
         archiveVisible: Boolean(nextOverlays.archiveVisible),
+      };
+      draw();
+    },
+    setPlanning(nextPlanning = {}) {
+      state.planning = {
+        heatmap: nextPlanning.heatmap ?? null,
+        route: Array.isArray(nextPlanning.route) ? nextPlanning.route : null,
+        heatmapVisible: Boolean(nextPlanning.heatmapVisible),
       };
       draw();
     },

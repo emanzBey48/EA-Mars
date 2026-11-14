@@ -32,6 +32,13 @@ main { display: flex; height: calc(100% - 58px); }
 .minimap-endpoints dd { overflow-wrap: anywhere; }
 #minimap-plan-route:disabled { opacity: .65; cursor: not-allowed; }
 #minimap-status { margin: 6px 0; }
+.planning-disclaimer { margin: 5px 0; padding: 5px 7px; border-left: 3px solid #ffc56e; background: #332a1e; font-size: 11px; font-weight: 700; }
+.minimap-summary { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; margin: 7px 0; font-size: 12px; }
+.minimap-summary dt { font-weight: 700; }
+.minimap-summary dd { margin: 0; overflow-wrap: anywhere; }
+.minimap-cell-explanation { margin: 7px 0; padding: 8px; border: 1px solid #53616b; border-radius: 5px; background: #20262b; font-size: 12px; }
+.minimap-cell-explanation h3 { margin: 0 0 5px; font-size: 13px; }
+.minimap-cell-explanation p { margin: 3px 0; }
 .card { background: linear-gradient(180deg, #1e1e25 0%, #19191f 100%); border: 1px solid #2f2f38; border-radius: 7px; padding: 9px 11px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
 .card h2 { margin: 0 0 6px; font-size: 14px; }
 dl { margin: 0; display: grid; grid-template-columns: 1fr; }

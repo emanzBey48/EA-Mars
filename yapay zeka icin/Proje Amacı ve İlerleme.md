@@ -4,7 +4,9 @@
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Hedef uygulama:** `C:\Users\Erdem\OneDrive\Desktop\nasa space apps\Sim`
 
-## Güncel bağımsız inceleme — 14 Kasım 2026
+## Güncel statik inceleme — 14 Kasım 2026
+
+**Güncel not:** `7df26df` and `1bc85f6` pushed to `codex/usgs-dtm-fail-closed`; independent static re-review PASS for prior code blockers. USGS candidate remains `needs_review` because product-specific vertical datum is unverified; legacy HiRISE fallback is active. No tests, `prepare-data`, or runtime run; Stage 6 terrain acceptance remains open. JP2 decoder unavailable.
 
 **USGS HiRISE DTM migration kabul edilmedi (FAIL).** `eb385ea` yeni USGS Mars 2020 TRN HiRISE DTM Mosaic’e geçişi ve pencereli TIFF provider’ını içeriyor; migration remote’a push edilmişti. Kodun mevcut olması verinin provenance/koordinat/datum/lisans kabulünü tamamlamaz. Stage 8–12 için önceki commit’lerde kaydedilen testler bu migration’ın test veya kabul sonucu değildir; bu yeni aşama için bağımsız test/kabul çalıştırması yapılmadı.
 

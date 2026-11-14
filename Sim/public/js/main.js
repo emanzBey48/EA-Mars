@@ -2,18 +2,26 @@
 // immutable WorldSnapshot creation, canvas rendering, input and HUD.
 import { SCENARIO, WAYPOINTS, MAP_FRAME, ROUTE_ORIGIN_NOTE, SOURCES } from './config.js';
 import { adapterFromLabel } from './geo/geo.js';
-import { createGeologyIndex, lookupGeologicUnitLocal, geologicBoundarySegments, geologicBoundarySegmentsToLocal } from './geo/geology.js';
+import {
+  createGeologyIndex, lookupGeologicUnitLocal, toGeologySnapshot,
+  createGeologicContactField, nearestGeologicContactM,
+} from './geo/geology.js';
 import { UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
 import { createDefaultSurfaceRegistry } from './surface/registry.js';
 import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
 import { Camera, buildTerrainImage, render } from './view/render.js';
-import { cameraRelativeMovement, createFirstPersonCamera, lookCamera, setFirstPersonPose, zoomCamera } from './view/3d/camera.js';
+import {
+  cameraRelativeMovement, createFirstPersonCamera, lookCamera, setFirstPersonLook, setFirstPersonPose, zoomCamera,
+} from './view/3d/camera.js';
 import { createTerrainRenderer } from './view/3d/renderer.js';
 import { ASTRONAUT_RIG } from './view/3d/astronaut-rig.js';
 import { buildTerrainMesh } from './view/3d/terrain-mesh.js';
 import { buildMarkerMeshes } from './view/3d/marker-mesh.js';
 import { bindControls } from './input/input.js';
+import { createStops } from './geo/rover-observations.js';
+import { createRoverGallery } from './view/rover-gallery.js';
 import { createHud } from './view/hud.js';
+import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 
 const $ = (id) => document.getElementById(id);
 const urlParams = new URLSearchParams(window.location.search);
@@ -33,6 +41,10 @@ const layers = { dtm: new UnavailableLayer(dtmBaseDescriptor(), 'Yükleniyor…'
 let terrain = null;
 let terrainMesh = null;
 let markerMesh = null;
+let archiveTraverse = null;
+let archiveTraverse3d = null;
+let archiveMarkerBase = null;
+let combinedArchiveMarkers = null;
 let markerMeshError = null;
 let lastSnapshot = null;
 let activeView = '2d';
@@ -43,6 +55,7 @@ let renderer3dError = null;
 let terrainMeshError = null;
 let terrainMeshBuildMs = null;
 let geologyIndex = null;
+let geologyContactField = null;
 let geologySegmentsLocal = [];
 let geologyLinePositions = new Float32Array();
 let geologyStatus = 'loading';
@@ -119,9 +132,51 @@ function build3dTerrainOnce() {
   }
   if (!prepared.indices.length) throw new Error('DTM penceresinde çizilebilir geçerli terrain quad’ı bulunamadı.');
   terrainMesh = prepared;
+  prepareArchiveDisplay();
   geologyLinePositions = buildGeologyLinePositions();
   build3dMarkersOnce();
   return terrainMesh;
+}
+
+function prepareArchiveDisplay() {
+  if (!archiveTraverse || !terrainMesh) return;
+  try {
+    archiveTraverse3d = prepareArchiveTraverse3d(archiveTraverse, layers.dtm, terrainMesh.displayConfig);
+  } catch (error) {
+    console.warn('Arşiv sürüş izinin 3D katmanı hazırlanamadı:', error);
+  }
+}
+
+function displayedMarkerMesh() {
+  const base = markerMesh || build3dMarkersOnce();
+  if (!$('toggle-archive-traverse').checked || !archiveTraverse3d) return base;
+  if (base !== archiveMarkerBase || !combinedArchiveMarkers) {
+    archiveMarkerBase = base;
+    combinedArchiveMarkers = combineTraverseMarkers(base, archiveTraverse3d.markers);
+  }
+  return combinedArchiveMarkers;
+}
+
+async function loadArchiveTraverse() {
+  const status = $('archive-traverse-status');
+  status.textContent = 'MMGIS sürüş arşivi yükleniyor…';
+  try {
+    const files = ['M20_traverse.json', 'M20_waypoints.json'];
+    const [traverse, stops] = await Promise.all(files.map(async (file) => {
+      const response = await fetch(`data/mars-trek/${file}`);
+      if (!response.ok) throw new Error(`${file} HTTP ${response.status}`);
+      return response.json();
+    }));
+    archiveTraverse = prepareArchiveTraverse(traverse, stops, adapter, {
+      ...sim.route, corridorHalfWidthM: sim.corridorHalfWidthM,
+    });
+    prepareArchiveDisplay();
+    const { polylineLengthM, straightLengthM } = archiveTraverse.comparison;
+    status.textContent = `Sürüş arşivi: Sol 116 Site 4 Drive 1250 → Sol 157 Site 6 Drive 0. Sol 120 ve 164 görüntü kayıtlarına aittir. Yerel harita düzleminde arşiv izi ${polylineLengthM.toFixed(0)} m, senaryo düz hattı ${straightLengthM.toFixed(0)} m.`;
+  } catch (error) {
+    status.textContent = 'MMGIS sürüş arşivi kullanılamıyor.';
+    console.warn('MMGIS sürüş arşivi yüklenemedi:', error);
+  }
 }
 
 function buildGeologyLinePositions() {
@@ -259,7 +314,11 @@ async function selectView(view) {
 }
 
 function buildSnapshot() {
-  const geology = geologyIndex ? lookupGeologicUnitLocal(geologyIndex, adapter, { xM: sim.pos.x, yM: sim.pos.y }) : { status: geologyStatus };
+  const position = { xM: sim.pos.x, yM: sim.pos.y };
+  const lookup = geologyIndex ? lookupGeologicUnitLocal(geologyIndex, adapter, position) : null;
+  const geology = toGeologySnapshot(lookup, geologyIndex);
+  const contact = geology.status === 'ok' || geology.status === 'ambiguous'
+    ? nearestGeologicContactM(geologyContactField, position) : null;
   lastSnapshot = createWorldSnapshot({
     sim,
     surfaceProvider: layers.dtm,
@@ -267,6 +326,8 @@ function buildSnapshot() {
     waypoints,
     routeNote: ROUTE_ORIGIN_NOTE,
     geology,
+    geologyLayerStatus: geologyStatus,
+    geologyContactDistanceM: contact?.distanceM,
   });
   return lastSnapshot;
 }
@@ -284,16 +345,16 @@ async function loadGeology() {
     if (!geologyIndex.counts.acceptedFeatures || geologyIndex.counts.skippedFeatures > 0) {
       throw new Error('Jeoloji verisinde poligon atlandı; kısmi katman kullanılmadı');
     }
-    geologySegmentsLocal = geologicBoundarySegmentsToLocal(
-      geologicBoundarySegments(geologyIndex).filter((segment) => !segment.clipEdge), adapter,
-    );
-    geologySegmentsLocal = uniqueGeologySegments(geologySegmentsLocal);
+    geologyContactField = createGeologicContactField(geologyIndex, adapter);
+    geologySegmentsLocal = uniqueGeologySegments(geologyContactField.polylines);
     if (terrainMesh) geologyLinePositions = buildGeologyLinePositions();
     geologyStatus = 'ready';
     updateHud();
   } catch (error) {
     geologyIndex = null;
+    geologyContactField = null;
     geologySegmentsLocal = [];
+    geologyLinePositions = new Float32Array();
     geologyStatus = 'unavailable';
     console.warn('USGS jeoloji katmanı kullanılamıyor:', error);
     updateHud();
@@ -326,9 +387,43 @@ const hud = createHud({
   sources: SOURCES,
 });
 
-const updateHud = () => hud.updateHud(buildSnapshot());
+const roverGallery = createRoverGallery({
+  container: $('rover-gallery'),
+  stops: createStops({
+    waypoints,
+    toLocal(latDeg, lonDeg) {
+      const { x, y } = adapter.latLonToLocal(latDeg, lonDeg);
+      return { xM: x, yM: y };
+    },
+  }),
+  onPointCamera: (look) => {
+    if (activeView === '3d') setFirstPersonLook(camera3d, look);
+  },
+});
+
+function updateHudFromSnapshot(snapshot) {
+  hud.updateHud(snapshot);
+  roverGallery.update(snapshot.astronaut, { firstPerson: activeView === '3d' });
+}
+
+const updateHud = () => updateHudFromSnapshot(buildSnapshot());
+
+async function loadRoverGallery() {
+  try {
+    const response = await fetch('data/perseverance-raw/manifest.json');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    roverGallery.setManifest(await response.json());
+  } catch (error) {
+    roverGallery.setManifest(null);
+    console.warn('Perseverance fotoğraf arşivi kullanılamıyor:', error);
+  }
+  updateHud();
+}
+
+void loadRoverGallery();
 geologyToggle?.addEventListener('change', () => { geologyLayerVisible = geologyToggle.checked; updateHud(); });
 void loadGeology();
+void loadArchiveTraverse();
 
 const { keys } = bindControls({
   mapEl: mapWrap,
@@ -442,7 +537,7 @@ function frame(now) {
   }
   if (activeView === '2d') {
     ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-    render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [] });
+    render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [], archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null });
   } else if (renderer3d && terrainMesh) {
     try {
       renderer3d.resize(w, h, dpr);
@@ -465,8 +560,9 @@ function frame(now) {
         // Ballistic 0.38g flight: subtle vertical-velocity gaze tracking
         const vz = mov.verticalSpeedMps ?? 0;
         pitchOffsetRad = Math.max(-0.018, Math.min(0.018, vz * 0.006));
-      } else if (mov?.grounded && !mov?.airborne && !mov?.landingRecovery && (mov?.horizontalSpeedMps ?? 0) > 0.1) {
+      } else if (mov?.grounded && !mov?.airborne && !mov?.landingRecovery && (mov?.horizontalSpeedMps ?? 0) > 0.04) {
         // Mars 0.38g loping head-bob: rhythmic flight bounce, pitch nod, and subtle weight-shift roll
+        // Match MOVING_SPEED_EPSILON_MPS in astronaut-rig.js.
         const speed = mov.horizontalSpeedMps;
         const speedNorm = Math.min(1, speed / 1.4);
         const strideM = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
@@ -499,7 +595,8 @@ function frame(now) {
         snapshot,
         camera: camera3d,
         terrainMesh,
-        markerMesh: markerMesh || build3dMarkersOnce(),
+        markerMesh: displayedMarkerMesh(),
+        archiveLinePositions: $('toggle-archive-traverse').checked ? archiveTraverse3d?.linePositions : null,
         geologyLinePositions: geologyLayerVisible ? geologyLinePositions : null,
       });
       if (!hasElevation) {
@@ -517,10 +614,10 @@ function frame(now) {
       viewStatus.textContent = `3D görünüm durdu: ${error.message}. 2D harita kullanılabilir.`;
       viewStatus.hidden = false;
       ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-      render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [] });
+      render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [], archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null });
     }
   }
-  hudAcc += dt; if (hudAcc > 0.08) { hudAcc = 0; hud.updateHud(snapshot); }
+  hudAcc += dt; if (hudAcc > 0.08) { hudAcc = 0; updateHudFromSnapshot(snapshot); }
   requestAnimationFrame(frame);
 }
 updateHud();

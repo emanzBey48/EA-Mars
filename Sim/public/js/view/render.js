@@ -87,7 +87,7 @@ export function buildTerrainImage(layer) {
  * the prepared visual `terrain` asset. Never receives live `sim`, `layer`, or `adapter` instances,
  * and performs no raster sampling or route/deviation math.
  */
-export function render(ctx, w, h, { camera, snapshot, terrain, geologySegments = [] }) {
+export function render(ctx, w, h, { camera, snapshot, terrain, geologySegments = [], archiveTraverse = null }) {
   ctx.save();
   ctx.fillStyle = '#121216'; ctx.fillRect(0, 0, w, h);
   const T = (x, y) => camera.toScreen(x, y, w, h);
@@ -108,6 +108,28 @@ export function render(ctx, w, h, { camera, snapshot, terrain, geologySegments =
     ctx.beginPath();
     segment.xy.forEach(([x, y], i) => { const p = T(x, y); i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy); });
     ctx.strokeStyle = 'rgba(255,220,90,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  if (archiveTraverse) {
+    ctx.strokeStyle = '#ceabff';
+    ctx.lineWidth = 2;
+    for (const { points } of archiveTraverse.segments) {
+      ctx.beginPath();
+      points.forEach(({ x, y }, i) => {
+        const { sx, sy } = T(x, y);
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      });
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ceabff';
+    for (const stop of archiveTraverse.stops) {
+      if (stop.isArrival) continue;
+      const { sx, sy } = T(stop.xM, stop.yM);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2.5, 0, 2 * Math.PI);
+      ctx.fill();
+    }
   }
 
   const { route, astronaut, trail } = snapshot;

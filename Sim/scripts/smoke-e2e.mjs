@@ -4,12 +4,13 @@
 // Screenshots are written to Sim/test-output/.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, 'test-output');
-const profileDir = path.join(root, '.e2e-profile');
+const profileDir = path.join(os.tmpdir(), `marswalk-e2e-${process.pid}`);
 fs.mkdirSync(outDir, { recursive: true });
 const BROWSERS = [
   process.env.BROWSER,
@@ -159,6 +160,63 @@ try {
   check('6l WASD hareketi snapshot hızından deterministik yürüyüş gait üretir', gaitDuringMove.pose === 'walk' && gaitDuringMove.frequency > 0 &&
     gaitDuringMove.speed > 0,
     `rig=${gaitDuringMove.pose}, hız=${gaitDuringMove.speed}, frekans=${gaitDuringMove.frequency}, faz=${gaitDuringMove.phase}`);
+
+  // Stage 32B: advance exactly 60 simulation seconds of first-person walking, with a mid-walk turn.
+  const trailHeapBefore = await send('Runtime.getHeapUsage').then((r) => r.result?.usedSize ?? null);
+  const trailWalk = await evaluate(`new Promise(resolve => {
+    const m=window.marswalk, startS=m.sim.simTimeS; let frames=0, renderSum=0, renderMax=0, turned=false;
+    m.sim.phase='running'; m.keys.up=true; m.keys.jumpPressed=false;
+    function tick(){
+      frames++;
+      const renderMs=m.getDiagnostics().renderer?.frameRenderMs;
+      if(Number.isFinite(renderMs)){renderSum+=renderMs;renderMax=Math.max(renderMax,renderMs);}
+      if(!turned && m.sim.simTimeS-startS>=30){m.camera3d.yawRad+=0.45;m.sim.headingRad=m.camera3d.yawRad;turned=true;}
+      if(m.sim.simTimeS-startS>=60){m.keys.up=false;const d=m.getDiagnostics();resolve({simSeconds:m.sim.simTimeS-startS,frames,turned,
+        count:d.footprints.count,capacity:d.footprints.capacity,counters:d.footprints.counters,
+        rendererCount:d.renderer?.footprintCount,renderAvgMs:renderSum/Math.max(1,frames),renderMaxMs:renderMax});}
+      else requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  })`);
+  const trailHeapAfter = await send('Runtime.getHeapUsage').then((r) => r.result?.usedSize ?? null);
+  check('32b 60 sim-saniye yürüyüş/dönüş iz geometrisini 3D batch olarak çizer',
+    trailWalk.simSeconds >= 60 && trailWalk.turned && trailWalk.count > 0 && trailWalk.rendererCount === trailWalk.count,
+    `Δt=${trailWalk.simSeconds.toFixed(1)} s, ayak izi=${trailWalk.count}/${trailWalk.capacity}, çizilen=${trailWalk.rendererCount}, atlanan no-data=${trailWalk.counters.skippedUnknown}, heap Δ=${Number.isFinite(trailHeapBefore)&&Number.isFinite(trailHeapAfter)?trailHeapAfter-trailHeapBefore:'n/a'} B, render ort=${trailWalk.renderAvgMs.toFixed(2)} ms / max=${trailWalk.renderMaxMs.toFixed(2)} ms`);
+  const trailView = await evaluate(`(() => { const m=window.marswalk,c=m.camera3d; m.sim.togglePause(); c.pitchRad=-0.72;
+    const d=m.getDiagnostics(); return {active:d.activeView,available:d.rendererAvailable,error:d.rendererError,count:d.footprints.count,mode:c.mode,pitch:c.pitchRad}; })()`);
+  await sleep(240);
+  await shot('32b-3d-footprints.png');
+  check('32b-view Stage32B görseli gerçek 3D renderer ve izlerle alındı', trailView.active === '3d' && trailView.available && trailView.count > 0 && trailView.mode === 'first-person',
+    `view=${trailView.active}, renderer=${trailView.available}, error=${trailView.error}, iz=${trailView.count}, kamera=${trailView.mode}/${trailView.pitch}`);
+
+  await press('KeyR', 'r');
+  await evaluate(`(() => { const m=window.marswalk, sample=m.layers.dtm.sampleElevation(m.sim.pos.x,m.sim.pos.y);
+    m.sim.resolveSurfaceContact(sample);m.sim.phase='running';m.sim.stepFirstPerson(0.025,{jump:true,headingRad:m.camera3d.yawRad},sample); })()`);
+  const landingBefore = await evaluate('window.marswalk.getDiagnostics().footprints.counters.landings');
+  await sleep(70);
+  const airborneSeen = await evaluate('window.marswalk.getSnapshot().astronaut.movement.airborne');
+  await shot('32b-jump.png');
+  await sleep(250);
+  const landingAfter = await evaluate(`(() => { const m=window.marswalk; const d=m.getDiagnostics(); return {landings:d.footprints.counters.landings,grounded:m.getSnapshot().astronaut.movement.grounded,count:d.footprints.count}; })()`);
+  check('32c Zıplama ve iniş tek yüzey örnekli iniş yaması üretir', airborneSeen && landingAfter.landings === landingBefore + 1 && landingAfter.grounded && landingAfter.count > 0,
+    `airborne=${airborneSeen}, landings ${landingBefore}→${landingAfter.landings}, grounded=${landingAfter.grounded}, iz=${landingAfter.count}`);
+  await press('KeyP', 'p'); await sleep(150);
+  const pauseTrailA = await evaluate('({t:window.marswalk.sim.simTimeS,count:window.marswalk.getDiagnostics().footprints.count})');
+  await sleep(450);
+  const pauseTrailB = await evaluate('({t:window.marswalk.sim.simTimeS,count:window.marswalk.getDiagnostics().footprints.count})');
+  check('32d Duraklatmada ayak izleri ve simülasyon saati donuyor', pauseTrailA.t === pauseTrailB.t && pauseTrailA.count === pauseTrailB.count,
+    `t=${pauseTrailA.t}→${pauseTrailB.t}, iz=${pauseTrailA.count}→${pauseTrailB.count}`);
+  await press('KeyR', 'r');
+  const resetTrail = await evaluate('window.marswalk.getDiagnostics().footprints.count');
+  check('32e R ile ayak izi tamponu temizlenir', resetTrail === 0, `count=${resetTrail}`);
+  await evaluate(`document.getElementById('btn-view-2d').click()`); await sleep(150);
+  await keyEvt('keyDown', 'KeyS', 's'); await sleep(2200); await keyEvt('keyUp', 'KeyS', 's'); await sleep(120);
+  const trail2d = await evaluate(`(() => ({count:window.marswalk.getDiagnostics().footprints.count,view:window.marswalk.getDiagnostics().activeView}))()`);
+  await evaluate('window.marswalk.camera.pxPerM=12'); await sleep(120);
+  await shot('32b-2d-footprints.png');
+  check('32f 2D fallback yürüyüşte DTM izlerini üretir', trail2d.view === '2d' && trail2d.count > 0,
+    `view=${trail2d.view}, minimap/2D izi=${trail2d.count}`);
+
   await evaluate(`document.getElementById('btn-view-2d').click()`); await sleep(100);
   const back2d = await evaluate(`({active:window.marswalk.getDiagnostics().activeView, hidden:document.getElementById('map').hidden})`);
   await evaluate(`document.getElementById('btn-view-3d').click()`); await sleep(150);

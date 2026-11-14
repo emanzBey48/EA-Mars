@@ -10,6 +10,7 @@ const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
 in vec3 aNormal;
 in vec3 aColor;
+in float aAlpha;
 uniform mat4 uViewProjection;
 uniform vec3 uLightDirection;
 uniform vec3 uObjectOffset;
@@ -25,6 +26,7 @@ uniform vec3 uRootRotationRad;
 out vec3 vNormal;
 out vec3 vWorldPos;
 out vec3 vColor;
+out float vAlpha;
 vec3 rotateEuler(vec3 p, vec3 r) {
   float cx = cos(r.x), sx = sin(r.x);
   p = vec3(p.x, cx * p.y - sx * p.z, sx * p.y + cx * p.z);
@@ -48,6 +50,7 @@ void main() {
   vNormal = normalize(rotatedNormal);
   vWorldPos = worldPosition;
   vColor = aColor;
+  vAlpha = aAlpha;
   gl_Position = uViewProjection * vec4(worldPosition, 1.0);
 }`;
 
@@ -56,6 +59,7 @@ precision highp float;
 in vec3 vNormal;
 in vec3 vWorldPos;
 in vec3 vColor;
+in float vAlpha;
 uniform vec3 uBaseColor;
 uniform vec3 uLightDirection;
 uniform vec3 uCameraEye;
@@ -185,7 +189,7 @@ void main() {
     float spec = pow(ndoth, 36.0) * 0.28 * daylight;
     vec3 lit = uBaseColor * vColor * (0.38 + 0.68 * ndotl) + vec3(spec + rim);
     float fogFactor = clamp(1.0 - exp(-dist * 0.00035), 0.0, 0.65);
-    outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
+    outColor = vec4(mix(lit, horizonColor, fogFactor), uAlpha * vAlpha);
     return;
   }
 
@@ -387,6 +391,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     position: gl.getAttribLocation(program, 'aPosition'),
     normal: gl.getAttribLocation(program, 'aNormal'),
     color: gl.getAttribLocation(program, 'aColor'),
+    footprintAlpha: gl.getAttribLocation(program, 'aAlpha'),
     viewProjection: gl.getUniformLocation(program, 'uViewProjection'),
     lightDirection: gl.getUniformLocation(program, 'uLightDirection'),
     objectOffset: gl.getUniformLocation(program, 'uObjectOffset'),
@@ -412,7 +417,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     hasOrthoFine: gl.getUniformLocation(program, 'uHasOrthoFine'),
     hasOrthoCoarse: gl.getUniformLocation(program, 'uHasOrthoCoarse'),
   };
-  if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || !locations.viewProjection || !locations.lightDirection ||
+  if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || locations.footprintAlpha < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
       !locations.partSize || !locations.partCenter || !locations.partOffset || !locations.partRotationRad ||
       !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass || !locations.alpha ||
@@ -482,6 +487,24 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   gl.vertexAttribPointer(locations.position, 3, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  const footprintVao = gl.createVertexArray();
+  const footprintPositionBuffer = gl.createBuffer();
+  const footprintAlphaBuffer = gl.createBuffer();
+  if (!footprintVao || !footprintPositionBuffer || !footprintAlphaBuffer) throw new Error('WebGL2 footprint buffers unavailable');
+  gl.bindVertexArray(footprintVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, footprintPositionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, 400 * 6 * 3 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(locations.position);
+  gl.vertexAttribPointer(locations.position, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, footprintAlphaBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, 400 * 6 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(locations.footprintAlpha);
+  gl.vertexAttribPointer(locations.footprintAlpha, 1, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  let footprintPositions = new Float32Array(400 * 6 * 3);
+  let footprintAlphas = new Float32Array(400 * 6);
+  let footprintGpuCapacity = 400;
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.clearColor(clearColor[0], clearColor[1], clearColor[2], 1);
@@ -601,7 +624,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null, footprintTrail = null }) {
       const frameStartedAt = collectDiagnostics ? performance.now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -688,6 +711,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       }
       if (uploadedMarkerMesh && uploadedMarkerMesh.indexCount > 0) {
         gl.uniform1i(locations.renderPass, 1);
+        gl.uniform1f(locations.alpha, 1);
         gl.uniform3f(locations.objectOffset, 0, 0, 0);
         gl.uniform1f(locations.headingRad, 0);
         gl.uniform1f(locations.verticalScale, 1);
@@ -698,6 +722,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.uniform3f(locations.rootOffset, 0, 0, 0);
         gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
         gl.uniform3f(locations.baseColor, 1, 1, 1);
+        gl.disableVertexAttribArray(locations.footprintAlpha);
+        gl.vertexAttrib1f(locations.footprintAlpha, 1);
         gl.bindVertexArray(uploadedMarkerMesh.vao);
         markerDrawPlan = getMarkerDrawPlan(uploadedMarkerMesh.source, camera);
         for (const range of markerDrawPlan.drawRanges) {
@@ -716,11 +742,14 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       function drawSurfaceLines(positions, red, green, blue, baseGreen = 1, baseBlue = 1, lineWidth = 2) {
         if (!(positions instanceof Float32Array) || positions.length < 6) return;
         gl.uniform1i(locations.renderPass, 1);
+        gl.uniform1f(locations.alpha, 1);
         gl.uniform3f(locations.objectOffset, 0, 0, 0);
         gl.uniform1f(locations.headingRad, 0);
         gl.uniform1f(locations.verticalScale, 1);
         gl.uniform3f(locations.baseColor, 1, baseGreen, baseBlue);
         gl.bindVertexArray(geologyVao);
+        gl.disableVertexAttribArray(locations.footprintAlpha);
+        gl.vertexAttrib1f(locations.footprintAlpha, 1);
         gl.bindBuffer(gl.ARRAY_BUFFER, geologyPositionBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
         gl.disableVertexAttribArray(locations.normal);
@@ -734,6 +763,61 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24, 2);
       drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1, 1, 1, 2);
       drawSurfaceLines(plannedRouteLinePositions, 0.12, 0.92, 0.78, 0.96, 1, 3);
+
+      let footprintCountDrawn = 0;
+      const footprintCount = Number.isInteger(footprintTrail?.count) ? footprintTrail.count : 0;
+      const footprintQuads = footprintTrail?.quads;
+      const footprintInstances = footprintTrail?.instances;
+      if (footprintCount > 0 && footprintQuads instanceof Float32Array && footprintInstances instanceof Float32Array &&
+          footprintQuads.length === footprintCount * 12 && footprintInstances.length === footprintCount * 10) {
+        const vertexCount = footprintCount * 6;
+        if (footprintPositions.length < vertexCount * 3) footprintPositions = new Float32Array(vertexCount * 3);
+        if (footprintAlphas.length < vertexCount) footprintAlphas = new Float32Array(vertexCount);
+        if (footprintCount > footprintGpuCapacity) {
+          footprintGpuCapacity = Math.max(footprintCount, Math.ceil(footprintGpuCapacity * 1.5));
+          gl.bindBuffer(gl.ARRAY_BUFFER, footprintPositionBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, footprintGpuCapacity * 6 * 3 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+          gl.bindBuffer(gl.ARRAY_BUFFER, footprintAlphaBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, footprintGpuCapacity * 6 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+        }
+        const { referenceElevationM: footprintReferenceM, verticalScale: footprintVerticalScale } = terrainMesh.displayConfig;
+        const corners = [0, 1, 2, 0, 2, 3];
+        for (let i = 0; i < footprintCount; i++) {
+          const sourceOffset = i * 12;
+          const alpha = Math.max(0, Math.min(1, footprintInstances[i * 10 + 5]));
+          for (let vertex = 0; vertex < 6; vertex++) {
+            const source = sourceOffset + corners[vertex] * 3;
+            const target = (i * 6 + vertex) * 3;
+            footprintPositions[target] = footprintQuads[source];
+            footprintPositions[target + 1] = footprintQuads[source + 1];
+            footprintPositions[target + 2] = (footprintQuads[source + 2] - footprintReferenceM) * footprintVerticalScale;
+            footprintAlphas[i * 6 + vertex] = alpha;
+          }
+        }
+        gl.uniform1i(locations.renderPass, 1);
+        gl.uniform1f(locations.alpha, 0.9);
+        gl.uniform3f(locations.objectOffset, 0, 0, 0);
+        gl.uniform1f(locations.headingRad, 0);
+        gl.uniform1f(locations.verticalScale, 1);
+        gl.uniform3f(locations.baseColor, 1, 1, 1);
+        gl.disableVertexAttribArray(locations.normal);
+        gl.vertexAttrib3f(locations.normal, 0, 0, 1);
+        gl.disableVertexAttribArray(locations.color);
+        gl.vertexAttrib3f(locations.color, 0.34, 0.25, 0.20);
+        gl.bindVertexArray(footprintVao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, footprintPositionBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, footprintPositions.subarray(0, vertexCount * 3));
+        gl.bindBuffer(gl.ARRAY_BUFFER, footprintAlphaBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, footprintAlphas.subarray(0, vertexCount));
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        gl.depthMask(false);
+        gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
+        gl.depthMask(true);
+        gl.disable(gl.BLEND);
+        gl.bindVertexArray(null);
+        footprintCountDrawn = footprintCount;
+      }
 
       const { astronaut: player } = snapshot;
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
@@ -851,6 +935,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         lastFrameDiagnostics = {
           frameRenderMs: performance.now() - frameStartedAt,
           terrainTriangles: uploadedMesh.indexCount / 3,
+          footprintCount: footprintCountDrawn,
+          footprintVertexCount: footprintCountDrawn * 6,
           plannedRouteLineVertexCount: plannedRouteLinePositions instanceof Float32Array ? plannedRouteLinePositions.length / 3 : 0,
           markersDrawn,
           markerTriangles: uploadedMarkerMesh ? uploadedMarkerMesh.indexCount / 3 : 0,
@@ -949,6 +1035,9 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       if (dummyTexture) { gl.deleteTexture(dummyTexture); }
       gl.deleteVertexArray(geologyVao);
       gl.deleteBuffer(geologyPositionBuffer);
+      gl.deleteVertexArray(footprintVao);
+      gl.deleteBuffer(footprintPositionBuffer);
+      gl.deleteBuffer(footprintAlphaBuffer);
       gl.deleteVertexArray(astronaut.vao);
       gl.deleteBuffer(astronaut.positionBuffer);
       gl.deleteBuffer(astronaut.normalBuffer);

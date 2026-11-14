@@ -25,6 +25,7 @@ import { createStops } from './geo/rover-observations.js';
 import { createRoverGallery } from './view/rover-gallery.js';
 import { createHud } from './view/hud.js';
 import { buildPlannedRouteLinePositions, derivePlannedRouteGuidance } from './view/route-guidance.js';
+import { createFootprintTrail } from './view/3d/footprint-trail.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 import { createMinimap } from './view/minimap/minimap.js';
 
@@ -81,6 +82,9 @@ const routeWorkerRequests = new Map();
 let routeHeatmap = null;
 let activeRoute = null;
 let plannedRouteLinePositions = new Float32Array();
+const footprintTrail = createFootprintTrail({ sampleElevation: (xM, yM) => layers.dtm.sampleElevation(xM, yM) });
+let footprintTrailSnapshot = footprintTrail.getSnapshot();
+let lastMinimapFootprintRefreshS = -Infinity;
 let orthoOverlay = null;
 
 const mapWrap = $('mapwrap');
@@ -874,6 +878,37 @@ function buildSnapshot() {
   return lastSnapshot;
 }
 
+function resetFootprints() {
+  footprintTrail.reset();
+  footprintTrailSnapshot = footprintTrail.getSnapshot();
+  lastMinimapFootprintRefreshS = -Infinity;
+  minimapController.setOverlays({ footprintTrail: footprintTrailSnapshot });
+}
+
+function updateFootprints(snapshot) {
+  const astronaut = snapshot.astronaut;
+  const movement = astronaut.movement;
+  const is2d = activeView === '2d';
+  footprintTrail.update({
+    timeS: snapshot.simTimeS,
+    xM: astronaut.xM,
+    yM: astronaut.yM,
+    headingRad: astronaut.headingRad,
+    gaitDistanceM: movement.gaitDistanceM,
+    grounded: is2d ? astronaut.elevationStatus === 'ok' : movement.grounded,
+    airborne: is2d ? false : movement.airborne,
+    landingRecoveryFrac: movement.landingRecoveryFrac,
+  });
+  footprintTrailSnapshot = footprintTrail.getSnapshot();
+  const countChanged = footprintTrailSnapshot.count !== updateFootprints.lastCount;
+  // The minimap is a low-rate overview; avoid redrawing it at display refresh rate.
+  if (countChanged || snapshot.simTimeS - lastMinimapFootprintRefreshS >= 1) {
+    minimapController.setOverlays({ footprintTrail: footprintTrailSnapshot });
+    lastMinimapFootprintRefreshS = snapshot.simTimeS;
+  }
+  updateFootprints.lastCount = footprintTrailSnapshot.count;
+}
+
 async function loadGeology() {
   try {
     const [geoResponse, manifestResponse] = await Promise.all([
@@ -1141,6 +1176,7 @@ const { keys } = bindControls({
   onTogglePause: () => { sim.togglePause(); updateHud(); },
   onRestart: () => {
     sim.restart();
+    resetFootprints();
     hasEntered3dOnce = false;
     camera3d.yawRad = targetYawRad;
     camera3d.dynamicPitchOffsetRad = 0;
@@ -1195,6 +1231,7 @@ btnDemoTour?.addEventListener('click', () => void startDemoTour());
 btnDemoToggleView?.addEventListener('click', () => void selectView(activeView === '3d' ? '2d' : '3d'));
 btnDemoRestart?.addEventListener('click', () => {
   sim.restart();
+  resetFootprints();
   hasEntered3dOnce = false;
   camera3d.yawRad = targetYawRad;
   updateHud();
@@ -1265,6 +1302,7 @@ function frame(now) {
     sim.resolveSurfaceContact(layers.dtm.sampleElevation(sim.pos.x, sim.pos.y));
   }
   const snapshot = buildSnapshot();
+  updateFootprints(snapshot);
   camera.cx = snapshot.astronaut.xM; camera.cy = snapshot.astronaut.yM;
   const dpr = window.devicePixelRatio || 1;
   const w = Math.max(1, mapWrap.clientWidth), h = Math.max(1, mapWrap.clientHeight);
@@ -1284,6 +1322,7 @@ function frame(now) {
       archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null,
       plannedRoute: activeRoute?.status === 'ok' ? activeRoute.path : null,
       routeEndpoints: routeEndpoints.start || routeEndpoints.goal ? { start: routeEndpoints.start, goal: routeEndpoints.goal } : null,
+      footprintTrail: footprintTrailSnapshot,
     });
   } else if (renderer3d && terrainMesh) {
     try {
@@ -1346,6 +1385,7 @@ function frame(now) {
         archiveLinePositions: $('toggle-archive-traverse').checked ? archiveTraverse3d?.linePositions : null,
         geologyLinePositions: geologyLayerVisible ? geologyLinePositions : null,
         plannedRouteLinePositions,
+        footprintTrail: footprintTrailSnapshot,
       });
       if (!hasElevation) {
         viewStatus.textContent = `DTM yüzey kotu bilinmiyor (${player.elevationStatus}); zemin teması doğrulanamıyor. Kamera yalnız saklanan hareket dünya-Z referansını kullanır; bu güncel yüzey kotu değildir.`;
@@ -1371,6 +1411,7 @@ function frame(now) {
         archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null,
         plannedRoute: activeRoute?.status === 'ok' ? activeRoute.path : null,
         routeEndpoints: routeEndpoints.start || routeEndpoints.goal ? { start: routeEndpoints.start, goal: routeEndpoints.goal } : null,
+        footprintTrail: footprintTrailSnapshot,
       });
     }
   }
@@ -1409,6 +1450,11 @@ if (debugEnabled) {
       cameraFovYRad: camera3d.fovYRad,
       movement: lastSnapshot?.astronaut?.movement ?? null,
       renderer: renderer3d?.getDiagnostics?.() ?? null,
+      footprints: {
+        count: footprintTrailSnapshot.count,
+        capacity: footprintTrailSnapshot.capacity,
+        counters: footprintTrailSnapshot.counters,
+      },
       orthoOverlay: orthoOverlay ? {
         mode: orthoOverlay.mode,
         fineAvailable: Boolean(orthoOverlay.fine?.image),

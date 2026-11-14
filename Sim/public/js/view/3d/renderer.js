@@ -100,7 +100,9 @@ void main() {
   }
 
   vec3 normal = normalize(vNormal);
-  float ndotl = max(dot(normal, lightDir), 0.0);
+  // Use the same horizon fade for direct sunlight on every scene pass.
+  float daylight = smoothstep(0.0, 0.08, lightDir.z);
+  float ndotl = max(dot(normal, lightDir), 0.0) * daylight;
   float hemi = 0.5 + 0.5 * normal.z;
   vec3 ambient = mix(vec3(0.24, 0.14, 0.11), vec3(0.42, 0.29, 0.23), hemi);
   vec3 halfVec = normalize(lightDir + viewDir);
@@ -122,9 +124,9 @@ void main() {
     float strata = 0.975 + 0.025 * sin(vWorldPos.z * 2.4);
     regolith *= strata;
 
-    // The mesh normals include visual vertical exaggeration. Undo it for daylight.
+    // Terrain positions are pre-scaled, so these normals still contain the
+    // visual exaggeration. Restore source slopes before calculating sunlight.
     vec3 terrainNormal = normalize(vec3(normal.xy, normal.z * uTerrainExaggeration));
-    float daylight = smoothstep(0.0, 0.08, lightDir.z);
     float direct = max(dot(terrainNormal, lightDir), 0.0) * daylight;
     vec3 diffuseSky = vec3(0.39, 0.35, 0.33);
     vec3 lit = regolith * vColor * (diffuseSky + vec3(0.64, 0.60, 0.55) * direct);
@@ -136,7 +138,7 @@ void main() {
   if (uRenderPass == 1) {
     // 3D Waypoint beacons & route corridor guides
     float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5) * 0.32;
-    float spec = pow(ndoth, 36.0) * 0.28;
+    float spec = pow(ndoth, 36.0) * 0.28 * daylight;
     vec3 lit = uBaseColor * vColor * (0.38 + 0.68 * ndotl) + vec3(spec + rim);
     float fogFactor = clamp(1.0 - exp(-dist * 0.00035), 0.0, 0.65);
     outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
@@ -145,7 +147,7 @@ void main() {
 
   // Pass 2: Astronaut EVA suit & first-person view-model arms/gloves/chestPack
   float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.22;
-  float spec = pow(ndoth, 32.0) * 0.22;
+  float spec = pow(ndoth, 32.0) * 0.22 * daylight;
   vec3 suitLit = uBaseColor * vColor * (ambient * 0.85 + 0.78 * ndotl) + vec3(1.0, 0.90, 0.78) * (spec + rim);
   outColor = vec4(suitLit, uAlpha);
 }`;

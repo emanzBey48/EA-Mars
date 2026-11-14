@@ -644,8 +644,8 @@ test('Stage 12: First-person camera dynamic offsets and view-projection calculat
   assert.equal(camera.yM, 20);
   assert.equal(camera.dynamicEyeOffsetM, -0.05);
   assert.equal(camera.dynamicPitchOffsetRad, -0.012);
-  // Expected zDisplay: 5 + (1.75 - 0.05) * 3 = 5 + 1.70 * 3 = 10.10
-  assert.ok(Math.abs(camera.zDisplay - (5 + (1.75 - 0.05) * 3)) < 1e-9);
+  // Expected zDisplay: 5 + (1.48 - 0.05) * 3 = 5 + 1.43 * 3 = 9.29
+  assert.ok(Math.abs(camera.zDisplay - (5 + (1.48 - 0.05) * 3)) < 1e-9);
 
   // Base pitch remains unchanged
   assert.equal(camera.pitchRad, 0.1);
@@ -659,5 +659,5 @@ test('Stage 12: First-person camera dynamic offsets and view-projection calculat
   setFirstPersonPose(camera, { xM: 10, yM: 20, bodyZDisplay: 5, verticalScale: 3 });
   assert.equal(camera.dynamicEyeOffsetM, 0);
   assert.equal(camera.dynamicPitchOffsetRad, 0);
-  assert.ok(Math.abs(camera.zDisplay - (5 + 1.75 * 3)) < 1e-9);
+  assert.ok(Math.abs(camera.zDisplay - (5 + 1.48 * 3)) < 1e-9);
 });

@@ -48,7 +48,13 @@ try {
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
   let id = 0; const pending = new Map();
-  ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } };
+  const browserErrors = [];
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.method === 'Runtime.exceptionThrown') browserErrors.push(`exception: ${m.params.exceptionDetails?.text || m.params.exceptionDetails?.exception?.description || 'unknown'}`);
+    if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error') browserErrors.push(`console: ${m.params.entry.text}${m.params.entry.url ? ` (${m.params.entry.url})` : ''}`);
+    if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
+  };
   const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
   const evaluate = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails)); return r.result?.result?.value; };
   const VK = { KeyW: 87, KeyA: 65, KeyS: 83, KeyD: 68, KeyP: 80, KeyR: 82, Equal: 187, ArrowUp: 38 };
@@ -61,7 +67,7 @@ try {
   const holdUntil = async (code, key, pred, maxMs = 15000) => { await keyEvt('keyDown', code, key); const t0 = Date.now(); let s; do { await sleep(50); s = await state(); } while (!pred(s) && Date.now() - t0 < maxMs); await keyEvt('keyUp', code, key); await sleep(120); return state(); };
   const segDist = (s) => { const { a, b } = s; const dx = b.x - a.x, dy = b.y - a.y; let t = ((s.x - a.x) * dx + (s.y - a.y) * dy) / (dx * dx + dy * dy); t = Math.max(0, Math.min(1, t)); return Math.hypot(s.x - (a.x + t * dx), s.y - (a.y + t * dy)); };
 
-  await send('Page.enable'); await send('Runtime.enable');
+  await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable');
   // 0. Verify normal run does NOT expose window.marswalk
   const normalUrl = new URL(url); normalUrl.searchParams.delete('debug');
   await send('Page.navigate', { url: normalUrl.toString() });
@@ -99,7 +105,7 @@ try {
   const first3dWallMs = Date.now() - threeDStart;
   const canvas3dState = await evaluate(`(() => { const c=document.getElementById('map-3d'); const r=c.getBoundingClientRect(); return {hidden:c.hidden,w:r.width,h:r.height}; })()`);
   check('6a 2D→3D geçişi terrain mesh ile açılıyor', diag3d?.activeView === '3d' && diag3d.terrainMeshReady && !canvas3dState.hidden && canvas3dState.w > 400,
-    `active=${diag3d?.activeView}, mesh=${diag3d?.terrainMeshReady}, hücre=${diag3d?.terrainMeshCellCount}, CPU build=${diag3d?.terrainMeshBuildMs?.toFixed(1)} ms, ilk geçiş=${first3dWallMs} ms`);
+    `active=${diag3d?.activeView}, mesh=${diag3d?.terrainMeshReady}, meshError=${diag3d?.terrainMeshError}, rendererError=${diag3d?.rendererError}, hücre=${diag3d?.terrainMeshCellCount}, CPU build=${diag3d?.terrainMeshBuildMs?.toFixed(1)} ms, ilk geçiş=${first3dWallMs} ms`);
   const fpPose = await evaluate(`(() => { const m=window.marswalk,c=m.camera3d,s=m.getSnapshot(); const d=m.getDiagnostics();
     return {mode:c.mode,eyeHeightM:c.eyeHeightM,eyeZ:c.zDisplay,bodyZ:s.astronaut.bodyWorldZM,
       avatarDrawn:d.renderer?.avatarDrawn,worldRigDrawn:d.renderer?.worldRigDrawn,viewModelDrawn:d.renderer?.firstPersonViewModelDrawn,triangles:d.renderer?.terrainTriangles,
@@ -240,13 +246,22 @@ try {
     'senaryo varsayımı', 'NASA operasyon sınırı değil', 'yerel equirectangular projeksiyon düzleminde hesaplanır', 'güvenlik sınırı değil'];
   const missing = need.filter((n) => !text.includes(n));
   check('5a Kaynak/birim/datum ve kategori etiketleri görünür', missing.length === 0, missing.length ? 'eksik: ' + missing.join(', ') : `${need.length} etiket bulundu`);
-  const disclaimer = 'Kot ve eğim yalnız arşiv DTM’sinden türetilmiş değerlerdir; güvenli/güvensiz yorumu, tehlike skoru veya rover karar desteği değildir.';
-  const rest = text.replace(disclaimer, '');
-  check('5b Güvenli/güvensiz veya tehlike etiketi yok (yalnız açık feragat metni)', text.includes(disclaimer) && !/güvenli(?!k)|güvensiz|tehlike/i.test(rest), '');
+  const disclaimers = [
+    'Kot ve eğim yalnız arşiv DTM’sinden türetilmiş değerlerdir; güvenli/güvensiz yorumu, tehlike skoru veya rover karar desteği değildir.',
+    'Sürüş izi canlı telemetri veya güvenli rota bilgisi içermez.',
+    'Planlama göstergesi — güvenli rota sertifikası değildir.',
+  ];
+  const missingDisclaimers = disclaimers.filter((disclaimer) => !text.includes(disclaimer));
+  const rest = disclaimers.reduce((remaining, disclaimer) => remaining.replaceAll(disclaimer, ''), text);
+  const strayDisclaimerTerms = [...rest.matchAll(/güvenli(?!k)|güvensiz|tehlike/gi)].map((match) => rest.slice(Math.max(0, match.index - 50), match.index + match[0].length + 50));
+  check('5b DTM ve arşiv feragatleri görünür; bunların dışında güvenli/güvensiz veya tehlike iddiası yok',
+    missingDisclaimers.length === 0 && !/güvenli(?!k)|güvensiz|tehlike/i.test(rest),
+    missingDisclaimers.length ? `eksik: ${missingDisclaimers.join(' | ')}` : strayDisclaimerTerms.length ? `feragat dışı eşleşmeler: ${strayDisclaimerTerms.join(' | ')}` : 'tüm açık feragatler bulundu');
 
   // Restart
   await press('KeyR', 'r'); const r = await state();
   check('2f Yeniden başlatma başlangıç durumuna dönüyor', r.x === 0 && r.y === 0 && r.t === 0 && r.phase === 'ready', `(${r.x}, ${r.y}), t=${r.t}, faz=${r.phase}`);
+  console.log(`Browser errors: ${browserErrors.length ? browserErrors.join(' | ') : 'none observed'}`);
   await shot('04-restart.png');
   ws.close();
 } catch (e) {

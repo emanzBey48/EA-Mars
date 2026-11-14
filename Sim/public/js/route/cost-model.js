@@ -111,12 +111,6 @@ const PROVENANCE = deepFreeze({
   caveatEN: 'Planning aid, not a safety certificate; final route decisions rest with the crew and mission control. No rock/boulder detection; valid only at ~1 m DTM scale. Thresholds are unsourced "scenario" parameters; rover limits are not human limits. Unknown data is never treated as passable.',
 });
 
-const WARN_NO_UNKNOWN = Object.freeze({
-  code: 'NO_UNKNOWN_DATA_DECLARED',
-  textTR: 'noDataValue ve validMin/validMax verilmedi: sentinel (ör. -9999) değerleri geçerli arazi sayılır. Çağıran taraf kaynağın no-data değerini veya geçerli aralığı bildirmelidir.',
-  textEN: 'Neither noDataValue nor validMin/validMax was declared: sentinel values (e.g. -9999) are treated as valid terrain. Callers must declare the source no-data value or a valid range.',
-});
-
 function optFinite(name, v) {
   if (v === undefined) return undefined; // undefined = not provided
   if (typeof v !== 'number' || !Number.isFinite(v)) throw new TypeError(`${name} sonlu bir sayı olmalı (verildi: ${String(v)})`);
@@ -127,8 +121,7 @@ function optFinite(name, v) {
  * Build the walkability field. Input contract:
  *  - elevation: Float32Array/Float64Array/Array, length rows*cols, row-major, row 0 = north.
  *  - noDataValue / validMin / validMax: `undefined` = not declared; otherwise MUST be finite numbers (TypeError else).
- *    CALLERS MUST declare the source's sentinel and/or valid range; if neither is declared a sentinel plateau
- *    (e.g. -9999) is treated as terrain and `provenance.warnings` carries NO_UNKNOWN_DATA_DECLARED.
+ *    Callers must declare noDataValue, both validMin and validMax, or a coverageMask.
  *  - coverageMask: array/typed array of length rows*cols whose values must be exactly 0 or 1 (true accepted as 1).
  *    A cell is covered ONLY if its value is 1/true; anything else (0, false, null, NaN, undefined, 2...) is OUT_OF_COVERAGE.
  */
@@ -146,6 +139,9 @@ export function buildWalkabilityField(input) {
   const noDataValue = optFinite('noDataValue', input.noDataValue);
   const validMin = optFinite('validMin', input.validMin);
   const validMax = optFinite('validMax', input.validMax);
+  if (noDataValue === undefined && !(validMin !== undefined && validMax !== undefined) && coverageMask == null) {
+    throw new TypeError('noDataValue, validMin ve validMax veya coverageMask ile bilinmeyen veri kapsamı açıkça tanımlanmalı');
+  }
   if (validMin !== undefined && validMax !== undefined && validMin > validMax) throw new TypeError('validMin <= validMax olmalı');
   const P = resolveParams(params);
   const ndRaw = noDataValue !== undefined ? noDataValue : null;
@@ -153,9 +149,7 @@ export function buildWalkabilityField(input) {
   // Elevation is typically float32: compare against the float32-rounded bounds so boundary cells are accepted.
   const vmin = validMin !== undefined ? Math.fround(validMin) : -Infinity;
   const vmax = validMax !== undefined ? Math.fround(validMax) : Infinity;
-  const provenance = (noDataValue === undefined && validMin === undefined && validMax === undefined)
-    ? deepFreeze({ ...PROVENANCE, warnings: [{ ...WARN_NO_UNKNOWN }] })
-    : deepFreeze({ ...PROVENANCE, warnings: [] });
+  const provenance = deepFreeze({ ...PROVENANCE, warnings: [] });
 
   const cost = new Float32Array(n).fill(Infinity);
   const score = new Uint8Array(n);

@@ -500,6 +500,52 @@ test('worker: attachWorker mesajı gidiş-dönüş işler', async () => {
   assert.equal(scope.posted[1].type, 'error');
 });
 
+test('worker: init-window, walking plan and cell explanation use worker-owned DEM field', async () => {
+  const { attachWorker } = await import('../public/js/route/pathfinder.worker.js');
+  const scope = fakeWorkerScope();
+  attachWorker(scope);
+  const rows = 12, cols = 12;
+  const elevation = new Float32Array(rows * cols).fill(-2500);
+  scope.onmessage({ data: { type: 'init-window', id: 'init', window: {
+    elevation, rows, cols, cellSizeM: 1, nwXM: -6, nwYM: 6, noDataValue: -9999,
+  } } });
+  assert.equal(scope.posted[0].type, 'window-ready');
+  assert.equal(scope.posted[0].id, 'init');
+  assert.equal(scope.posted[0].heatmap.score.length, rows * cols);
+  assert.equal(scope.posted[0].heatmap.status.length, rows * cols);
+  assert.equal(scope.posted[0].heatmap.nwXM, -6);
+
+  scope.onmessage({ data: { type: 'plan-walking-route', id: 2,
+    startLocal: { xM: -2.5, yM: 2.5 }, endLocal: { xM: 2.5, yM: -2.5 } } });
+  assert.equal(scope.posted[1].type, 'result');
+  assert.equal(scope.posted[1].id, 2);
+  assert.equal(scope.posted[1].result.status, 'ok');
+  scope.onmessage({ data: { type: 'explain-cell', id: 3, point: { xM: 0, yM: 0 } } });
+  assert.equal(scope.posted[2].type, 'cell-result');
+  assert.equal(scope.posted[2].id, 3);
+  assert.equal(scope.posted[2].result.passable, true);
+});
+
+test('worker: failed init clears prior window and requires unknown-data metadata', async () => {
+  const { attachWorker } = await import('../public/js/route/pathfinder.worker.js');
+  const scope = fakeWorkerScope();
+  attachWorker(scope);
+  const elevation = new Float32Array(100).fill(-9999);
+  scope.onmessage({ data: { type: 'init-window', id: 1, window: {
+    elevation, rows: 10, cols: 10, cellSizeM: 1, nwXM: 0, nwYM: 10, noDataValue: -9999,
+  } } });
+  assert.equal(scope.posted[0].type, 'window-ready');
+  scope.onmessage({ data: { type: 'init-window', id: 2, window: {
+    elevation, rows: 10, cols: 10, cellSizeM: 1, nwXM: 0, nwYM: 10,
+  } } });
+  assert.equal(scope.posted[1].type, 'error');
+  assert.match(scope.posted[1].message, /noDataValue, validMin ve validMax veya coverageMask/);
+  scope.onmessage({ data: { type: 'plan-walking-route', id: 3,
+    startLocal: { xM: 1.5, yM: 8.5 }, endLocal: { xM: 7.5, yM: 2.5 } } });
+  assert.equal(scope.posted[2].type, 'error');
+  assert.match(scope.posted[2].message, /init-window/);
+});
+
 test('worker içe aktarma: WorkerGlobalScope yoksa (window/ana iş parçacığı) onmessage bağlanmaz', async () => {
   const saved = { self: Object.getOwnPropertyDescriptor(globalThis, 'self'), wgs: Object.getOwnPropertyDescriptor(globalThis, 'WorkerGlobalScope') };
   try {

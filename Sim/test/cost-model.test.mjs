@@ -9,7 +9,7 @@ function grid(rows, cols, fn) {
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) e[r * cols + c] = fn(r, c);
   return e;
 }
-const build = (elevation, rows, cols, extra = {}) => buildWalkabilityField({ elevation, rows, cols, cellSizeM: 1, ...extra });
+const build = (elevation, rows, cols, extra = {}) => buildWalkabilityField({ elevation, rows, cols, cellSizeM: 1, noDataValue: ND, ...extra });
 const idx = (cols, r, c) => r * cols + c;
 
 test('flat grid: interior score 100, cost 1; border EDGE_UNKNOWN', () => {
@@ -92,7 +92,7 @@ test('exact 0xFF7FFFFB float32 value is no-data even without noDataValue roundin
   assert.equal(f.status[idx(7, 3, 3)], STATUS.NO_DATA);
   assert.equal(f.cost[idx(7, 3, 3)], Infinity);
   // without declaring noData, the finite but huge negative still fails validMin
-  const g = build(e, 7, 7, { validMin: -10000, validMax: 10000 });
+  const g = build(e, 7, 7, { noDataValue: undefined, validMin: -10000, validMax: 10000 });
   assert.equal(g.status[idx(7, 3, 3)], STATUS.INVALID);
 });
 
@@ -264,7 +264,7 @@ test('plane with both gx and gy nonzero: roughness ~0 (a dy sign flip would make
 });
 
 test('cellSizeM = 5: ramp slope is atan(rise/5), roughness ~0', () => {
-  const f = buildWalkabilityField({ elevation: grid(9, 9, (r, c) => c), rows: 9, cols: 9, cellSizeM: 5 });
+  const f = buildWalkabilityField({ elevation: grid(9, 9, (r, c) => c), rows: 9, cols: 9, cellSizeM: 5, noDataValue: ND });
   const i = idx(9, 4, 4);
   assert.ok(Math.abs(f.slopeDeg[i] - Math.atan(1 / 5) * 180 / Math.PI) < 1e-4);
   assert.ok(f.roughnessM[i] < 1e-6);
@@ -354,18 +354,19 @@ test('finding 2: noDataValue matches Float64 and Float32 inputs (non float32-exa
   assert.equal(build(new Float64Array(49).fill(12.5), 7, 7, { noDataValue: -9999.1 }).status[idx(7, 3, 3)], STATUS.OK);
 });
 
-test('finding 3: no unknown-data declaration -> provenance.warnings NO_UNKNOWN_DATA_DECLARED (frozen); declared -> empty', () => {
-  const none = build(grid(5, 5, () => 0), 5, 5);
-  assert.equal(none.provenance.warnings.length, 1);
-  assert.equal(none.provenance.warnings[0].code, 'NO_UNKNOWN_DATA_DECLARED');
-  assert.ok(none.provenance.warnings[0].textTR && none.provenance.warnings[0].textEN);
-  assert.ok(Object.isFrozen(none.provenance.warnings) && Object.isFrozen(none.provenance.warnings[0]));
-  for (const extra of [{ noDataValue: -9999 }, { validMin: -10 }, { validMax: 10 }]) {
+test('finding 3: unknown-data metadata is required; declared metadata carries no warning', () => {
+  assert.throws(() => build(grid(5, 5, () => -9999), 5, 5, { noDataValue: undefined }), {
+    name: 'TypeError', message: /noDataValue, validMin ve validMax veya coverageMask/,
+  });
+  for (const extra of [{ noDataValue: -9999 }, { validMin: -10, validMax: 10 }]) {
     const f = build(grid(5, 5, () => 0), 5, 5, extra);
     assert.deepEqual(f.provenance.warnings, []);
     assert.ok(Object.isFrozen(f.provenance.warnings));
+    assert.equal(f.provenance.model, 'marswalk-eva-walkability');
   }
-  assert.equal(none.provenance.model, 'marswalk-eva-walkability');
+  const mask = new Uint8Array(25).fill(1); mask[idx(5, 2, 2)] = 0;
+  const masked = build(grid(5, 5, () => -9999), 5, 5, { coverageMask: mask });
+  assert.equal(masked.status[idx(5, 2, 2)], STATUS.OUT_OF_COVERAGE);
 });
 
 test('finding 4: non-finite / non-number validMin, validMax, noDataValue throw TypeError; validMin > validMax too', () => {
@@ -378,7 +379,8 @@ test('finding 4: non-finite / non-number validMin, validMax, noDataValue throw T
   ];
   for (const [extra, re] of cases) assert.throws(() => build(e, 5, 5, extra), { name: 'TypeError', message: re }, JSON.stringify(extra));
   // undefined = not provided; equal bounds are legal
-  assert.doesNotThrow(() => build(e, 5, 5, { validMin: undefined, validMax: undefined, noDataValue: undefined }));
+  assert.throws(() => build(e, 5, 5, { validMin: undefined, validMax: undefined, noDataValue: undefined }), /noDataValue, validMin ve validMax veya coverageMask/);
+  assert.throws(() => build(e, 5, 5, { noDataValue: undefined, validMin: 0 }), /noDataValue, validMin ve validMax veya coverageMask/);
   assert.doesNotThrow(() => build(e, 5, 5, { validMin: 0, validMax: 0 }));
 });
 

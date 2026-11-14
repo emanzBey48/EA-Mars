@@ -64,6 +64,12 @@ let geologyLinePositions = new Float32Array();
 let geologyStatus = 'loading';
 let geologyLayerVisible = true;
 let minimapEndpoints = { start: null, end: null };
+let routeWorker = null;
+let routeWorkerId = 0;
+let routeWorkerReady = false;
+let pendingRouteRequest = null;
+let routeHeatmap = null;
+let activeRoute = null;
 
 const mapWrap = $('mapwrap');
 const canvas2d = $('map');
@@ -83,6 +89,10 @@ const minimapStatus = $('minimap-status');
 const minimapGeologyToggle = $('minimap-toggle-geology');
 const minimapArchiveToggle = $('minimap-toggle-archive');
 const minimapLayerStatus = $('minimap-layer-status');
+const minimapHeatmapToggle = $('minimap-toggle-heatmap');
+const minimapPlanButton = $('minimap-plan-route');
+const minimapRouteSummary = $('minimap-route-summary');
+const minimapCellExplanation = $('minimap-cell-explanation');
 const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. Arazi yüksekliği 3× abartılı. Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.';
 
 function showSelectedPoint(kind, point) {
@@ -90,8 +100,12 @@ function showSelectedPoint(kind, point) {
   if (kind === 'start') minimapStartLabel.textContent = label;
   else minimapEndLabel.textContent = label;
   minimapEndpoints = { ...minimapEndpoints, [kind]: point };
+  if (pendingRouteRequest?.kind === 'plan') pendingRouteRequest = null;
   minimapController.setEndpoints(minimapEndpoints);
-  minimapStatus.textContent = 'Nokta kaydedildi. Kapsam/no-data ve hücre yürünebilirliği henüz doğrulanmadı; Stage 23A/23B rota planlayıcı modülleri bekleniyor.';
+  activeRoute = null;
+  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
+  minimapStatus.textContent = 'Nokta kaydedildi. Planlama göstergesi güvenli rota sertifikası değildir.';
+  updateRouteButton();
   minimapController.setSelectionMode(null);
   $('minimap-pick-start').setAttribute('aria-pressed', 'false');
   $('minimap-pick-end').setAttribute('aria-pressed', 'false');
@@ -102,10 +116,143 @@ const minimapController = createMinimap({
   terrain,
   descriptor: MAP_FRAME,
   onPointSelected: ({ kind, xM, yM }) => showSelectedPoint(kind, { xM, yM }),
-  onCellClick: () => {
-    minimapStatus.textContent = 'Hücre açıklaması kullanılamıyor: Stage 23A explainCell() henüz mevcut değil.';
-  },
+  onCellClick: (point) => explainMinimapCell(point),
 });
+
+function updateRouteButton() {
+  const ready = Boolean(layers.dtm.available && minimapEndpoints.start && minimapEndpoints.end && routeWorkerReady);
+  minimapPlanButton.disabled = !ready || Boolean(pendingRouteRequest);
+  minimapPlanButton.textContent = pendingRouteRequest ? 'Rota hesaplanıyor…' : ready ? 'Rota planla' : 'Başlangıç ve bitiş seçin';
+}
+
+function renderRouteSummary(result) {
+  const rows = [];
+  const add = (key, value) => rows.push([key, value]);
+  const stats = result?.stats;
+  if (result?.status !== 'ok' || !stats) add('Rota', result?.reason || result?.status || 'Henüz hesaplanmadı');
+  else {
+    add('Uzunluk', Number.isFinite(stats.lengthM) ? `${stats.lengthM.toFixed(0)} m` : 'bilinmiyor');
+    add('Tahmini süre', Number.isFinite(stats.estimatedDurationS) ? `${(stats.estimatedDurationS / 60).toFixed(1)} dk (0,8 m/s senaryo hızı)` : 'yok (bölgesel çözünürlük)');
+    add('Kot kazanımı/kaybı', stats.elevationProfileComplete ? `+${stats.elevationGainM.toFixed(1)} / −${stats.elevationLossM.toFixed(1)} m` : 'profil eksik');
+    add('En zor segment göstergesi', Number.isFinite(stats.maxSlopeDeg) ? `${stats.maxSlopeDeg.toFixed(1)}° en yüksek eğim; maliyet çarpanı ${Number(stats.maxCost).toFixed(2)}` : `maliyet çarpanı ${Number(stats.maxCost).toFixed(2)}`);
+  }
+  minimapRouteSummary.replaceChildren(...rows.flatMap(([key, value]) => {
+    const dt = document.createElement('dt'); dt.textContent = key;
+    const dd = document.createElement('dd'); dd.textContent = value;
+    return [dt, dd];
+  }));
+}
+
+function updateHeatmap(data) {
+  if (!(data?.score instanceof Uint8Array) || !(data?.status instanceof Uint8Array)) return null;
+  const canvas = document.createElement('canvas'); canvas.width = data.cols; canvas.height = data.rows;
+  const context = canvas.getContext('2d');
+  const image = context.createImageData(data.cols, data.rows);
+  for (let i = 0; i < data.score.length; i++) {
+    const p = i * 4, score = data.score[i];
+    if (data.status[i] !== 0) { image.data[p + 3] = 0; continue; }
+    image.data[p] = 245 - Math.round(score * 1.65);
+    image.data[p + 1] = 48 + Math.round(score * 1.55);
+    image.data[p + 2] = 55; image.data[p + 3] = 190;
+  }
+  context.putImageData(image, 0, 0);
+  return { canvas, bounds: { nwXM: data.nwXM, nwYM: data.nwYM, widthM: data.cols * data.cellSizeM, heightM: data.rows * data.cellSizeM } };
+}
+
+function handleRouteWorkerMessage({ data }) {
+  if (!data || !pendingRouteRequest || data.id !== pendingRouteRequest.id) return;
+  const pending = pendingRouteRequest;
+  if (data.type === 'window-ready') {
+    pendingRouteRequest = null;
+    routeWorkerReady = true;
+    routeHeatmap = updateHeatmap(data.heatmap);
+    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
+    minimapStatus.textContent = 'Yürünebilirlik ısı haritası hazır. Planlama göstergesi — güvenli rota sertifikası değildir.';
+    updateRouteButton();
+    return;
+  }
+  pendingRouteRequest = null;
+  if (data.type === 'error') {
+    minimapStatus.textContent = `Rota planlayıcı: ${data.reason || data.message || 'işlem başarısız'}`;
+    if (pending.kind === 'plan') { activeRoute = null; renderRouteSummary({ status: 'error', reason: minimapStatus.textContent }); }
+    if (pending.kind === 'explain') minimapCellExplanation.textContent = minimapStatus.textContent;
+    updateRouteButton();
+    return;
+  }
+  if (data.type === 'result' && pending.kind === 'plan') {
+    activeRoute = data.result;
+    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
+    renderRouteSummary(activeRoute);
+    minimapStatus.textContent = activeRoute?.status === 'ok'
+      ? `Rota planlandı. ${activeRoute.mode === 'eva_walkability' ? 'EVA yürünebilirlik' : 'Bölgesel ön planlama'}. Planlama göstergesi — güvenli rota sertifikası değildir.`
+      : activeRoute?.reason || `Rota üretilemedi (${activeRoute?.status || 'bilinmiyor'}).`;
+  } else if (data.type === 'cell-result' && pending.kind === 'explain') {
+    renderCellExplanation(data.result);
+  }
+  updateRouteButton();
+}
+
+function ensureRouteWorker() {
+  if (routeWorker) return routeWorker;
+  routeWorker = new Worker(new URL('./route/pathfinder.worker.js', import.meta.url), { type: 'module' });
+  routeWorker.addEventListener('message', handleRouteWorkerMessage);
+  routeWorker.addEventListener('error', (event) => {
+    routeWorkerReady = false; pendingRouteRequest = null;
+    minimapStatus.textContent = `Rota Worker kullanılamıyor: ${event.message || 'çalışma hatası'}.`;
+    updateRouteButton();
+  });
+  return routeWorker;
+}
+
+function initializeRouteWorker() {
+  if (!layers.dtm.available || !terrain) return;
+  const worker = ensureRouteWorker();
+  const values = new Float32Array(layers.dtm.values);
+  const dataView = new DataView(new ArrayBuffer(4));
+  dataView.setUint32(0, layers.dtm.noDataBits, true);
+  const noDataValue = dataView.getFloat32(0, true);
+  const request = { type: 'init-window', id: ++routeWorkerId, window: {
+    elevation: values, rows: layers.dtm.rows, cols: layers.dtm.cols, cellSizeM: layers.dtm.cellSizeM,
+    nwXM: terrain.bounds.nwXM, nwYM: terrain.bounds.nwYM, noDataValue,
+    validMin: layers.dtm.validMin, validMax: layers.dtm.validMax,
+  } };
+  pendingRouteRequest = { id: request.id, kind: 'init' };
+  routeWorkerReady = false;
+  minimapStatus.textContent = 'Planlama alanı Worker içinde hazırlanıyor…';
+  worker.postMessage(request, [values.buffer]);
+}
+
+function renderCellExplanation(result) {
+  minimapCellExplanation.hidden = false;
+  minimapCellExplanation.replaceChildren();
+  const heading = document.createElement('h3'); heading.textContent = 'Hücre açıklaması'; minimapCellExplanation.append(heading);
+  const entries = [
+    ['Durum', result?.cellStatus || result?.status || 'bilinmiyor'],
+    ['Yürünebilirlik puanı', Number.isFinite(result?.score) ? `${result.score}/100` : 'üretilmiyor'],
+    ['Eğim', Number.isFinite(result?.slopeDeg) ? `${result.slopeDeg.toFixed(2)}°` : 'bilinmiyor'],
+    ['Pürüzlülük', Number.isFinite(result?.roughnessM) ? `${result.roughnessM.toFixed(3)} m` : 'bilinmiyor'],
+    ['Açıklama', result?.reason || result?.caveatTR || 'Veri açıklaması yok'],
+  ];
+  for (const [label, value] of entries) { const p = document.createElement('p'); p.textContent = `${label}: ${value}`; minimapCellExplanation.append(p); }
+  if (Array.isArray(result?.components)) for (const component of result.components) {
+    const p = document.createElement('p'); p.textContent = `${component.name}: ${component.formula}`; minimapCellExplanation.append(p);
+  }
+}
+
+function explainMinimapCell(point) {
+  if (!routeWorkerReady) { minimapStatus.textContent = 'Hücre açıklaması için planlama alanı henüz hazır değil.'; return; }
+  const id = ++routeWorkerId; pendingRouteRequest = { id, kind: 'explain' };
+  minimapCellExplanation.hidden = false; minimapCellExplanation.textContent = 'Hücre açıklaması alınıyor…';
+  ensureRouteWorker().postMessage({ type: 'explain-cell', id, point });
+}
+
+function planMinimapRoute() {
+  if (!routeWorkerReady || !minimapEndpoints.start || !minimapEndpoints.end) return;
+  const id = ++routeWorkerId; pendingRouteRequest = { id, kind: 'plan' };
+  minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi güvenli rota sertifikası değildir.';
+  updateRouteButton();
+  ensureRouteWorker().postMessage({ type: 'plan-walking-route', id, startLocal: minimapEndpoints.start, endLocal: minimapEndpoints.end });
+}
 
 function refreshMinimapOverlays() {
   minimapController.setOverlays({
@@ -128,6 +275,10 @@ function setMinimapPickMode(kind) {
 
 $('minimap-pick-start').addEventListener('click', () => setMinimapPickMode('start'));
 $('minimap-pick-end').addEventListener('click', () => setMinimapPickMode('end'));
+$('minimap-plan-route').addEventListener('click', planMinimapRoute);
+minimapHeatmapToggle.addEventListener('change', () => {
+  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
+});
 $('minimap-fit').addEventListener('click', () => minimapController.fit());
 $('minimap-clear-points').addEventListener('click', () => {
   minimapEndpoints = { start: null, end: null };
@@ -137,7 +288,12 @@ $('minimap-clear-points').addEventListener('click', () => {
   minimapController.setSelectionMode(null);
   $('minimap-pick-start').setAttribute('aria-pressed', 'false');
   $('minimap-pick-end').setAttribute('aria-pressed', 'false');
-  minimapStatus.textContent = 'Noktalar temizlendi. Rota planlayıcı Stage 23A/23B modülleri olmadığı için kullanılamıyor.';
+  if (pendingRouteRequest?.kind === 'plan') pendingRouteRequest = null;
+  minimapStatus.textContent = 'Noktalar temizlendi. Yeni başlangıç ve bitiş seçerek yeniden planlayın.';
+  activeRoute = null;
+  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
+  renderRouteSummary({ status: 'idle', reason: 'Noktalar temizlendi' });
+  updateRouteButton();
 });
 minimapGeologyToggle.addEventListener('change', () => {
   geologyLayerVisible = minimapGeologyToggle.checked;
@@ -594,6 +750,8 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
     minimapController.setTerrain(null);
   }
   minimapController.setDescriptor(layers.dtm.descriptor);
+  initializeRouteWorker();
+  updateRouteButton();
   updateViewControls();
   hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
   updateHud();

@@ -154,8 +154,13 @@ export function poseAstronautRig(state) {
     rootOffset = [0, 0, lopeBounce - squash + 0.006 * breath * idleFade];
 
     const forwardLean = 0.04 * speedNorm;
-    const sway = 0.02 * gaitNorm * cycle;
-    rootRotationRad = [forwardLean + 0.03 * gaitNorm * cycle, 0, sway];
+    const hipRoll = 0.015 * speedNorm * cycle;
+    const sway = 0.02 * speedNorm * cycle;
+    rootRotationRad = [forwardLean + 0.03 * speedNorm * cycle, hipRoll, sway];
+
+    const helmetRot = [-0.35 * rootRotationRad[0], -0.4 * hipRoll, -0.3 * sway];
+    parts.helmet = hingedPart3D('helmet', helmetRot);
+    parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
 
     const armSwing = 0.72 * amplitude * cycle;
     const armFlare = 0.02 + 0.04 * speedNorm + 0.15 * recFrac;
@@ -175,26 +180,44 @@ export function poseAstronautRig(state) {
 
     const legSwing = amplitude * cycle;
     const legAbsorb = 0.12 * recFrac;
-    const legClearance = 0.03 * gaitNorm;
-    parts.leftLeg = hingedPart3D('leftLeg', [legSwing - legAbsorb, -legClearance, 0]);
-    parts.rightLeg = hingedPart3D('rightLeg', [-legSwing - legAbsorb, legClearance, 0]);
+    const legClearance = 0.03;
+    const leftLegRot = [legSwing - legAbsorb, -legClearance, 0];
+    const rightLegRot = [-legSwing - legAbsorb, legClearance, 0];
+    parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
+    parts.rightLeg = hingedPart3D('rightLeg', rightLegRot);
 
     const bootSwing = 0.30 * amplitude * cycle;
     const bootAbsorb = 0.10 * recFrac;
-    parts.leftBoot = hingedPart3D('leftBoot', [bootSwing + bootAbsorb, -legClearance, 0]);
-    parts.rightBoot = hingedPart3D('rightBoot', [-bootSwing + bootAbsorb, legClearance, 0]);
+    const leftAnklePush = cycle > 0 ? 0.12 * amplitude * cycle : 0.04 * amplitude * cycle;
+    const rightAnklePush = -cycle > 0 ? -0.12 * amplitude * cycle : -0.04 * amplitude * cycle;
+    const leftBootTargetPitch = bootSwing + leftAnklePush + bootAbsorb;
+    const rightBootTargetPitch = -bootSwing + rightAnklePush + bootAbsorb;
+    parts.leftBoot = chainedLimbPart('leftBoot', 'leftLeg', leftLegRot, [
+      leftBootTargetPitch - leftLegRot[0],
+      0,
+      0,
+    ]);
+    parts.rightBoot = chainedLimbPart('rightBoot', 'rightLeg', rightLegRot, [
+      rightBootTargetPitch - rightLegRot[0],
+      0,
+      0,
+    ]);
   } else if (pose === 'airborne') {
     // Mars low-gravity jump kinematics (0.38g):
     // 1. Ascent (verticalSpeedMps > 0.5): arms forward/upward, legs trailing backward.
     // 2. Apex Balance (|verticalSpeedMps| <= 0.5): floating equilibrium, arms flared out, legs soft.
     // 3. Descent (verticalSpeedMps < -0.5): legs/boots reaching forward to brace for touchdown.
     const vz = verticalSpeedMps;
-    const tAscent = Math.max(0, Math.min(1, (vz - 0.5) / 1.0));
-    const tDescent = Math.max(0, Math.min(1, (-vz - 0.5) / 1.0));
+    const tAscent = smoothstep01((vz - 0.5) / 1.0);
+    const tDescent = smoothstep01((-vz - 0.5) / 1.0);
     const tApex = 1 - tAscent - tDescent;
 
     const rootPitch = tAscent * 0.045 - tDescent * 0.04;
     rootRotationRad = [rootPitch, 0, 0];
+
+    const helmetRot = [-0.45 * rootPitch - tDescent * 0.06, 0, 0];
+    parts.helmet = hingedPart3D('helmet', helmetRot);
+    parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
 
     const apexFloat = tApex * 0.012 * Math.sin(timeS * 2.5);
     rootOffset = [0, 0, apexFloat];
@@ -215,12 +238,24 @@ export function poseAstronautRig(state) {
     const legPitch = tAscent * 0.22 + tApex * 0.06 - tDescent * 0.26;
     const legSpread = 0.03 + tApex * 0.02;
     const stagger = tApex * 0.04;
-    parts.leftLeg = hingedPart3D('leftLeg', [legPitch + stagger, -legSpread, 0]);
-    parts.rightLeg = hingedPart3D('rightLeg', [legPitch - stagger, legSpread, 0]);
+    const leftLegRot = [legPitch + stagger, -legSpread, 0];
+    const rightLegRot = [legPitch - stagger, legSpread, 0];
+    parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
+    parts.rightLeg = hingedPart3D('rightLeg', rightLegRot);
 
     const bootPitch = tAscent * 0.10 + tApex * 0.02 - tDescent * 0.14;
-    parts.leftBoot = hingedPart3D('leftBoot', [bootPitch + stagger * 0.5, -legSpread, 0]);
-    parts.rightBoot = hingedPart3D('rightBoot', [bootPitch - stagger * 0.5, legSpread, 0]);
+    const leftBootTargetPitch = bootPitch + stagger * 0.5;
+    const rightBootTargetPitch = bootPitch - stagger * 0.5;
+    parts.leftBoot = chainedLimbPart('leftBoot', 'leftLeg', leftLegRot, [
+      leftBootTargetPitch - leftLegRot[0],
+      0,
+      0,
+    ]);
+    parts.rightBoot = chainedLimbPart('rightBoot', 'rightLeg', rightLegRot, [
+      rightBootTargetPitch - rightLegRot[0],
+      0,
+      0,
+    ]);
   } else if (pose === 'landing') {
     // Landing squash & recovery: knees flex, torso drops (negative rootOffset Z), arms flare.
     // The idle breath/stance terms fade out as the recovery fraction rises (and back in as it decays),
@@ -230,8 +265,16 @@ export function poseAstronautRig(state) {
     rootOffset = [0, 0, squash + 0.006 * breath * idleFade];
     rootRotationRad = [0.045 * recFrac, 0, 0];
 
+    const helmetRot = [-0.30 * rootRotationRad[0], 0, 0];
+    parts.helmet = hingedPart3D('helmet', helmetRot);
+    parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
+
     const armFlare = 0.02 * idleFade + 0.22 * recFrac;
     const armPitch = -0.018 * breath * idleFade - 0.18 * recFrac;
+    const leftArmRot = [armPitch, armFlare, 0];
+    const rightArmRot = [armPitch, -armFlare, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
 
     // Wrists flex to cushion landing impact
     const gripPitch = (-0.08 - 0.015 * breath) * idleFade - 0.14 * recFrac;
@@ -247,24 +290,41 @@ export function poseAstronautRig(state) {
     const legFlex = -0.18 * recFrac;
     const bootFlex = 0.14 * recFrac;
     const legSpread = 0.04 * recFrac;
-    parts.leftLeg = hingedPart3D('leftLeg', [legFlex, -legSpread, 0]);
-    parts.rightLeg = hingedPart3D('rightLeg', [legFlex, legSpread, 0]);
-    parts.leftBoot = hingedPart3D('leftBoot', [bootFlex, -legSpread, 0]);
-    parts.rightBoot = hingedPart3D('rightBoot', [bootFlex, legSpread, 0]);
-  } else if (pose === 'stop' || pose === 'unknown') {
-    // Fixed settled stance (no hidden previous-pose state or transition clock). For `unknown` this is a
-    // static neutral presentation: unknown contact is not visually asserted as ground or flight.
-    setArms(parts, [-0.035, 0.02, 0], [-0.035, -0.02, 0], [-0.08, 0.03, 0], [-0.08, -0.03, 0]);
+    const leftLegRot = [legFlex, -legSpread, 0];
+    const rightLegRot = [legFlex, legSpread, 0];
+    parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
+    parts.rightLeg = hingedPart3D('rightLeg', rightLegRot);
+    parts.leftBoot = chainedLimbPart('leftBoot', 'leftLeg', leftLegRot, [bootFlex - legFlex, 0, 0]);
+    parts.rightBoot = chainedLimbPart('rightBoot', 'rightLeg', rightLegRot, [bootFlex - legFlex, 0, 0]);
+  } else if (pose === 'stop') {
+    // Fixed settled stance: no hidden previous-pose state or transition clock is required.
+    const leftArmRot = [-0.035, 0.02, 0];
+    const rightArmRot = [-0.035, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [-0.08, 0.03, 0]);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08, -0.03, 0]);
+  } else if (pose === 'unknown') {
+    // Static neutral presentation: unknown contact is not visually asserted as ground or flight.
+    const leftArmRot = [-0.035, 0.02, 0];
+    const rightArmRot = [-0.035, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [-0.08, 0.03, 0]);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08, -0.03, 0]);
   } else {
     // A small deterministic idle breath freezes naturally when the caller freezes timeS.
     rootOffset = [0, 0, 0.006 * breath];
-    setArms(
-      parts,
-      [-0.018 * breath, 0.02, 0],
-      [-0.018 * breath, -0.02, 0],
-      [-0.08 - 0.015 * breath, 0.03, 0],
-      [-0.08 - 0.015 * breath, -0.03, 0],
-    );
+    const helmetRot = [-0.008 * breath, 0, 0];
+    parts.helmet = hingedPart3D('helmet', helmetRot);
+    parts.visor = chainedLimbPart('visor', 'helmet', helmetRot, [0, 0, 0]);
+    const leftArmRot = [-0.018 * breath, 0.02, 0];
+    const rightArmRot = [-0.018 * breath, -0.02, 0];
+    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    const idleGrip = [-0.08 - 0.015 * breath, 0.03, 0];
+    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, idleGrip);
+    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08 - 0.015 * breath, -0.03, 0]);
   }
 
   for (const id of Object.keys(ASTRONAUT_RIG.parts)) {

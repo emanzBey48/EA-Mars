@@ -236,6 +236,7 @@ const { keys } = bindControls({
     hasEntered3dOnce = false;
     camera3d.yawRad = targetYawRad;
     camera3d.dynamicPitchOffsetRad = 0;
+    camera3d.dynamicRollOffsetRad = 0;
     camera3d.dynamicEyeOffsetM = 0;
     updateHud();
   },
@@ -340,21 +341,29 @@ function frame(now) {
 
       let eyeOffsetM = 0;
       let pitchOffsetRad = 0;
+      let rollOffsetRad = 0;
 
       if (mov?.landingRecovery) {
-        // Landing compression dip: cushions impact with downward camera dip (~0.05 m) and slight pitch tilt
-        const frac = mov.landingRecoveryFrac ?? 0;
-        const dipCurve = Math.sin(Math.max(0, Math.min(1, frac)) * Math.PI);
-        eyeOffsetM = -0.05 * dipCurve;
-        pitchOffsetRad = -0.012 * dipCurve;
+        // Landing compression dip: cushions impact with downward camera dip (~0.055 m) and slight pitch tilt
+        const frac = Math.max(0, Math.min(1, mov.landingRecoveryFrac ?? 0));
+        const dipCurve = Math.sin(frac * Math.PI);
+        eyeOffsetM = -0.055 * dipCurve;
+        pitchOffsetRad = -0.015 * dipCurve;
+        rollOffsetRad = 0.004 * dipCurve * Math.sin(frac * 2 * Math.PI);
+      } else if (mov?.airborne) {
+        // Ballistic 0.38g flight: subtle vertical-velocity gaze tracking
+        const vz = mov.verticalSpeedMps ?? 0;
+        pitchOffsetRad = Math.max(-0.018, Math.min(0.018, vz * 0.006));
       } else if (mov?.grounded && !mov?.airborne && !mov?.landingRecovery && (mov?.horizontalSpeedMps ?? 0) > 0.1) {
-        // Walking head-bob: subtle vertical sinusoidal oscillation (~0.02 m) and rhythmic pitch tilt
+        // Mars 0.38g loping head-bob: rhythmic flight bounce, pitch nod, and subtle weight-shift roll
         const speed = mov.horizontalSpeedMps;
+        const speedNorm = Math.min(1, speed / 1.4);
         const strideM = 1.25;
         const gaitFreqHz = speed / strideM;
         const phase = 2 * Math.PI * gaitFreqHz * (mov.timeS ?? 0);
-        eyeOffsetM = 0.02 * Math.sin(2 * phase);
-        pitchOffsetRad = 0.006 * Math.sin(phase);
+        eyeOffsetM = 0.024 * speedNorm * Math.sin(2 * phase);
+        pitchOffsetRad = 0.006 * speedNorm * Math.sin(phase);
+        rollOffsetRad = 0.005 * speedNorm * Math.cos(phase);
       }
 
       if (Number.isFinite(player.bodyWorldZM)) {
@@ -366,12 +375,14 @@ function frame(now) {
           verticalScale: terrainMesh.displayConfig.verticalScale,
           eyeOffsetM,
           pitchOffsetRad,
+          rollOffsetRad,
         });
       } else {
         // Keep the last eye Z if no sampled world-Z anchor exists; never invent zero terrain height.
         camera3d.xM = player.xM;
         camera3d.yM = player.yM;
         camera3d.dynamicPitchOffsetRad = pitchOffsetRad;
+        camera3d.dynamicRollOffsetRad = rollOffsetRad;
       }
       renderer3d.renderFrame({
         snapshot,

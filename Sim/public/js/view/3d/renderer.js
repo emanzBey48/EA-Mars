@@ -3,8 +3,8 @@
 // upload those arrays directly and supports 32-bit element indices without adding a package or CDN.
 // This keeps deployment simple; the tradeoff is that shaders and GPU resource lifecycle live here.
 
-import { getViewProjectionMatrix } from './camera.js';
-import { ASTRONAUT_RIG, poseAstronautRig } from './astronaut-rig.js';
+import { getCameraPosition, getViewProjectionMatrix } from './camera.js';
+import { ASTRONAUT_RIG, FIRST_PERSON_RIG_PARTS, poseAstronautRig } from './astronaut-rig.js';
 
 const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
@@ -22,7 +22,8 @@ uniform vec3 uPartOffset;
 uniform vec3 uPartRotationRad;
 uniform vec3 uRootOffset;
 uniform vec3 uRootRotationRad;
-out float vLighting;
+out vec3 vNormal;
+out vec3 vWorldPos;
 out vec3 vColor;
 vec3 rotateEuler(vec3 p, vec3 r) {
   float cx = cos(r.x), sx = sin(r.x);
@@ -44,20 +45,98 @@ void main() {
   localNormal = rotateEuler(localNormal, uRootRotationRad);
   vec3 rotatedNormal = vec3(c * localNormal.x - s * localNormal.y, s * localNormal.x + c * localNormal.y, localNormal.z);
   rotatedNormal.z /= uVerticalScale;
-  vec3 normal = normalize(rotatedNormal);
-  vLighting = 0.28 + 0.72 * max(dot(normal, normalize(uLightDirection)), 0.0);
+  vNormal = normalize(rotatedNormal);
+  vWorldPos = worldPosition;
   vColor = aColor;
   gl_Position = uViewProjection * vec4(worldPosition, 1.0);
 }`;
 
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
-in float vLighting;
+in vec3 vNormal;
+in vec3 vWorldPos;
 in vec3 vColor;
 uniform vec3 uBaseColor;
+uniform vec3 uLightDirection;
+uniform vec3 uCameraEye;
+uniform vec2 uElevBounds;
+uniform int uRenderPass;
 out vec4 outColor;
+
 void main() {
-  outColor = vec4(uBaseColor * vColor * vLighting, 1.0);
+  vec3 lightDir = normalize(uLightDirection);
+  vec3 toCamera = uCameraEye - vWorldPos;
+  float dist = length(toCamera);
+  vec3 viewDir = dist > 1e-4 ? toCamera / dist : vec3(0.0, 0.0, 1.0);
+  vec3 horizonColor = vec3(0.78, 0.51, 0.36);
+
+  if (uRenderPass == 3) {
+    // Martian butterscotch dust sky dome & solar scattering
+    vec3 rayDir = normalize(vWorldPos - uCameraEye);
+    float z = clamp(rayDir.z, -0.25, 1.0);
+    vec3 groundHaze = vec3(0.54, 0.32, 0.22);
+    vec3 midSky = vec3(0.46, 0.27, 0.21);
+    vec3 zenithSky = vec3(0.15, 0.10, 0.14);
+    vec3 sky;
+    if (z < 0.0) {
+      sky = mix(horizonColor, groundHaze, clamp(-z * 4.0, 0.0, 1.0));
+    } else {
+      float h = pow(z, 0.52);
+      sky = mix(horizonColor, midSky, clamp(h * 1.65, 0.0, 1.0));
+      sky = mix(sky, zenithSky, smoothstep(0.28, 0.95, h));
+    }
+    float sunCos = max(dot(rayDir, lightDir), 0.0);
+    float mieGlow = pow(sunCos, 10.0) * 0.26 + pow(sunCos, 96.0) * 0.55;
+    sky += vec3(1.0, 0.78, 0.56) * mieGlow;
+    outColor = vec4(sky, 1.0);
+    return;
+  }
+
+  vec3 normal = normalize(vNormal);
+  float ndotl = max(dot(normal, lightDir), 0.0);
+  float hemi = 0.5 + 0.5 * normal.z;
+  vec3 ambient = mix(vec3(0.24, 0.14, 0.11), vec3(0.42, 0.29, 0.23), hemi);
+  vec3 halfVec = normalize(lightDir + viewDir);
+  float ndoth = max(dot(normal, halfVec), 0.0);
+
+  if (uRenderPass == 0) {
+    // Jezero Crater terrain: hypsometric regolith + steep bedrock + sedimentary strata + dust fog
+    float span = max(1.0, uElevBounds.y - uElevBounds.x);
+    float elevFrac = clamp((vWorldPos.z - uElevBounds.x) / span, 0.0, 1.0);
+    vec3 basinOchre = vec3(0.62, 0.35, 0.22);
+    vec3 deltaRust = vec3(0.79, 0.45, 0.27);
+    vec3 ridgeSand = vec3(0.90, 0.58, 0.36);
+    vec3 regolith = elevFrac < 0.5
+      ? mix(basinOchre, deltaRust, elevFrac * 2.0)
+      : mix(deltaRust, ridgeSand, (elevFrac - 0.5) * 2.0);
+    float slope = clamp((1.0 - normal.z) * 3.2, 0.0, 1.0);
+    vec3 bedrock = vec3(0.38, 0.24, 0.19);
+    regolith = mix(regolith, bedrock, smoothstep(0.18, 0.85, slope) * 0.65);
+    float strata = 0.975 + 0.025 * sin(vWorldPos.z * 2.4);
+    regolith *= strata;
+
+    float spec = pow(ndoth, 20.0) * 0.07;
+    vec3 lit = regolith * vColor * (ambient + 0.78 * ndotl) + vec3(1.0, 0.82, 0.65) * spec;
+    float fogFactor = clamp(1.0 - exp(-dist * 0.00045), 0.0, 0.82);
+    outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
+    return;
+  }
+
+  if (uRenderPass == 1) {
+    // 3D Waypoint beacons & route corridor guides
+    float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5) * 0.32;
+    float spec = pow(ndoth, 36.0) * 0.28;
+    vec3 lit = uBaseColor * vColor * (0.38 + 0.68 * ndotl) + vec3(spec + rim);
+    float fogFactor = clamp(1.0 - exp(-dist * 0.00035), 0.0, 0.65);
+    outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
+    return;
+  }
+
+  // Pass 2: Astronaut EVA suit & first-person view-model arms/gloves/chestPack
+  float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.22;
+  float spec = pow(ndoth, 32.0) * 0.22;
+  vec3 suitLit = uBaseColor * vColor * (ambient * 0.85 + 0.78 * ndotl) + vec3(1.0, 0.90, 0.78) * (spec + rim);
+  outColor = vec4(suitLit, 1.0);
 }`;
 
 function compileShader(gl, type, source) {
@@ -154,9 +233,8 @@ function createAstronautBuffers(gl, locations) {
   return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: indices.length };
 }
 
-const FIRST_PERSON_RIG_PARTS = ['torso', 'leftArm', 'rightArm'];
-const FIRST_PERSON_RIG_FORWARD_M = 1.6;
-const FIRST_PERSON_RIG_ROOT_BELOW_EYE_M = 1.34;
+const FIRST_PERSON_RIG_FORWARD_M = 1.65;
+const FIRST_PERSON_RIG_ROOT_BELOW_EYE_M = 1.24;
 
 function rotateEuler([x, y, z], [rx, ry, rz]) {
   const cx = Math.cos(rx), sx = Math.sin(rx);
@@ -218,11 +296,14 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     partRotationRad: gl.getUniformLocation(program, 'uPartRotationRad'),
     rootOffset: gl.getUniformLocation(program, 'uRootOffset'),
     rootRotationRad: gl.getUniformLocation(program, 'uRootRotationRad'),
+    cameraEye: gl.getUniformLocation(program, 'uCameraEye'),
+    elevBounds: gl.getUniformLocation(program, 'uElevBounds'),
+    renderPass: gl.getUniformLocation(program, 'uRenderPass'),
   };
   if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
       !locations.partSize || !locations.partCenter || !locations.partOffset || !locations.partRotationRad ||
-      !locations.rootOffset || !locations.rootRotationRad) {
+      !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
   }
@@ -369,11 +450,41 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       uploadMesh(terrainMesh);
 
       const viewProjection = getViewProjectionMatrix(camera, canvas.width / canvas.height);
+      const eye = getCameraPosition(camera);
+      const minZDisplay = Number.isFinite(terrainMesh.bounds?.minZDisplay) ? terrainMesh.bounds.minZDisplay : -20;
+      const maxZDisplay = Number.isFinite(terrainMesh.bounds?.maxZDisplay) ? terrainMesh.bounds.maxZDisplay : 20;
+
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.useProgram(program);
       gl.uniformMatrix4fv(locations.viewProjection, false, viewProjection);
       gl.uniform3fv(locations.lightDirection, light);
+      gl.uniform3f(locations.cameraEye, eye.xM, eye.yM, eye.zDisplay);
+      gl.uniform2f(locations.elevBounds, minZDisplay, maxZDisplay);
+
+      // Pass 3: Procedural Martian Skybox Dome & Solar Mie Scattering
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
+      gl.uniform1i(locations.renderPass, 3);
+      gl.uniform3f(locations.objectOffset, eye.xM, eye.yM, eye.zDisplay);
+      gl.uniform1f(locations.headingRad, 0);
+      gl.uniform1f(locations.verticalScale, 1);
+      gl.uniform3f(locations.partSize, 2000, 2000, 2000);
+      gl.uniform3f(locations.partCenter, 0, 0, 0);
+      gl.uniform3f(locations.partOffset, 0, 0, 0);
+      gl.uniform3f(locations.partRotationRad, 0, 0, 0);
+      gl.uniform3f(locations.rootOffset, 0, 0, 0);
+      gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
+      gl.uniform3f(locations.baseColor, 1, 1, 1);
+      gl.disableVertexAttribArray(locations.color);
+      gl.vertexAttrib3f(locations.color, 1, 1, 1);
+      gl.bindVertexArray(astronaut.vao);
+      gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+      gl.depthMask(true);
+      gl.enable(gl.DEPTH_TEST);
+
+      // Pass 0: Jezero Crater Terrain Mesh
+      gl.uniform1i(locations.renderPass, 0);
       gl.uniform3f(locations.objectOffset, 0, 0, 0);
       gl.uniform1f(locations.headingRad, 0);
       gl.uniform1f(locations.verticalScale, 1);
@@ -389,12 +500,13 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.bindVertexArray(uploadedMesh.vao);
       gl.drawElements(gl.TRIANGLES, uploadedMesh.indexCount, gl.UNSIGNED_INT, 0);
 
-      // 3D Waypoint Beacons and Route Guides (if supplied)
+      // Pass 1: 3D Waypoint Beacons and Route Guides (if supplied)
       let markersDrawn = false;
       if (markerMesh) {
         uploadMarkerMesh(markerMesh);
       }
       if (uploadedMarkerMesh && uploadedMarkerMesh.indexCount > 0) {
+        gl.uniform1i(locations.renderPass, 1);
         gl.uniform3f(locations.objectOffset, 0, 0, 0);
         gl.uniform1f(locations.headingRad, 0);
         gl.uniform1f(locations.verticalScale, 1);
@@ -444,6 +556,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           objectOffset = [player.xM, player.yM, (player.bodyWorldZM - referenceElevationM) * verticalScale];
         }
         const partIds = firstPerson ? FIRST_PERSON_RIG_PARTS : Object.keys(ASTRONAUT_RIG.parts);
+        gl.uniform1i(locations.renderPass, 2);
         gl.uniform3fv(locations.objectOffset, objectOffset);
         gl.uniform1f(locations.headingRad, headingRad);
         gl.uniform1f(locations.verticalScale, verticalScale);

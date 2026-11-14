@@ -30,9 +30,17 @@ export function buildTerrainImage(layer) {
       if (st.value > zMax) zMax = st.value;
     }
   }
-  const az = 315 * Math.PI / 180, alt = 45 * Math.PI / 180;
+  const az = 315 * Math.PI / 180, alt = 42 * Math.PI / 180;
   const lx = Math.sin(az) * Math.cos(alt), ly = Math.cos(az) * Math.cos(alt), lz = Math.sin(alt);
-  const ramp = [[0, [40, 50, 90]], [0.25, [70, 110, 140]], [0.5, [150, 140, 100]], [0.75, [190, 120, 70]], [1, [235, 220, 200]]];
+  const azFill = 60 * Math.PI / 180, altFill = 55 * Math.PI / 180;
+  const fx = Math.sin(azFill) * Math.cos(altFill), fy = Math.cos(azFill) * Math.cos(altFill), fz = Math.sin(altFill);
+  const ramp = [
+    [0.00, [74, 42, 34]],
+    [0.25, [132, 68, 44]],
+    [0.50, [178, 98, 58]],
+    [0.75, [214, 138, 84]],
+    [1.00, [244, 198, 152]],
+  ];
   const tint = (t) => {
     for (let k = 1; k < ramp.length; k++) if (t <= ramp[k][0]) {
       const [t0, c0] = ramp[k - 1], [t1, c1] = ramp[k]; const u = (t - t0) / (t1 - t0);
@@ -46,14 +54,20 @@ export function buildTerrainImage(layer) {
     if (!ok[i]) { // no-data / invalid: magenta hatch, never painted as terrain
       const hatch = ((r + c) & 7) < 2; img.data[p] = hatch ? 255 : 90; img.data[p + 1] = 0; img.data[p + 2] = hatch ? 255 : 90; img.data[p + 3] = 255; continue;
     }
-    let shade = 0.75;
+    let shade = 0.74;
+    let slopeDarken = 1.0;
     const g = layer.cellGradient(r + rowOffset, c + colOffset);
     if (g.status === STATUS.OK) {
       const nlen = Math.hypot(g.dzdx, g.dzdy, 1);
-      shade = Math.max(0, (-g.dzdx * lx - g.dzdy * ly + lz) / nlen);
+      const primary = Math.max(0, (-g.dzdx * lx - g.dzdy * ly + lz) / nlen);
+      const fill = Math.max(0, (-g.dzdx * fx - g.dzdy * fy + fz) / nlen);
+      shade = 0.78 * primary + 0.22 * fill;
+      const cosSlope = 1 / nlen;
+      slopeDarken = 0.72 + 0.28 * cosSlope;
     }
-    const [R, G, B] = tint((cellValues[i] - zMin) / range);
-    const k = 0.35 + 0.75 * shade;
+    const normZ = (cellValues[i] - zMin) / range;
+    const [R, G, B] = tint(normZ);
+    const k = (0.30 + 0.82 * shade) * slopeDarken;
     img.data[p] = Math.min(255, R * k); img.data[p + 1] = Math.min(255, G * k); img.data[p + 2] = Math.min(255, B * k); img.data[p + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);

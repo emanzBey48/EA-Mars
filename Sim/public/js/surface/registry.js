@@ -355,21 +355,21 @@ export function validateLayerManifest(manifest, expectedFrame) {
   // 6. No-data / special value, scaling/offset, valid range & format
   const valSpec = manifest.valueEncoding;
   if (!valSpec || typeof valSpec !== 'object') {
-    record('valueEncoding', VALIDATION_STATUS.INVALID, 'Değer kodlaması (format, scaling, no-data, geçerli aralık) eksik.');
+    record('valueEncoding', VALIDATION_STATUS.INVALID, 'Değer kodlaması (format, scaling, no-data ve pencere extrema bilgisi) eksik.');
   } else if (!SUPPORTED_FORMATS.includes(valSpec.format)) {
     record('valueEncoding', VALIDATION_STATUS.INVALID, `Desteklenmeyen veri biçimi: ${valSpec.format ?? 'belirsiz'}. Yalnız ${SUPPORTED_FORMATS.join(', ')} desteklenir.`);
-  } else if (valSpec.sampleType !== 'IEEE_REAL' || valSpec.sampleBits !== 32 || valSpec.bands !== 1 || valSpec.compression !== 1 || valSpec.planarConfig !== 1 || valSpec.byteOrder !== 'LITTLE_ENDIAN') {
+  } else if (valSpec.sampleType !== 'IEEE_REAL' || valSpec.sampleBits !== 32 || valSpec.bands !== 1 || valSpec.compression !== 1 || ![1, 2].includes(valSpec.planarConfig) || valSpec.byteOrder !== 'LITTLE_ENDIAN') {
     record('valueEncoding', VALIDATION_STATUS.INVALID, 'Sample type/bits/bands/compression/planar config/byte order açık ve desteklenen değerler olmalıdır.');
-  } else if (valSpec.noDataSource !== 'TIFF_GDAL_NODATA' || valSpec.validRangeScope !== 'loaded_window_observed') {
-    record('valueEncoding', VALIDATION_STATUS.NEEDS_REVIEW, 'Nodata kaynağı veya gözlenen değer aralığının kapsamı belirtilmedi.');
+  } else if (valSpec.noDataSource !== 'TIFF_GDAL_NODATA' || valSpec.rangeSemantics !== 'loaded_window_observed_extrema_only') {
+    record('valueEncoding', VALIDATION_STATUS.NEEDS_REVIEW, 'No-data kaynağı veya extrema değerlerinin yalnızca pencere gözlemi olduğu belirtilmedi.');
   } else if (!approxEq(valSpec.scalingFactor, 1) || !approxEq(valSpec.offset, 0)) {
     record('valueEncoding', VALIDATION_STATUS.NEEDS_REVIEW, `SCALING_FACTOR=${valSpec.scalingFactor}, OFFSET=${valSpec.offset}: birim dönüşümü insan doğrulaması bekliyor.`);
   } else if (!isNonEmptyStr(valSpec.noDataHex) || !/^[0-9A-F]{8}$/i.test(valSpec.noDataHex)) {
     record('valueEncoding', VALIDATION_STATUS.INVALID, 'noDataHex (32-bit hex MISSING_CONSTANT) açıkça tanımlanmalıdır; 0 varsayılmaz.');
-  } else if (!isFinNum(valSpec.validMin) || !isFinNum(valSpec.validMax) || valSpec.validMin >= valSpec.validMax) {
-    record('valueEncoding', VALIDATION_STATUS.INVALID, 'validMin ve validMax geçerli bir aralık olmalıdır.');
+  } else if (!isFinNum(valSpec.observedMin) || !isFinNum(valSpec.observedMax) || valSpec.observedMin >= valSpec.observedMax) {
+    record('valueEncoding', VALIDATION_STATUS.INVALID, 'Yüklenen pencerenin sonlu observedMin/observedMax değerleri eksik veya geçersiz.');
   } else {
-    record('valueEncoding', VALIDATION_STATUS.SUPPORTED, `Biçim: ${valSpec.format}, no-data: 0x${valSpec.noDataHex.toUpperCase()}, aralık: [${valSpec.validMin}, ${valSpec.validMax}] m`);
+    record('valueEncoding', VALIDATION_STATUS.SUPPORTED, `Biçim: ${valSpec.format}, no-data: 0x${valSpec.noDataHex.toUpperCase()}; pencere extrema [${valSpec.observedMin}, ${valSpec.observedMax}] m (ürün geçerlilik aralığı değildir).`);
   }
 
   // 7. Access & human review flags
@@ -469,12 +469,12 @@ export function buildHiriseManifestFromMeta(meta) {
       planarConfig: label.planarConfig,
       byteOrder: label.byteOrder,
       noDataSource: label.noDataSource,
-      validRangeScope: label.validRangeScope,
+      rangeSemantics: label.rangeSemantics,
       scalingFactor: label.scalingFactor,
       offset: label.offset,
       noDataHex: label.missingConstantHex,
-      validMin: label.validMin,
-      validMax: label.validMax,
+      observedMin: label.observedMin,
+      observedMax: label.observedMax,
     },
     quality: {
       windowStats: meta.windowStats ?? null,
@@ -484,7 +484,8 @@ export function buildHiriseManifestFromMeta(meta) {
       transformComparison: meta.transformComparison ?? null,
     },
     access: { status: STATUS.OK, reason: null },
-    humanReviewRequired: false,
+    humanReviewRequired: label.verticalDatumVerified !== true,
+    humanReviewNote: label.verticalDatumVerified === true ? null : 'Ürüne özgü düşey datum kanıtı yok; candidate örneklemeye kapalı.',
   };
 }
 
@@ -535,8 +536,8 @@ export function manifestToDescriptor(manifest, validation) {
       rule: `Tam 32-bit desen eşleşmesi (0x${manifest.valueEncoding.noDataHex}) → no_data · ölçek=${manifest.valueEncoding.scalingFactor}, ofset=${manifest.valueEncoding.offset}`,
     } : null,
     quality: manifest.valueEncoding ? {
-      validMin: manifest.valueEncoding.validMin,
-      validMax: manifest.valueEncoding.validMax,
+      observedMin: manifest.valueEncoding.observedMin,
+      observedMax: manifest.valueEncoding.observedMax,
       format: manifest.valueEncoding.format,
       windowStats: manifest.quality?.windowStats ?? null,
       registration: manifest.quality?.registration ?? null,

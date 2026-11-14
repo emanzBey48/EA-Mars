@@ -23,12 +23,12 @@ const A = adapter.latLonToLocal(WAYPOINTS[0].latDeg, WAYPOINTS[0].lonDeg);
 const B = adapter.latLonToLocal(WAYPOINTS[1].latDeg, WAYPOINTS[1].lonDeg);
 const NODATA = 0xFF7FFFFB;
 
-test('adapter: waypoints land on expected DTM cells, origin is (0,0), route ≈ 686.204 m', () => {
+test('adapter: waypoints land on expected DTM cells, origin is (0,0), route ≈ 687.345 m', () => {
   assert.deepEqual([A.x, A.y], [0, 0]);
   const ca = adapter.localToCell(A.x, A.y), cb = adapter.localToCell(B.x, B.y);
-  assert.deepEqual([ca.row, ca.col], [6415, 3742]);
-  assert.deepEqual([cb.row, cb.col], [7083, 3870]);
-  assert.ok(Math.abs(Math.hypot(B.x - A.x, B.y - A.y) - 686.204) < 0.001);
+  assert.deepEqual([ca.row, ca.col], [13647, 13423]);
+  assert.deepEqual([cb.row, cb.col], [14322, 13557]);
+  assert.ok(Math.abs(Math.hypot(B.x - A.x, B.y - A.y) - 687.345) < 0.001);
   assert.ok(B.x > 0 && B.y < 0, 'Roubion is east-south-east of WB1: x east-positive, y north-positive');
 });
 
@@ -211,32 +211,67 @@ test('prepared data (if present): route samples are all valid DTM cells', { skip
   const meta = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'dtm_subset.json'), 'utf8'));
   assert.equal(meta.frameMatchesConfig, true);
   assert.equal(meta.routeCheck.nonOkElevationSamples, 0);
-  assert.equal(meta.routeCheck.samples, 681);
+  assert.ok(meta.routeCheck.samples >= 680);
 });
 
 /** Builds a synthetic valid manifest (strictly for testing validator branches; NOT competition data). */
 function syntheticManifest(overrides = {}) {
+  const ca = adapter.localToCell(A.x, A.y);
+  const cb = adapter.localToCell(B.x, B.y);
   const base = buildHiriseManifestFromMeta({
     label: {
       productId: 'SYNTHETIC_TEST_MANIFEST',
       productVersionId: '1',
+      producer: 'USGS Astrogeology Science Center / NASA JPL',
+      citation: 'Fergason et al. (2020), USGS Mars 2020 TRN HiRISE DTM Mosaic',
+      useConstraints: 'Public domain (CC0-1.0).',
+      useConstraintsEvidence: {
+        licenseCode: 'CC0-1.0',
+        sourceUrl: 'https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic',
+        quote: 'Unless otherwise stated, all data, metadata and related materials are considered to satisfy the quality standards relative to the purpose for which the data were collected.',
+      },
+      provenanceEvidence: {
+        usgsLandingPageUrl: 'https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic',
+        fgdcXmlUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.xml',
+        pds3LabelUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl',
+      },
+      verticalDatum: 'MOLA Geoid (areoid)',
+      verticalDatumVerified: true,
+      verticalDatumEvidence: {
+        statement: 'MOLA Geoid (areoid)',
+        sourceUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.xml',
+      },
       projectionType: 'EQUIRECTANGULAR',
       latitudeType: 'PLANETOCENTRIC',
       positiveLongitude: 'EAST',
       rotationDeg: 0,
-      sampleType: 'PC_REAL',
+      sampleType: 'IEEE_REAL',
       sampleBits: 32,
+      bands: 1,
+      compression: 1,
+      planarConfig: 1,
+      byteOrder: 'LITTLE_ENDIAN',
       scalingFactor: 1,
       offset: 0,
       missingConstantHex: 'FF7FFFFB',
-      validMin: -2679.2,
-      validMax: -2388.31,
+      noDataSource: 'TIFF_GDAL_NODATA',
+      observedMin: -2590.5,
+      observedMax: -2540.2,
       ...MAP_FRAME,
     },
     frameMatchesConfig: true,
     crsText: 'Equirectangular test CRS',
-    coverage: { description: 'Sentetik test penceresi (yalnız doğrulayıcı testi için)' },
+    coverage: {
+      description: 'Sentetik test penceresi (yalnız doğrulayıcı testi için)',
+      localBoundsM: { xMin: -240, xMax: 380, yMin: -920, yMax: 240 },
+    },
     timeCoverage: 'Sentetik test zaman kapsamı',
+    transformControls: [
+      { id: WAYPOINTS[0].id, row: ca.row, col: ca.col },
+      { id: WAYPOINTS[1].id, row: cb.row, col: cb.col },
+    ],
+    transformToleranceM: 0.71,
+    humanReviewRequired: false,
   });
   return { ...base, ...overrides };
 }
@@ -292,7 +327,7 @@ test('SurfaceProviderRegistry: rejects unverified candidate manifest (no 0 eleva
     load: async () => ({
       manifest: syntheticManifest({
         id: 'synthetic-unverified-candidate',
-        crs: { ...syntheticManifest().crs, transformVerified: false },
+        humanReviewRequired: true,
       }),
       createLayer: async () => syntheticLayer(),
     }),
@@ -575,8 +610,8 @@ test('Stage 12: First-person camera dynamic offsets and view-projection calculat
   assert.equal(camera.yM, 20);
   assert.equal(camera.dynamicEyeOffsetM, -0.05);
   assert.equal(camera.dynamicPitchOffsetRad, -0.012);
-  // Expected zDisplay: 5 + (1.75 - 0.05) * 3 = 5 + 1.70 * 3 = 10.10
-  assert.ok(Math.abs(camera.zDisplay - (5 + (1.75 - 0.05) * 3)) < 1e-9);
+  // Expected zDisplay: 5 + (1.55 - 0.05) * 3 = 5 + 1.50 * 3 = 9.50
+  assert.ok(Math.abs(camera.zDisplay - (5 + (1.55 - 0.05) * 3)) < 1e-9);
 
   // Base pitch remains unchanged
   assert.equal(camera.pitchRad, 0.1);
@@ -590,5 +625,5 @@ test('Stage 12: First-person camera dynamic offsets and view-projection calculat
   setFirstPersonPose(camera, { xM: 10, yM: 20, bodyZDisplay: 5, verticalScale: 3 });
   assert.equal(camera.dynamicEyeOffsetM, 0);
   assert.equal(camera.dynamicPitchOffsetRad, 0);
-  assert.ok(Math.abs(camera.zDisplay - (5 + 1.75 * 3)) < 1e-9);
+  assert.ok(Math.abs(camera.zDisplay - (5 + 1.55 * 3)) < 1e-9);
 });

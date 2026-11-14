@@ -1,6 +1,6 @@
 ﻿# Marswalk — Tam Proje Yol Haritası
 
-**Son güncelleme:** 14 Kasım 2026
+**Son güncelleme:** 14 Kasım 2026 (akşam — minimap, otomatik rota ve tüm Mars kapsamı)
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Bu belge:** Kodlama planı ve karar kaydıdır; uygulama/test çalıştırma kaydı değildir.
 
@@ -16,7 +16,73 @@
 
 **[KULLANICI BİLDİRDİ]** Alparslan regresyon kontrollerinin tümünün geçtiğini söyledi. Ayrıca 13 Kasım'da kullanıcı simülasyonun açıldığını, arayüzde “Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor)” uyarısını gördüğünü ve mevcut 3D görünümün hedef FPS deneyimine yakın olmadığını bildirdi. Bu kullanıcı gözlemleri bağımsız runtime kabulü değildir.
 
-## Güncel yürütme kararı — 14 Kasım 2026
+## ÜRÜN YÖNÜ GÜNCELLEMESİ — Minimap, otomatik rota ve tüm Mars kapsamı (14 Kasım 2026, akşam)
+
+**[KULLANICI/EKİP KARARI]** Proje yalnız geçmişteki Perseverance sürüşünü yeniden oynatan bir simülasyon olmaktan çıkar. Hedef: (1) Google Maps benzeri bir **2D minimap** üzerinde kullanıcı başlangıç ve bitiş noktası seçer; (2) uygulama, yol üzerindeki her konumun **insan yürüyüşüne uygunluğunu puanlayan** (eğim vb.) bir maliyet modeliyle **en mantıklı ve kısa yolu otomatik üretir**; (3) NASA Mars Trek (`trek.nasa.gov/mars`) katmanları ve elimizdeki jeolojik bilgilerle **tüm Mars yüzeyi** algoritmanın kapsamına girer. Bu bölüm, aşağıdaki tüm eski "güncel/sıradaki" ifadelerinin önündedir; eski bölümler tarihsel kayıt ve açık iş listesi olarak kalır.
+
+### Karar değişikliği: "güvenlik skoru yok" kuralı → şeffaf yürünebilirlik puanı
+
+Önceki kural "güvenlik skoru üretme" idi. Yeni karar: **EVA yürünebilirlik puanı** üretilir, ancak şu koşullarla:
+
+- Puan bir **planlama yardımcısıdır**; "güvenli rota" sertifikası veya operasyonel karar değildir. UI metni: "Planlama göstergesi — nihai rota kararı ekip ve görev kontrolündedir."
+- Her bileşenin (eğim, pürüzlülük, veri kapsamı, jeoloji) **formülü, girdisi, birimi ve kaynağı** görünür olur; kullanıcı bir hücrenin puanının neden o olduğunu açabilir.
+- Eşikler (ör. en yüksek yürünebilir eğim) birincil kaynakla belgelenir. Kaynak bulunana kadar değer **"senaryo parametresi"** etiketiyle UI'da ayarlanabilir kalır; NASA eşiği gibi sunulmaz. Rover hareket limitleri insan için kullanılmaz.
+- **Bilinmeyen veri asla güvenli sayılmaz:** no-data, kapsam dışı ve doğrulanmamış katman hücreleri geçilemez ya da "bilinmiyor" olarak işaretlenir; 0'a veya ortalamaya çevrilmez.
+- **Çözünürlük dürüstlüğü:** İnsan adımı ölçeğinde yürünebilirlik yalnız ~1 m DTM (HiRISE) bulunan yerlerde hesaplanır. Küresel/bölgesel kaba DEM'lerden (yüzlerce metre/piksel) çıkan eğim yerel eğimi olduğundan düşük gösterir; bu katmanlarda çıktı "bölgesel ön planlama" olarak etiketlenir, yürünebilirlik puanı olarak sunulmaz.
+
+**Belge uyumu:** `AGENTS.md` ve `yapay zeka icin/SYSTEM_PROMPT.md` hâlâ "güvenlik skoru üretme" diyor. Bu karar entegrasyon sahibi (Alparslan) onayıyla o belgelere de işlenmelidir; işlenene kadar ajanlar bu bölümü güncel ürün kararı olarak uygular.
+
+### Mimari: çok çözünürlüklü veri katmanları
+
+| Kat | Kapsam / çözünürlük | Aday kaynak (Mars Trek kataloğunda ve birincil kayıtta doğrulanacak) | Kullanım |
+|---|---|---|---|
+| **K0 — Küresel** | Tüm Mars, yüzlerce m/piksel | MOLA MEGDR DEM (~463 m/px), HRSC-MOLA birleşik DEM (~200 m/px), küresel jeoloji haritası (Tanaka vd. 2014, USGS SIM 3292, 1:20.000.000), CTX/THEMIS görüntü mozaikleri | Saha seçimi, bölgesel bağlam, kaba erişilebilirlik; **yürünebilirlik puanı değil** |
+| **K1 — Bölgesel** | Seçili bölge, ~5–20 m | CTX DEM/ortho (varsa), bölgesel jeoloji haritaları (ör. SIM 3464 Jezero, 1:75.000) | Bölgesel rota ön planı, koridor daraltma |
+| **K2 — Yerel (EVA)** | ~1 m ve altı | HiRISE DTM/ortho (Jezero mevcut; diğer sahalar Mars Trek/HiRISE kataloğuna göre) | **Yürünebilirlik puanı ve otomatik EVA rotası** |
+
+- **Koordinat:** Küresel düzlem Mars 2000 küresi (R = 3.396.190 m) üzerinde planetosentrik enlem/boylam; Mars Trek bağlantısındaki `EPSG:104905` (Mars 2000 coğrafi) referansı doğrulanır. Her yerel saha kendi yerel metre düzlemine `geo/` adaptörüyle bağlanır; CRS/datum bilinmeyen katman örneklenmez.
+- **Kot verisi:** Rota hesabı için **ham kot (float) rasterı** gerekir; renkli görselleştirme karolarından kot okunmaz. Mars Trek veya USGS Astropedia'nın indirilebilir DEM ürünleri ve erişim yolu (ve CORS) doğrulanır; tarayıcı erişemiyorsa `server.mjs` önbellekli vekil ya da önceden hazırlanmış saha paketleri kullanılır.
+- **Atıf/lisans:** Her katman kaynak, ürün kimliği, çözünürlük ve lisans alanını taşır; kaynakta lisans yoksa "belirtilmemiş" yazılır, uydurulmaz.
+
+### Yeni aşamalar ve iş bölümü
+
+Dosya sahipliği kuralı korunur: Efe saf modüller/hazırlama araçları/testler; Alparslan composition root, snapshot, HUD, renderer ve UI entegrasyonu. Her aşama ayrı branch, tek kabul ölçütü.
+
+**FAZ 1 — Jezero'da çalışan minimap + otomatik rota (yarışma demosu için öncelikli)**
+
+| Aşama | Sahip | Dosya sınırı | Çıktı | Kabul |
+|---|---|---|---|---|
+| **23A — Yürünebilirlik maliyet modeli** | Efe | `public/js/route/cost-model.js` (yeni), `test/cost-model.test.mjs` | Hücre başına eğim (3×3 Horn), pürüzlülük (DTM'den, ör. yerel kot std/TRI), veri durumu ve isteğe bağlı jeoloji etkisinden 0–100 puan ve geçiş maliyeti. Donmuş parametre seti; her parametrede `source`/`status: 'scenario'|'sourced'`. Sert kısıt: eşik üstü eğim, no-data, kapsam dışı = geçilemez. Hücre puanını açıklayan `explainCell()` çıktısı. | Saf ve deterministik; bilinmeyen veri hiçbir zaman geçilebilir değil; sentetik eğim/no-data ızgaralarında beklenen puanlar; parametre değişince puan monoton değişir. |
+| **23B — Otomatik rota (A\*) motoru** | Efe | `public/js/route/pathfinder.js` (yeni), `public/js/route/pathfinder.worker.js` (yeni), `test/pathfinder.test.mjs` | 8 komşulu ızgara A\* (oktil sezgisel × en düşük birim maliyet → kabul edilebilir/admissible), deterministik eşitlik kırma, düğüm/süre bütçesi, büyük pencereler için kaba→ince hiyerarşik arama, isteğe bağlı maliyet-farkında yol düzleştirme. Çıktı: yol noktaları (yerel m ve lon/lat), uzunluk, toplam/max eğim, en düşük puan, kot kazanımı/kaybı, segment bazlı puan dökümü, senaryo hızıyla tahmini EVA süresi; yol yoksa açık `no_path` nedeni. Web Worker ile UI donmaz. | Sentetik testler: duvar etrafından dolanma, dik yamaçtan kaçınma, no-data adası, başlangıç/bitiş geçilemez hücrede, bütçe aşımı. Aynı girdi → aynı yol. |
+| **23C — Gerçek veriyle doğrulama raporu** | Efe | `scripts/validate-route-planner.mjs` (yeni), `Sim/stage23-route-validation.md` | Jezero 1 m DTM penceresinde WB1 → Roubion için planlanan rotayı **düz hat** ve **arşiv Perseverance izi** (20A) ile karşılaştırır: uzunluk, ortalama/maks sapma, eğim/pürüzlülük profilleri, en düşük puan. | Sayısal tablo ve kısa yorum; rover izi insan rotası değildir notu; planlayıcı rover izinden "daha iyi/güvenli" iddiası kurmaz, yalnız ölçüm verir. |
+| **24 — 2D minimap arayüzü** | Alparslan | `public/js/view/minimap/` (yeni), `index.html`, `styles.css`, `main.js` | Google Maps benzeri sürükle/yakınlaştır harita; katman seçici (hillshade, eğim/puan ısı haritası, jeoloji, ortho, arşiv izi, planlanan rota); tıklayarak başlangıç/bitiş seçimi; rota paneli (uzunluk, süre, en zor segment, puan dökümü); hücreye tıklayınca `explainCell()` açıklaması; ölçek çubuğu, kuzey oku, katman atıfları. | Başlangıç/bitiş seçilince Worker'da rota hesaplanır ve çizilir; `no_path` anlaşılır mesajla gösterilir; kapsam dışı/no-data alanları görünür biçimde boş kalır; 2D/3D fallback bozulmaz. |
+| **25 — Rota ↔ first-person HUD bağlantısı** | Alparslan | `main.js`, `view/hud.js`, `view/3d/renderer.js`, `view/3d/marker-mesh.js` | Seçili rota 3D'de zemin kılavuzu olarak çizilir; HUD'da sıradaki noktaya yön/mesafe, mevcut hücre puanı ve eğim uyarısı. Mevcut sabit WB1→Roubion senaryosu "örnek görev" olarak kalır. | Rota değişince 3D kılavuz güncellenir; puan HUD'da "planlama göstergesi" etiketiyle görünür; no-data üzerinde sahte zemin teması yok. |
+
+**FAZ 2 — Tüm Mars kapsamı (Mars Trek entegrasyonu; demo sonrası veya zaman kalırsa)**
+
+| Aşama | Sahip | Dosya sınırı | Çıktı | Kabul |
+|---|---|---|---|---|
+| **26A — Mars Trek katman kataloğu ve karo matematiği** | Efe | `public/js/geo/trek-tiles.js` (yeni; 21A karo matematiğini genelleştirir), `scripts/trek-catalog.mjs` (yeni), testler | Mars Trek WMTS `GetCapabilities` belgelerinden katman kataloğu (ad, ürün kimliği, CRS, TileMatrixSet, çözünürlük, kapsam, atıf/lisans alanları); küresel lon/lat ↔ karo dönüşümü; zoom seçimi. Katman adları belgeden okunur, uydurulmaz. | Katalog gerçek capabilities belgelerinden üretilir; karo sınırları belgeyle 1e-9° içinde; bilinmeyen CRS'li katman `needs_review`. |
+| **26B — Karo/DEM istemcisi ve önbellek** | Alparslan | `surface/` (yeni sağlayıcı), `server.mjs` (vekil/önbellek), `main.js` | Minimap için görüntü karoları; rota için ham DEM erişimi (indirilebilir ürün veya hazırlanmış saha paketi). CORS ve erişim doğrulaması; çevrimdışı demo önbelleği. | Ağ yokken önbellekten çalışır; erişilemeyen katman `unavailable` görünür; atıf her katmanda gösterilir. |
+| **27 — Küresel jeoloji ve çok çözünürlüklü planlama** | Efe (saf), Alparslan (UI) | `geo/geology.js` genişletmesi (çoklu harita: SIM 3292 küresel + SIM 3464 Jezero), `route/` hiyerarşik planlayıcı | Herhangi bir noktada mevcut en ayrıntılı jeoloji haritasından birim + ölçek/belirsizlik; K0/K1'de bölgesel ön rota, K2 bulunan alt alanlarda EVA rotası. | Her sonuç hangi katmandan ve hangi çözünürlükten geldiğini taşır; K0/K1 çıktısı yürünebilirlik puanı olarak etiketlenmez. |
+| **28 — Saha seçici ve yeni sahalar** | Alparslan | UI/entegrasyon | Minimap'te küresel görünümden saha seçimi; 1 m DTM bulunan sahalar (Jezero ve doğrulanacak diğerleri, ör. Gale) için yerel paket hazırlama akışı. | Yalnız DTM'i, datumu ve kapsamı doğrulanmış sahalar EVA rotasına açılır; diğerleri "bölgesel ön planlama" modunda kalır. |
+
+### Öncelik sırası (yarışma takvimi kısıtlı)
+
+1. **H1 düzeltmesi** (`sim.js` havada asılı kalma) — demo güvenilirliği.
+2. **23A → 23B** (Efe) ile **24** (Alparslan) paralel: maliyet modeli ve A\* saf modülleri ile minimap UI ayrı dosya kümelerinde. Arayüz sözleşmesi: `planRoute({ grid, costParams, start, end, budget }) → { status, path, stats, segments }` ve `explainCell(grid, cell, costParams)`.
+3. **23C** doğrulama raporu ve **25** HUD bağlantısı.
+4. Mevcut **20B → 19B → 22B → 21B** entegrasyonları minimap katmanları olarak bağlanır (arşiv izi, jeoloji, rover fotoğrafları, ortho).
+5. FAZ 2 (26–28) demo sonrası; zaman kalırsa yalnız 26A katalog + küresel görünümde saha seçimi gösterilir.
+
+### Açık araştırma maddeleri
+
+- **Yürünebilir eğim eşiği ve eğim–hız ilişkisi:** NASA EVA/uzay giysisi literatüründen birincil kaynak (ör. Apollo yürüyüş deneyimleri, NASA insan sistemleri standartları). Bulunana kadar senaryo parametresi.
+- **Pürüzlülük ölçüsü:** 1 m DTM'den TRI/kot std; kaya tespiti iddiası kurulmaz (1 m DTM tek tek kayaları çözmez). HiRISE kaya yoğunluğu ürünleri varsa ayrı katman olarak değerlendirilir.
+- **Mars Trek erişimi:** Hangi katmanların ham DEM indirmesi sunduğu, kullanım/lisans koşulları, CORS ve hız sınırları.
+- **Jeolojinin maliyete etkisi:** Birim bazlı yürünebilirlik etkisi için kaynak yoksa jeoloji yalnız bilgi katmanı olur, maliyete katılmaz.
+
+## Önceki yürütme kararı — 14 Kasım 2026 (tarihsel; yukarıdaki ürün yönü önceliklidir)
 
 **Repo kaydı ve kaynakla doğrulandı (14 Kasım 2026):** HEAD `94f7bac` (`codex/stage17-first-person-lower-body`), origin ile eşit. Stage 16 rig güncellemesi `8e7173c`; Stage 17 alt beden first-person renderer entegrasyonu `94f7bac` içinde. Stage 13 ve 16 kodu mevcut; Stage 17 kodu da eklenmiş. Stage 17 için bu turdaki bağımsız kontrol salt statikti: test, smoke ve tarayıcı çalıştırılmadı, görsel kabul açık. Stage 19A saf geometri modülü `cdc7ca3` ile mevcut; `Sim/stage19a-geology-audit.md` kaynak ve sorgu belirsizliklerini gösterir. USGS DTM adayı ürün özelinde düşey datum kanıtı olmadığı için `needs_review` kalır; legacy HiRISE fallback korunur. Veri/raster runtime kabulü yoktur.
 
@@ -110,7 +176,7 @@
 
 Marswalk’ın nihai ürün vizyonu, oyuncunun Mars yüzeyinde astronotu **birinci şahıs bakışla keşif amacıyla** yönettiği ayrıntılı, kullanıcı kontrollü bir 3D simülasyondur. “FPS” first-person kamera/kontrol anlamındadır; shooter, silah veya çatışma mekaniği değildir. Çalışan 2D Canvas MVP ve WebGL2 terrain görüntüleyicisi bu hedefe giden ara kilometre taşlarıdır; Stage 10 first-person/rig dikey dilimi eklense de nihai deneyim değildir. Kullanıcının 13 Kasım’daki “3D deneyim hedefe yakın değil” bildirimi Stage 10 entegrasyonundan önceki görünüm içindir; sonraki dilimin bağımsız doğrulaması ayrı kayıtlıdır. Seçili resmi challenge: *Interplanetary Survival Guide: Martian Map*.
 
-**Bilimsel/ürün sınırı:** Canlı NASA telemetrisi izlenimi, gerçek rover karar desteği, güvenli/güvensiz rota kararı veya veriyle desteklenmeyen risk/güvenlik skoru üretme. FPS hareketi Mars yerçekimi ve atmosfer koşullarını dikkate almalı; sayıların birimi, birincil kaynak, uzamsal/zamansal kapsam ve senaryo varsayımları ayrı gösterilmeli. Astronot/giysi kütlesi ve aerodinamik katsayıları kaynaksızsa atmosfer sürüklemesini gerçekçi fizik gibi uygulama. 14 Kasım 2026 itibarıyla kullanıcı eski IMG DTM ve JP2 orto dosyalarının geçersiz olduğunu bildirdi; bunları aktif veri girdisi veya otomatik fallback olarak kullanma. Yeni raster ancak provenance, datum, lisans/kullanım ve uzamsal uygunluğu doğrulandıktan sonra ana yüzey kaynağı olabilir.
+**Bilimsel/ürün sınırı:** Canlı NASA telemetrisi izlenimi, gerçek rover karar desteği, güvenli/güvensiz rota **kararı** veya veriyle desteklenmeyen risk/güvenlik skoru üretme. **14 Kasım 2026 akşam güncellemesi:** Şeffaf, kaynaklı ve parametrik bir **EVA yürünebilirlik puanı** ile otomatik rota önerisi artık ürün kapsamındadır; koşulları en üstteki "ÜRÜN YÖNÜ GÜNCELLEMESİ" bölümündedir (planlama yardımcısı, bilinmeyen veri asla güvenli değil, kaynaksız eşik senaryo parametresi, kaba çözünürlükte puan yok). FPS hareketi Mars yerçekimi ve atmosfer koşullarını dikkate almalı; sayıların birimi, birincil kaynak, uzamsal/zamansal kapsam ve senaryo varsayımları ayrı gösterilmeli. Astronot/giysi kütlesi ve aerodinamik katsayıları kaynaksızsa atmosfer sürüklemesini gerçekçi fizik gibi uygulama. 14 Kasım 2026 itibarıyla kullanıcı eski IMG DTM ve JP2 orto dosyalarının geçersiz olduğunu bildirdi; bunları aktif veri girdisi veya otomatik fallback olarak kullanma. Yeni raster ancak provenance, datum, lisans/kullanım ve uzamsal uygunluğu doğrulandıktan sonra ana yüzey kaynağı olabilir.
 
 NASA başlangıç referansları: yüzey yerçekimi NASA Planet Compare'da 3.71 m/s², NASA NSSDC Mars Fact Sheet'te yaklaşık 3.73 m/s² olarak yuvarlanır; kaynak/yuvarlama farkı saklı tutulur. NSSDC ortalama yüzey basıncını 6.36 mbar (mevsimsel 4.0–8.7 mbar), yüzey yoğunluğunu yaklaşık 0.016 ± 0.006 kg/m³ ve atmosferin hacimce çoğunluğunu CO₂ (~95.1%) olarak listeler. Bunlar Jezero'da belirli bir sol/saate ait atmosfer ölçümü değildir. [NASA Planet Compare](https://solarsystem.nasa.gov/planet-compare/?intent=121), [NASA NSSDC Mars Fact Sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html).
 

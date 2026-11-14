@@ -67,7 +67,11 @@ let minimapEndpoints = { start: null, end: null };
 let routeWorker = null;
 let routeWorkerId = 0;
 let routeWorkerReady = false;
-let pendingRouteRequest = null;
+let pendingInitId = null;
+let pendingPlanId = null;
+let latestExplainId = null;
+let endpointRevision = 0;
+const routeWorkerRequests = new Map();
 let routeHeatmap = null;
 let activeRoute = null;
 
@@ -100,10 +104,13 @@ function showSelectedPoint(kind, point) {
   if (kind === 'start') minimapStartLabel.textContent = label;
   else minimapEndLabel.textContent = label;
   minimapEndpoints = { ...minimapEndpoints, [kind]: point };
-  if (pendingRouteRequest?.kind === 'plan') pendingRouteRequest = null;
+  endpointRevision++;
+  if (pendingPlanId !== null) routeWorkerRequests.delete(pendingPlanId);
+  pendingPlanId = null;
   minimapController.setEndpoints(minimapEndpoints);
   activeRoute = null;
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
+  renderRouteSummary({ status: 'idle', reason: 'Yeni nokta seçildi' });
   minimapStatus.textContent = 'Nokta kaydedildi. Planlama göstergesi güvenli rota sertifikası değildir.';
   updateRouteButton();
   minimapController.setSelectionMode(null);
@@ -120,9 +127,15 @@ const minimapController = createMinimap({
 });
 
 function updateRouteButton() {
-  const ready = Boolean(layers.dtm.available && minimapEndpoints.start && minimapEndpoints.end && routeWorkerReady);
-  minimapPlanButton.disabled = !ready || Boolean(pendingRouteRequest);
-  minimapPlanButton.textContent = pendingRouteRequest ? 'Rota hesaplanıyor…' : ready ? 'Rota planla' : 'Başlangıç ve bitiş seçin';
+  const endpointsReady = Boolean(layers.dtm.available && minimapEndpoints.start && minimapEndpoints.end);
+  minimapPlanButton.disabled = !endpointsReady || !routeWorkerReady || pendingInitId !== null || pendingPlanId !== null;
+  minimapPlanButton.textContent = pendingInitId !== null
+    ? 'Planlama alanı hazırlanıyor…'
+    : pendingPlanId !== null
+      ? 'Rota hesaplanıyor…'
+      : !endpointsReady
+        ? 'Başlangıç ve bitiş seçin'
+        : routeWorkerReady ? 'Rota planla' : 'Rota planlayıcı kullanılamıyor';
 }
 
 function renderRouteSummary(result) {
@@ -160,22 +173,42 @@ function updateHeatmap(data) {
 }
 
 function handleRouteWorkerMessage({ data }) {
-  if (!data || !pendingRouteRequest || data.id !== pendingRouteRequest.id) return;
-  const pending = pendingRouteRequest;
-  if (data.type === 'window-ready') {
-    pendingRouteRequest = null;
+  if (!data || !routeWorkerRequests.has(data.id)) return;
+  const pending = routeWorkerRequests.get(data.id);
+  routeWorkerRequests.delete(data.id);
+  if (pending.kind === 'init') {
+    if (data.id !== pendingInitId) return;
+    pendingInitId = null;
+    if (data.type === 'error') {
+      routeWorkerReady = false;
+      minimapStatus.textContent = `Planlama alanı hazırlanamadı: ${data.reason || data.message || 'Worker hatası'}.`;
+      updateRouteButton();
+      return;
+    }
+    if (data.type !== 'window-ready') return;
     routeWorkerReady = true;
     routeHeatmap = updateHeatmap(data.heatmap);
     minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
-    minimapStatus.textContent = 'Yürünebilirlik ısı haritası hazır. Planlama göstergesi — güvenli rota sertifikası değildir.';
+    minimapStatus.textContent = routeHeatmap
+      ? 'Yürünebilirlik ısı haritası hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
+      : 'Rota planlama alanı hazır; ısı haritası verisi Worker yanıtında bulunamadı.';
     updateRouteButton();
     return;
   }
-  pendingRouteRequest = null;
+  if (pending.kind === 'plan') {
+    if (data.id !== pendingPlanId || pending.endpointRevision !== endpointRevision) return;
+    pendingPlanId = null;
+  } else if (pending.kind === 'explain' && data.id !== latestExplainId) {
+    return;
+  }
   if (data.type === 'error') {
-    minimapStatus.textContent = `Rota planlayıcı: ${data.reason || data.message || 'işlem başarısız'}`;
-    if (pending.kind === 'plan') { activeRoute = null; renderRouteSummary({ status: 'error', reason: minimapStatus.textContent }); }
-    if (pending.kind === 'explain') minimapCellExplanation.textContent = minimapStatus.textContent;
+    const reason = data.reason || data.message || 'işlem başarısız';
+    if (pending.kind === 'plan') {
+      activeRoute = null;
+      renderRouteSummary({ status: 'error', reason });
+      minimapStatus.textContent = `Rota planlayıcı: ${reason}`;
+    }
+    if (pending.kind === 'explain') minimapCellExplanation.textContent = `Hücre açıklaması alınamadı: ${reason}`;
     updateRouteButton();
     return;
   }
@@ -197,7 +230,11 @@ function ensureRouteWorker() {
   routeWorker = new Worker(new URL('./route/pathfinder.worker.js', import.meta.url), { type: 'module' });
   routeWorker.addEventListener('message', handleRouteWorkerMessage);
   routeWorker.addEventListener('error', (event) => {
-    routeWorkerReady = false; pendingRouteRequest = null;
+    routeWorkerReady = false;
+    pendingInitId = null;
+    pendingPlanId = null;
+    latestExplainId = null;
+    routeWorkerRequests.clear();
     minimapStatus.textContent = `Rota Worker kullanılamıyor: ${event.message || 'çalışma hatası'}.`;
     updateRouteButton();
   });
@@ -216,7 +253,8 @@ function initializeRouteWorker() {
     nwXM: terrain.bounds.nwXM, nwYM: terrain.bounds.nwYM, noDataValue,
     validMin: layers.dtm.validMin, validMax: layers.dtm.validMax,
   } };
-  pendingRouteRequest = { id: request.id, kind: 'init' };
+  pendingInitId = request.id;
+  routeWorkerRequests.set(request.id, { kind: 'init' });
   routeWorkerReady = false;
   minimapStatus.textContent = 'Planlama alanı Worker içinde hazırlanıyor…';
   worker.postMessage(request, [values.buffer]);
@@ -241,14 +279,19 @@ function renderCellExplanation(result) {
 
 function explainMinimapCell(point) {
   if (!routeWorkerReady) { minimapStatus.textContent = 'Hücre açıklaması için planlama alanı henüz hazır değil.'; return; }
-  const id = ++routeWorkerId; pendingRouteRequest = { id, kind: 'explain' };
+  const id = ++routeWorkerId;
+  if (latestExplainId !== null) routeWorkerRequests.delete(latestExplainId);
+  latestExplainId = id;
+  routeWorkerRequests.set(id, { kind: 'explain' });
   minimapCellExplanation.hidden = false; minimapCellExplanation.textContent = 'Hücre açıklaması alınıyor…';
   ensureRouteWorker().postMessage({ type: 'explain-cell', id, point });
 }
 
 function planMinimapRoute() {
-  if (!routeWorkerReady || !minimapEndpoints.start || !minimapEndpoints.end) return;
-  const id = ++routeWorkerId; pendingRouteRequest = { id, kind: 'plan' };
+  if (!routeWorkerReady || pendingPlanId !== null || pendingInitId !== null || !minimapEndpoints.start || !minimapEndpoints.end) return;
+  const id = ++routeWorkerId;
+  pendingPlanId = id;
+  routeWorkerRequests.set(id, { kind: 'plan', endpointRevision });
   minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi güvenli rota sertifikası değildir.';
   updateRouteButton();
   ensureRouteWorker().postMessage({ type: 'plan-walking-route', id, startLocal: minimapEndpoints.start, endLocal: minimapEndpoints.end });
@@ -282,13 +325,15 @@ minimapHeatmapToggle.addEventListener('change', () => {
 $('minimap-fit').addEventListener('click', () => minimapController.fit());
 $('minimap-clear-points').addEventListener('click', () => {
   minimapEndpoints = { start: null, end: null };
+  endpointRevision++;
   minimapStartLabel.textContent = 'Seçilmedi';
   minimapEndLabel.textContent = 'Seçilmedi';
   minimapController.setEndpoints(minimapEndpoints);
   minimapController.setSelectionMode(null);
   $('minimap-pick-start').setAttribute('aria-pressed', 'false');
   $('minimap-pick-end').setAttribute('aria-pressed', 'false');
-  if (pendingRouteRequest?.kind === 'plan') pendingRouteRequest = null;
+  if (pendingPlanId !== null) routeWorkerRequests.delete(pendingPlanId);
+  pendingPlanId = null;
   minimapStatus.textContent = 'Noktalar temizlendi. Yeni başlangıç ve bitiş seçerek yeniden planlayın.';
   activeRoute = null;
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });

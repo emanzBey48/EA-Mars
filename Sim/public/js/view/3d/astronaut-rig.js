@@ -53,6 +53,25 @@ const TAU = 2 * Math.PI;
 const MOVING_SPEED_EPSILON_MPS = 0.04;
 const PRESENTATION_STRIDE_LENGTH_M = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
 
+// Stage 16 first-person view-model constants. These are visual choices for the lower-frame torso/arm
+// overlay, not suit or human biomechanics measurements. Camera head-bob lives in camera.js (owned
+// elsewhere), so these amplitudes are kept small to avoid double-counting the same motion.
+const BREATH_HZ = 0.22;
+const VM_BREATH_OFFSET_Z = 0.004;
+const VM_BREATH_PITCH_RAD = 0.006;
+const WALK_FULL_SPEED_MPS = 1.4;
+const VM_WALK_FULL_SPEED_MPS = WALK_FULL_SPEED_MPS;
+// Speed range above the idle/walk threshold over which rhythmic gait amplitudes ease in from zero.
+const GAIT_EASE_MPS = 0.2;
+const VALID_PHASES = Object.freeze(['idle', 'walk', 'stop', 'airborne', 'paused', 'ready', 'running', 'arrived']);
+const VM_STEP_SWAY_X = 0.006;
+const VM_STEP_BOB_Z = 0.008;
+const VM_STEP_ROLL_RAD = 0.01;
+const VM_AIRBORNE_LAG_Z = 0.01;
+const VM_AIRBORNE_LAG_SPEED_MPS = 2.4;
+const VM_RECOVERY_DIP_Z = 0.012;
+const VM_RECOVERY_DIP_PITCH_RAD = 0.01;
+
 /**
  * Creates a deterministic, renderer-independent pose for the static rig template.
  *
@@ -75,18 +94,26 @@ const PRESENTATION_STRIDE_LENGTH_M = ASTRONAUT_RIG.metadata.presentationStrideLe
  * @param {{timeS:number, horizontalSpeedMps:number, verticalSpeedMps:number,
  *   grounded:boolean, airborne?:boolean, landingRecovery?:boolean, landingRecoveryFrac?:number,
  *   groundContactStatus?:string, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
+ * `viewModel` is an additive, presentation-only first-person overlay (local model units/radians) for the
+ * lower-frame torso/arms: `offset` and `rotationRad` are small breath and step/landing terms, and
+ * `breathPhaseRad` / `stepPhaseRad` expose the phases they use. It does not alter any other field.
+ *
  * @returns {{pose:'idle'|'walk'|'stop'|'airborne'|'landing'|'unknown', gaitPhaseRad:number, gaitFrequencyHz:number,
  *   rootOffset:[number,number,number], rootRotationRad:[number,number,number],
- *   parts:Record<string,{offset:[number,number,number],rotationRad:[number,number,number]}>}}
+ *   parts:Record<string,{offset:[number,number,number],rotationRad:[number,number,number]}>,
+ *   viewModel:{offset:[number,number,number], rotationRad:[number,number,number],
+ *     breathPhaseRad:number, stepPhaseRad:number}}}
  */
 export function poseAstronautRig(state) {
   assertMotionState(state);
 
   const { timeS, horizontalSpeedMps: speed, verticalSpeedMps, grounded, groundContactStatus, phase } = state;
   const contactKnown = groundContactStatus === undefined || groundContactStatus === 'ok';
-  const recFrac = (state.landingRecovery === true || (state.landingRecoveryFrac ?? 0) > 0)
-    ? (state.landingRecoveryFrac !== undefined ? state.landingRecoveryFrac : 1.0)
-    : 0;
+  // An explicit `landingRecovery: false` forces no recovery; the fraction is clamped to [0, 1].
+  let recFrac = 0;
+  if (state.landingRecovery !== false && (state.landingRecovery === true || (state.landingRecoveryFrac ?? 0) > 0)) {
+    recFrac = Math.min(1, state.landingRecoveryFrac !== undefined ? state.landingRecoveryFrac : 1);
+  }
 
   let pose;
   if (phase === 'airborne' || state.airborne === true || (contactKnown && !grounded)) {
@@ -106,6 +133,7 @@ export function poseAstronautRig(state) {
   const gaitFrequencyHz = pose === 'walk' ? speed / PRESENTATION_STRIDE_LENGTH_M : 0;
   const gaitPhaseRad = pose === 'walk' ? positiveModulo(TAU * gaitFrequencyHz * timeS, TAU) : 0;
   const cycle = Math.sin(gaitPhaseRad);
+  const breath = Math.sin(TAU * BREATH_HZ * timeS);
   const parts = {};
   let rootOffset = [0, 0, 0];
   let rootRotationRad = [0, 0, 0];
@@ -113,32 +141,41 @@ export function poseAstronautRig(state) {
   if (pose === 'walk') {
     // Apollo/Mars EVA loping gait: wide stride amplitude, pronounced vertical flight bounce (bob),
     // and rhythmic low-gravity arm counter-swing with pressurized suit clearance.
-    const speedNorm = Math.min(1, speed / 1.4);
-    const amplitude = 0.52 * speedNorm;
-    const lopeBounce = 0.035 * speedNorm * (1 - Math.cos(2 * gaitPhaseRad));
+    // Every walk term starts from the idle pose at the idle/walk threshold: the idle breath fades out
+    // with speed, static arm/grip values interpolate from the idle values, and the rhythmic gait
+    // terms (swing, bounce, sway, clearance) ease in over GAIT_EASE_MPS above the threshold.
+    const speedNorm = Math.min(1, speed / WALK_FULL_SPEED_MPS);
+    const ease = smoothstep01((speed - MOVING_SPEED_EPSILON_MPS) / GAIT_EASE_MPS);
+    const gaitNorm = speedNorm * ease;
+    const idleFade = 1 - speedNorm;
+    const amplitude = 0.52 * gaitNorm;
+    const lopeBounce = 0.035 * gaitNorm * (1 - Math.cos(2 * gaitPhaseRad));
     const squash = 0.065 * recFrac;
-    rootOffset = [0, 0, lopeBounce - squash];
+    rootOffset = [0, 0, lopeBounce - squash + 0.006 * breath * idleFade];
 
     const forwardLean = 0.04 * speedNorm;
-    const sway = 0.02 * speedNorm * cycle;
-    rootRotationRad = [forwardLean + 0.03 * speedNorm * cycle, 0, sway];
+    const sway = 0.02 * gaitNorm * cycle;
+    rootRotationRad = [forwardLean + 0.03 * gaitNorm * cycle, 0, sway];
 
     const armSwing = 0.72 * amplitude * cycle;
-    const armFlare = 0.06 + 0.15 * recFrac;
-    const leftArmRot = [-armSwing, armFlare, -0.04 * cycle];
-    const rightArmRot = [armSwing, -armFlare, 0.04 * cycle];
-    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
-    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
-
+    const armFlare = 0.02 + 0.04 * speedNorm + 0.15 * recFrac;
+    const armYaw = 0.04 * gaitNorm * cycle;
+    const armPitchIdle = -0.018 * breath * idleFade;
     // EVA gloves follow arms with natural pre-curved inward working grip
-    const leftGrip = [-0.10, 0.05, -0.03 * cycle];
-    const rightGrip = [-0.10, -0.05, 0.03 * cycle];
-    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, leftGrip);
-    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, rightGrip);
+    const gripPitch = -0.08 - 0.02 * speedNorm - 0.015 * breath * idleFade;
+    const gripRoll = 0.03 + 0.02 * speedNorm;
+    const gripYaw = 0.03 * gaitNorm * cycle;
+    setArms(
+      parts,
+      [-armSwing + armPitchIdle, armFlare, -armYaw],
+      [armSwing + armPitchIdle, -armFlare, armYaw],
+      [gripPitch, gripRoll, -gripYaw],
+      [gripPitch, -gripRoll, gripYaw],
+    );
 
     const legSwing = amplitude * cycle;
     const legAbsorb = 0.12 * recFrac;
-    const legClearance = 0.03;
+    const legClearance = 0.03 * gaitNorm;
     parts.leftLeg = hingedPart3D('leftLeg', [legSwing - legAbsorb, -legClearance, 0]);
     parts.rightLeg = hingedPart3D('rightLeg', [-legSwing - legAbsorb, legClearance, 0]);
 
@@ -164,16 +201,16 @@ export function poseAstronautRig(state) {
 
     const leftArmPitch = tAscent * -0.55 + tApex * -0.26 + tDescent * -0.32;
     const leftArmRoll = tAscent * 0.10 + tApex * 0.20 + tDescent * 0.14;
-    const leftArmRot = [leftArmPitch, leftArmRoll, 0];
-    const rightArmRot = [leftArmPitch, -leftArmRoll, 0];
-    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
-    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
-
     // Hands adapt dynamically across jump regimes
     const gripPitch = tAscent * -0.08 + tApex * -0.06 + tDescent * -0.12;
     const gripRoll = tAscent * 0.04 + tApex * 0.08 + tDescent * 0.05;
-    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [gripPitch, gripRoll, 0]);
-    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [gripPitch, -gripRoll, 0]);
+    setArms(
+      parts,
+      [leftArmPitch, leftArmRoll, 0],
+      [leftArmPitch, -leftArmRoll, 0],
+      [gripPitch, gripRoll, 0],
+      [gripPitch, -gripRoll, 0],
+    );
 
     const legPitch = tAscent * 0.22 + tApex * 0.06 - tDescent * 0.26;
     const legSpread = 0.03 + tApex * 0.02;
@@ -186,21 +223,26 @@ export function poseAstronautRig(state) {
     parts.rightBoot = hingedPart3D('rightBoot', [bootPitch - stagger * 0.5, legSpread, 0]);
   } else if (pose === 'landing') {
     // Landing squash & recovery: knees flex, torso drops (negative rootOffset Z), arms flare.
+    // The idle breath/stance terms fade out as the recovery fraction rises (and back in as it decays),
+    // so the pose is continuous with idle when recFrac reaches 0.
+    const idleFade = 1 - recFrac;
     const squash = -0.065 * recFrac;
-    rootOffset = [0, 0, squash];
+    rootOffset = [0, 0, squash + 0.006 * breath * idleFade];
     rootRotationRad = [0.045 * recFrac, 0, 0];
 
-    const armFlare = 0.22 * recFrac;
-    const armPitch = -0.18 * recFrac;
-    const leftArmRot = [armPitch, armFlare, 0];
-    const rightArmRot = [armPitch, -armFlare, 0];
-    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
-    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+    const armFlare = 0.02 * idleFade + 0.22 * recFrac;
+    const armPitch = -0.018 * breath * idleFade - 0.18 * recFrac;
 
     // Wrists flex to cushion landing impact
-    const landGrip = [-0.14 * recFrac, 0.06 * recFrac, 0];
-    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, landGrip);
-    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.14 * recFrac, -0.06 * recFrac, 0]);
+    const gripPitch = (-0.08 - 0.015 * breath) * idleFade - 0.14 * recFrac;
+    const gripRoll = 0.03 * idleFade + 0.06 * recFrac;
+    setArms(
+      parts,
+      [armPitch, armFlare, 0],
+      [armPitch, -armFlare, 0],
+      [gripPitch, gripRoll, 0],
+      [gripPitch, -gripRoll, 0],
+    );
 
     const legFlex = -0.18 * recFrac;
     const bootFlex = 0.14 * recFrac;
@@ -209,40 +251,77 @@ export function poseAstronautRig(state) {
     parts.rightLeg = hingedPart3D('rightLeg', [legFlex, legSpread, 0]);
     parts.leftBoot = hingedPart3D('leftBoot', [bootFlex, -legSpread, 0]);
     parts.rightBoot = hingedPart3D('rightBoot', [bootFlex, legSpread, 0]);
-  } else if (pose === 'stop') {
-    // Fixed settled stance: no hidden previous-pose state or transition clock is required.
-    const leftArmRot = [-0.035, 0.02, 0];
-    const rightArmRot = [-0.035, -0.02, 0];
-    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
-    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
-    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [-0.08, 0.03, 0]);
-    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08, -0.03, 0]);
-  } else if (pose === 'unknown') {
-    // Static neutral presentation: unknown contact is not visually asserted as ground or flight.
-    const leftArmRot = [-0.035, 0.02, 0];
-    const rightArmRot = [-0.035, -0.02, 0];
-    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
-    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
-    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, [-0.08, 0.03, 0]);
-    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08, -0.03, 0]);
+  } else if (pose === 'stop' || pose === 'unknown') {
+    // Fixed settled stance (no hidden previous-pose state or transition clock). For `unknown` this is a
+    // static neutral presentation: unknown contact is not visually asserted as ground or flight.
+    setArms(parts, [-0.035, 0.02, 0], [-0.035, -0.02, 0], [-0.08, 0.03, 0], [-0.08, -0.03, 0]);
   } else {
     // A small deterministic idle breath freezes naturally when the caller freezes timeS.
-    const breath = Math.sin(TAU * 0.22 * timeS);
     rootOffset = [0, 0, 0.006 * breath];
-    const leftArmRot = [-0.018 * breath, 0.02, 0];
-    const rightArmRot = [-0.018 * breath, -0.02, 0];
-    parts.leftArm = hingedPart3D('leftArm', leftArmRot);
-    parts.rightArm = hingedPart3D('rightArm', rightArmRot);
-    const idleGrip = [-0.08 - 0.015 * breath, 0.03, 0];
-    parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, idleGrip);
-    parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, [-0.08 - 0.015 * breath, -0.03, 0]);
+    setArms(
+      parts,
+      [-0.018 * breath, 0.02, 0],
+      [-0.018 * breath, -0.02, 0],
+      [-0.08 - 0.015 * breath, 0.03, 0],
+      [-0.08 - 0.015 * breath, -0.03, 0],
+    );
   }
 
   for (const id of Object.keys(ASTRONAUT_RIG.parts)) {
     if (!parts[id]) parts[id] = fixedPart();
   }
 
-  return deepFreeze({ pose, gaitPhaseRad, gaitFrequencyHz, rootOffset, rootRotationRad, parts });
+  const viewModel = buildFirstPersonViewModel(pose, timeS, speed, verticalSpeedMps, gaitPhaseRad, recFrac);
+
+  return deepFreeze({ pose, gaitPhaseRad, gaitFrequencyHz, rootOffset, rootRotationRad, parts, viewModel });
+}
+
+// Stage 16: presentation-only first-person breath and step terms. Reads only values already derived
+// by poseAstronautRig; it never changes the world-rig outputs.
+function buildFirstPersonViewModel(pose, timeS, horizontalSpeedMps, verticalSpeedMps, gaitPhaseRad, recFrac) {
+  if (pose === 'unknown') {
+    // Unknown contact stays neutral: no breath, no step, no contact claim.
+    return deepFreeze({ offset: [0, 0, 0], rotationRad: [0, 0, 0], breathPhaseRad: 0, stepPhaseRad: 0 });
+  }
+
+  const breathPhaseRad = positiveModulo(TAU * BREATH_HZ * timeS, TAU);
+  const breath = Math.sin(breathPhaseRad);
+  let breathScale = 1;
+  let offsetX = 0;
+  let offsetZ = 0;
+  let rollRad = 0;
+
+  if (pose === 'walk') {
+    // Breath fades toward half strength as speed rises; step sway is synchronized to gait phase.
+    const speedNorm = Math.min(1, horizontalSpeedMps / VM_WALK_FULL_SPEED_MPS);
+    breathScale = 1 - 0.5 * speedNorm;
+    const gaitSin = Math.sin(gaitPhaseRad);
+    offsetX = VM_STEP_SWAY_X * speedNorm * gaitSin;
+    offsetZ = VM_STEP_BOB_Z * speedNorm * (1 - Math.cos(2 * gaitPhaseRad)) / 2;
+    rollRad = VM_STEP_ROLL_RAD * speedNorm * gaitSin;
+  } else if (pose === 'airborne') {
+    // No step sway in flight; arms lag slightly (up when rising, down when falling), clamped.
+    breathScale = 0.5;
+    offsetZ = VM_AIRBORNE_LAG_Z * Math.max(-1, Math.min(1, verticalSpeedMps / VM_AIRBORNE_LAG_SPEED_MPS));
+  }
+
+  offsetZ += VM_BREATH_OFFSET_Z * breathScale * breath;
+  const pitchRad = VM_BREATH_PITCH_RAD * breathScale * breath;
+
+  let dipZ = 0;
+  let dipPitchRad = 0;
+  if (pose === 'walk' || pose === 'landing') {
+    // Landing recovery dip, applied during landing and during walk-with-recovery.
+    dipZ = -VM_RECOVERY_DIP_Z * recFrac;
+    dipPitchRad = VM_RECOVERY_DIP_PITCH_RAD * recFrac;
+  }
+
+  return deepFreeze({
+    offset: [offsetX, 0, offsetZ + dipZ],
+    rotationRad: [pitchRad + dipPitchRad, 0, rollRad],
+    breathPhaseRad,
+    stepPhaseRad: gaitPhaseRad,
+  });
 }
 
 function part(id, size, center, pivot, colorRgb) {
@@ -373,8 +452,20 @@ function assertMotionState(state) {
       (state.landingRecoveryFrac !== undefined && (!Number.isFinite(state.landingRecoveryFrac) || state.landingRecoveryFrac < 0))) {
     throw new TypeError('state requires finite timeS, non-negative horizontalSpeedMps, finite verticalSpeedMps, and boolean grounded');
   }
-  const phases = ['idle', 'walk', 'stop', 'airborne', 'paused', 'ready', 'running', 'arrived'];
-  if (!phases.includes(state.phase)) throw new TypeError(`state.phase must be one of: ${phases.join(', ')}`);
+  if (!VALID_PHASES.includes(state.phase)) throw new TypeError(`state.phase must be one of: ${VALID_PHASES.join(', ')}`);
+}
+
+// Writes the arm hinges and the chained gloves (wrist rotations are local to each arm).
+function setArms(parts, leftArmRot, rightArmRot, leftGrip, rightGrip) {
+  parts.leftArm = hingedPart3D('leftArm', leftArmRot);
+  parts.rightArm = hingedPart3D('rightArm', rightArmRot);
+  parts.leftGlove = chainedLimbPart('leftGlove', 'leftArm', leftArmRot, leftGrip);
+  parts.rightGlove = chainedLimbPart('rightGlove', 'rightArm', rightArmRot, rightGrip);
+}
+
+function smoothstep01(x) {
+  const t = Math.max(0, Math.min(1, x));
+  return t * t * (3 - 2 * t);
 }
 
 function positiveModulo(value, modulus) {

@@ -4,7 +4,6 @@ import {
   ASTRONAUT_RIG,
   FIRST_PERSON_RIG_PARTS,
   poseAstronautRig,
-  hingedPart3D,
   chainedLimbPart,
 } from '../public/js/view/3d/astronaut-rig.js';
 
@@ -123,7 +122,8 @@ test('Stage 13: Apollo/Mars EVA loping walk kinematics and flight bounce', () =>
   // At quarter cycle (phase = PI/2, 2*phase = PI): 1 - cos(PI) = 2 -> peak bounce
   assert.ok(poseQuarter.rootOffset[2] > 0.02, `Lope bounce ${poseQuarter.rootOffset[2]} m should be pronounced in Mars 0.38g`);
   // At half cycle (phase = PI, 2*phase = 2PI): 1 - cos(2PI) = 0 -> base
-  assert.ok(Math.abs(poseHalf.rootOffset[2]) < 1e-4);
+  // (only the faded idle breath, at most 0.006 * (1 - speedNorm), remains)
+  assert.ok(Math.abs(poseHalf.rootOffset[2]) < 0.006 * (1 - speed / 1.4) + 1e-4);
 
   // Arm counter-swing: left and right arms swing in opposition
   assert.ok(poseQuarter.parts.leftArm.rotationRad[0] * poseQuarter.parts.rightArm.rotationRad[0] < 0);
@@ -257,11 +257,9 @@ test('Stage 14: Hierarchical chained limb kinematics (chainedLimbPart)', () => {
   assert.ok(Math.abs(pitched.offset[1]) > 0.1, 'Glove swung forward/backward with shoulder');
   assert.ok(Math.abs(pitched.offset[2]) > 0.02, 'Glove raised with shoulder swing');
 
-  // Combined shoulder swing + wrist local grip angle: true composition stays near the small-angle sum
-  // (exact composition is covered by the dedicated matrix-composition test below)
-  const combined = chainedLimbPart('leftGlove', 'leftArm', [shoulderPitch, 0.1, 0], [-0.15, 0.05, 0]);
-  assert.ok(Math.abs(combined.rotationRad[0] - (shoulderPitch - 0.15)) < 0.1);
-  assert.ok(Math.abs(combined.rotationRad[1] - 0.15) < 0.1);
+  // Combined shoulder + wrist rotations are intentionally not compared with a small-angle sum here:
+  // that was only a loose approximation. The exact composition is covered by the dedicated
+  // matrix-composition test below ('chainedLimbPart composes parent and child orientation ...').
 });
 
 test('Stage 14: EVA Glove synchronization and grip angle across all animation regimes', () => {
@@ -388,4 +386,265 @@ test('Stage 14: chainedLimbPart composes parent and child orientation as a true 
     assert.ok(result.rotationRad.every((angle) => Number.isFinite(angle)), 'rotationRad must be finite');
     assert.ok(result.offset.every((value) => Number.isFinite(value)), 'offset must be finite');
   }
+});
+
+test('Stage 16: first-person viewModel breathing and step sway', () => {
+  const BREATH_HZ_LOCAL = 0.22;
+  const STRIDE_M = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
+  const idleAt = (timeS) => ({ timeS, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, phase: 'running' });
+  const walkAt = (timeS, speed) => ({ timeS, horizontalSpeedMps: speed, verticalSpeedMps: 0, grounded: true, phase: 'walk' });
+  const airAt = (timeS, verticalSpeedMps) => ({
+    timeS, horizontalSpeedMps: 0.5, verticalSpeedMps, grounded: false, airborne: true,
+    groundContactStatus: STATUS.OK, phase: 'running',
+  });
+  const landingState = {
+    timeS: 3.8, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true,
+    landingRecovery: true, landingRecoveryFrac: 1.0, groundContactStatus: STATUS.OK, phase: 'running',
+  };
+  const stopState = { timeS: 0.5, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, phase: 'stop' };
+  const unknownState = {
+    timeS: 2, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: false, airborne: false,
+    groundContactStatus: STATUS.NO_DATA, phase: 'running',
+  };
+
+  // (1) Field exists, is frozen and finite for every pose
+  const cases = {
+    idle: { state: idleAt(1.3), pose: 'idle' },
+    walk: { state: walkAt(1.5, 1.2), pose: 'walk' },
+    airborne: { state: airAt(2, 2.0), pose: 'airborne' },
+    landing: { state: landingState, pose: 'landing' },
+    stop: { state: stopState, pose: 'stop' },
+    unknown: { state: unknownState, pose: 'unknown' },
+  };
+  for (const [name, { state, pose: expectedPose }] of Object.entries(cases)) {
+    const result = poseAstronautRig(state);
+    assert.equal(result.pose, expectedPose, `${name}: expected pose`);
+    const vm = result.viewModel;
+    assert.ok(vm && typeof vm === 'object', `${name}: viewModel must exist`);
+    assert.ok(Object.isFrozen(vm), `${name}: viewModel must be frozen`);
+    assert.ok(Object.isFrozen(vm.offset), `${name}: viewModel.offset must be frozen`);
+    assert.ok(Object.isFrozen(vm.rotationRad), `${name}: viewModel.rotationRad must be frozen`);
+    assert.equal(vm.offset.length, 3, `${name}: offset has 3 components`);
+    assert.equal(vm.rotationRad.length, 3, `${name}: rotationRad has 3 components`);
+    assert.ok(vm.offset.every(Number.isFinite), `${name}: offset must be finite`);
+    assert.ok(vm.rotationRad.every(Number.isFinite), `${name}: rotationRad must be finite`);
+    assert.ok(Number.isFinite(vm.breathPhaseRad), `${name}: breathPhaseRad must be finite`);
+    assert.ok(Number.isFinite(vm.stepPhaseRad), `${name}: stepPhaseRad must be finite`);
+  }
+
+  // (2) Idle breath varies with timeS and is periodic with period 1 / BREATH_HZ
+  const early = poseAstronautRig(idleAt(0.7)).viewModel;
+  const later = poseAstronautRig(idleAt(1.9)).viewModel;
+  assert.notEqual(early.offset[2], later.offset[2], 'idle breath must vary with timeS');
+  assert.ok(Math.abs(early.offset[2]) <= 0.004 + 1e-12, 'idle breath offset stays small');
+  const period = 1 / BREATH_HZ_LOCAL;
+  const cycleA = poseAstronautRig(idleAt(0.7)).viewModel;
+  const cycleB = poseAstronautRig(idleAt(0.7 + period)).viewModel;
+  assert.ok(Math.abs(cycleA.offset[2] - cycleB.offset[2]) < 1e-9, 'breath offset periodic');
+  assert.ok(Math.abs(cycleA.rotationRad[0] - cycleB.rotationRad[0]) < 1e-9, 'breath pitch periodic');
+  assert.ok(Math.abs(cycleA.breathPhaseRad - cycleB.breathPhaseRad) < 1e-9, 'breath phase periodic');
+
+  // (3) Walk step phase matches gait phase; left/right sway flips sign between quarter and three-quarter cycle
+  const speed = 1.0;
+  const gaitHz = speed / STRIDE_M;
+  const walkQuarter = poseAstronautRig(walkAt(0.25 / gaitHz, speed));
+  const walkThreeQuarter = poseAstronautRig(walkAt(0.75 / gaitHz, speed));
+  assert.equal(walkQuarter.viewModel.stepPhaseRad, walkQuarter.gaitPhaseRad, 'stepPhaseRad equals gaitPhaseRad');
+  assert.equal(walkThreeQuarter.viewModel.stepPhaseRad, walkThreeQuarter.gaitPhaseRad, 'stepPhaseRad equals gaitPhaseRad');
+  assert.ok(
+    walkQuarter.viewModel.offset[0] * walkThreeQuarter.viewModel.offset[0] < 0,
+    'lateral step sway must have opposite sign at quarter and three-quarter cycle'
+  );
+  assert.ok(Math.abs(walkQuarter.viewModel.offset[0]) > 0.004, 'walk sway has visible amplitude at speed');
+
+  // (4) Unknown contact is neutral: zero offset and rotation, zero phases
+  const unknown = poseAstronautRig(unknownState);
+  assert.equal(unknown.pose, 'unknown');
+  assert.deepEqual(unknown.viewModel.offset, [0, 0, 0]);
+  assert.deepEqual(unknown.viewModel.rotationRad, [0, 0, 0]);
+  assert.equal(unknown.viewModel.breathPhaseRad, 0);
+  assert.equal(unknown.viewModel.stepPhaseRad, 0);
+
+  // (5) Continuity at the walk/idle and airborne vertical-speed boundaries
+  const walkSlow = poseAstronautRig({ timeS: 1.0, horizontalSpeedMps: 0.041, verticalSpeedMps: 0, grounded: true, phase: 'running' });
+  const idleRest = poseAstronautRig(idleAt(1.0));
+  assert.equal(walkSlow.pose, 'walk');
+  assert.equal(idleRest.pose, 'idle');
+  for (let i = 0; i < 3; i += 1) {
+    assert.ok(Math.abs(walkSlow.viewModel.offset[i] - idleRest.viewModel.offset[i]) < 2e-4, `walk/idle offset axis ${i} continuous`);
+    assert.ok(Math.abs(walkSlow.viewModel.rotationRad[i] - idleRest.viewModel.rotationRad[i]) < 2e-4, `walk/idle rotation axis ${i} continuous`);
+  }
+  const airBelow = poseAstronautRig(airAt(2.0, 0.49)).viewModel;
+  const airAbove = poseAstronautRig(airAt(2.0, 0.51)).viewModel;
+  for (let i = 0; i < 3; i += 1) {
+    assert.ok(Math.abs(airBelow.offset[i] - airAbove.offset[i]) < 1e-3, `airborne offset axis ${i} continuous`);
+    assert.ok(Math.abs(airBelow.rotationRad[i] - airAbove.rotationRad[i]) < 1e-3, `airborne rotation axis ${i} continuous`);
+  }
+
+  // (6) Determinism: identical input yields deep-equal viewModel
+  const walkInput = walkAt(1.5, 1.2);
+  assert.deepEqual(poseAstronautRig(walkInput).viewModel, poseAstronautRig(walkInput).viewModel);
+
+  // (7) Existing walk outputs remain present and unchanged in meaning
+  const walk = poseAstronautRig(walkInput);
+  assert.equal(walk.pose, 'walk');
+  assert.equal(walk.gaitFrequencyHz, 1.2 / STRIDE_M);
+  // Golden value: 2*pi * (1.2 / 1.25 Hz) * 1.5 s = 2*pi * 1.44 -> 2*pi * 0.44 = 2.76460153515902 rad.
+  assert.ok(Math.abs(walk.gaitPhaseRad - 2.7646015351590165) < 1e-12, `gait phase ${walk.gaitPhaseRad}`);
+  assert.equal(walk.rootOffset.length, 3);
+  assert.equal(walk.rootRotationRad.length, 3);
+  assert.deepEqual(Object.keys(walk.parts).sort(), Object.keys(ASTRONAUT_RIG.parts).sort());
+});
+
+// ---- Stage 13 follow-up: attachment invariant, continuity, clamping ----
+
+// Local copy of the rig's Euler convention (X, then Y, then Z) so the test does not depend on internals.
+function rotateEulerRef([x, y, z], [rx, ry, rz]) {
+  const cx = Math.cos(rx), sx = Math.sin(rx);
+  const y1 = cx * y - sx * z;
+  const z1 = sx * y + cx * z;
+  const cy = Math.cos(ry), sy = Math.sin(ry);
+  const x2 = cy * x + sy * z1;
+  const z2 = -sy * x + cy * z1;
+  const cz = Math.cos(rz), sz = Math.sin(rz);
+  return [cz * x2 - sz * y1, sz * x2 + cz * y1, z2];
+}
+const addV = (a, b) => a.map((v, i) => v + b[i]);
+const subV = (a, b) => a.map((v, i) => v - b[i]);
+const distV = (a, b) => Math.hypot(...subV(a, b));
+
+const WALK_AT = (timeS, speed) => ({ timeS, horizontalSpeedMps: speed, verticalSpeedMps: 0, grounded: true, phase: 'walk' });
+const AIR_AT = (timeS, vz) => ({
+  timeS, horizontalSpeedMps: 0.5, verticalSpeedMps: vz, grounded: false, airborne: true,
+  groundContactStatus: STATUS.OK, phase: 'running',
+});
+const LAND_AT = (frac, extra = {}) => ({
+  timeS: 2, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true,
+  landingRecovery: true, landingRecoveryFrac: frac, groundContactStatus: STATUS.OK, phase: 'running', ...extra,
+});
+
+function maxPoseJump(a, b) {
+  let rot = 0;
+  let off = 0;
+  const track = (p, q) => {
+    for (let i = 0; i < 3; i += 1) {
+      rot = Math.max(rot, Math.abs(p.rotationRad[i] - q.rotationRad[i]));
+      off = Math.max(off, Math.abs(p.offset[i] - q.offset[i]));
+    }
+  };
+  for (const id of Object.keys(a.parts)) track(a.parts[id], b.parts[id]);
+  track({ rotationRad: a.rootRotationRad, offset: a.rootOffset }, { rotationRad: b.rootRotationRad, offset: b.rootOffset });
+  return { rot, off };
+}
+
+function maxViewModelJump(a, b) {
+  let rot = 0;
+  let off = 0;
+  for (let i = 0; i < 3; i += 1) {
+    rot = Math.max(rot, Math.abs(a.viewModel.rotationRad[i] - b.viewModel.rotationRad[i]));
+    off = Math.max(off, Math.abs(a.viewModel.offset[i] - b.viewModel.offset[i]));
+  }
+  return { rot, off };
+}
+
+test('Stage 13: glove stays attached at the wrist (arm lower end) in every regime', () => {
+  const quarter = 0.25 / (1.0 / ASTRONAUT_RIG.metadata.presentationStrideLengthM);
+  const states = {
+    'walk quarter cycle': WALK_AT(quarter, 1.0),
+    'airborne ascent': AIR_AT(2, 2),
+    'landing peak': LAND_AT(1),
+    idle: { timeS: 1.3, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, phase: 'idle' },
+  };
+  for (const [name, state] of Object.entries(states)) {
+    const pose = poseAstronautRig(state);
+    for (const side of ['left', 'right']) {
+      const arm = ASTRONAUT_RIG.parts[`${side}Arm`];
+      const glove = ASTRONAUT_RIG.parts[`${side}Glove`];
+      const armPose = pose.parts[`${side}Arm`];
+      const glovePose = pose.parts[`${side}Glove`];
+
+      // Arm lower end (local -Z end of the arm box) in the posed frame.
+      const armLowerEnd = addV(
+        addV(rotateEulerRef([0, 0, -arm.size[2] / 2], armPose.rotationRad), arm.center),
+        armPose.offset,
+      );
+      // Glove wrist pivot in the posed frame.
+      const glovePivot = addV(
+        addV(rotateEulerRef(subV(glove.pivot, glove.center), glovePose.rotationRad), glove.center),
+        glovePose.offset,
+      );
+      // Wrist carried by the shoulder rotation about the arm pivot.
+      const chainedWrist = addV(arm.pivot, rotateEulerRef(subV(glove.pivot, arm.pivot), armPose.rotationRad));
+
+      assert.ok(distV(glovePivot, chainedWrist) < 1e-9, `${name} ${side}: glove pivot follows the shoulder-carried wrist`);
+      assert.ok(distV(glovePivot, armLowerEnd) < 1e-9, `${name} ${side}: glove pivot coincides with the arm lower end`);
+    }
+  }
+});
+
+test('Stage 13: world pose is continuous across idle/walk and landing/idle transitions', () => {
+  let walkJump = { rot: 0, off: 0 };
+  let landJump = { rot: 0, off: 0 };
+  for (const timeS of [0, 0.3, 1, 2.5, 5, 10.7, 33.3, 100]) {
+    // Speed 0.04 is idle (threshold is exclusive); 0.0401 is walk, same time and lifecycle phase.
+    const idle = poseAstronautRig({ timeS, horizontalSpeedMps: 0.04, verticalSpeedMps: 0, grounded: true, phase: 'running' });
+    const walk = poseAstronautRig({ timeS, horizontalSpeedMps: 0.0401, verticalSpeedMps: 0, grounded: true, phase: 'running' });
+    assert.equal(idle.pose, 'idle');
+    assert.equal(walk.pose, 'walk');
+    const a = maxPoseJump(idle, walk);
+    walkJump = { rot: Math.max(walkJump.rot, a.rot), off: Math.max(walkJump.off, a.off) };
+
+    const settled = poseAstronautRig({ ...LAND_AT(0, { landingRecovery: false }), timeS });
+    const justLanded = poseAstronautRig({ ...LAND_AT(1e-6), timeS });
+    assert.equal(settled.pose, 'idle');
+    assert.equal(justLanded.pose, 'landing');
+    const b = maxPoseJump(settled, justLanded);
+    landJump = { rot: Math.max(landJump.rot, b.rot), off: Math.max(landJump.off, b.off) };
+  }
+  assert.ok(walkJump.rot < 0.005, `idle->walk rotation jump ${walkJump.rot}`);
+  assert.ok(walkJump.off < 0.003, `idle->walk offset jump ${walkJump.off}`);
+  assert.ok(landJump.rot < 1e-4, `landing->idle rotation jump ${landJump.rot}`);
+  assert.ok(landJump.off < 1e-4, `landing->idle offset jump ${landJump.off}`);
+});
+
+test('Stage 13: viewModel is continuous across walk->airborne and airborne->landing', () => {
+  const walk = poseAstronautRig(WALK_AT(2, 0.5));
+  const launch = poseAstronautRig(AIR_AT(2, 2.4));
+  const j1 = maxViewModelJump(walk, launch);
+  assert.ok(j1.off < 0.015, `walk->airborne offset jump ${j1.off}`);
+  assert.ok(j1.rot < 0.01, `walk->airborne rotation jump ${j1.rot}`);
+
+  const descent = poseAstronautRig(AIR_AT(2, -2));
+  const touchdown = poseAstronautRig(LAND_AT(1));
+  const j2 = maxViewModelJump(descent, touchdown);
+  assert.ok(j2.off < 0.005, `airborne->landing offset jump ${j2.off}`);
+  assert.ok(j2.rot < 0.02, `airborne->landing rotation jump ${j2.rot}`);
+});
+
+test('Stage 16: paused viewModel matches running viewModel; airborne lag and landing dip ordering', () => {
+  const frozen = WALK_AT(1.7, 1.1);
+  assert.deepEqual(
+    poseAstronautRig({ ...frozen, phase: 'paused' }).viewModel,
+    poseAstronautRig(frozen).viewModel,
+    'same frozen input yields the same viewModel while paused',
+  );
+
+  const rising = poseAstronautRig(AIR_AT(2, 2.4)).viewModel;
+  const falling = poseAstronautRig(AIR_AT(2, -2.4)).viewModel;
+  assert.ok(rising.offset[2] > falling.offset[2], 'view-model sits higher when rising than falling');
+
+  const dipFull = poseAstronautRig(LAND_AT(1)).viewModel;
+  const dipHalf = poseAstronautRig(LAND_AT(0.5)).viewModel;
+  assert.ok(dipFull.offset[2] < dipHalf.offset[2], 'landing dip is deeper at frac 1 than 0.5');
+});
+
+test('Stage 13: landing recovery fraction is clamped and an explicit false disables it', () => {
+  assert.deepEqual(poseAstronautRig(LAND_AT(2)), poseAstronautRig(LAND_AT(1)), 'frac 2 equals frac 1');
+
+  const off = poseAstronautRig(LAND_AT(0.5, { landingRecovery: false }));
+  assert.equal(off.pose, 'idle');
+  assert.deepEqual(off, poseAstronautRig(LAND_AT(0, { landingRecovery: false })), 'frac ignored when recovery is false');
+
+  // recovery true without a fraction means full recovery
+  assert.deepEqual(poseAstronautRig(LAND_AT(undefined)), poseAstronautRig(LAND_AT(1)));
 });

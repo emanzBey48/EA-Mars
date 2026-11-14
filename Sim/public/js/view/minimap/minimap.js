@@ -54,6 +54,9 @@ export function createMinimap({
     minPxPerM: 0.02,
     maxPxPerM: 64,
     dragging: false,
+    draggingEndpoint: null,
+    draggedPos: null,
+    hoverEndpoint: null,
     pointerId: null,
     downX: 0,
     downY: 0,
@@ -140,11 +143,36 @@ export function createMinimap({
     };
   }
 
-  function drawMarker(point, label, color) {
+  function hitEndpoint(px, py, threshold = 18) {
+    for (const kind of ['start', 'end']) {
+      const pt = state.endpoints[kind];
+      if (pt && Number.isFinite(pt.xM) && Number.isFinite(pt.yM)) {
+        const scr = worldToScreen(pt.xM, pt.yM);
+        if (Math.hypot(scr.x - px, scr.y - py) <= threshold) {
+          return kind;
+        }
+      }
+    }
+    return null;
+  }
+
+  function drawMarker(point, label, color, isDragged = false) {
     if (!point || !Number.isFinite(point.xM) || !Number.isFinite(point.yM)) return;
     const p = worldToScreen(point.xM, point.yM);
+    if (isDragged) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+      ctx.fillStyle = color === '#52c7a5' ? 'rgba(82, 199, 165, 0.35)' : 'rgba(255, 176, 74, 0.35)';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, isDragged ? 9 : 7, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
     ctx.lineWidth = 2;
@@ -300,10 +328,10 @@ export function createMinimap({
       ctx.fillText('Eflatun tarama: DTM no-data / geçersiz hücre', 16, state.height - 49);
     }
 
-    const start = state.endpoints.start;
-    const end = state.endpoints.end;
-    drawMarker(start, 'Başlangıç', '#52c7a5');
-    drawMarker(end, 'Bitiş', '#ffb04a');
+    const startPoint = (state.draggingEndpoint === 'start' && state.draggedPos) ? state.draggedPos : state.endpoints.start;
+    const endPoint = (state.draggingEndpoint === 'end' && state.draggedPos) ? state.draggedPos : state.endpoints.end;
+    drawMarker(startPoint, 'Başlangıç', '#52c7a5', state.draggingEndpoint === 'start');
+    drawMarker(endPoint, 'Bitiş', '#ffb04a', state.draggingEndpoint === 'end');
     drawNorth();
     drawScale();
     drawAttribution();
@@ -333,28 +361,86 @@ export function createMinimap({
   function onPointerDown(event) {
     if (event.button !== 0) return;
     const p = localPointer(event);
-    state.dragging = true;
     state.pointerId = event.pointerId;
     state.downX = p.x;
     state.downY = p.y;
     state.lastX = p.x;
     state.lastY = p.y;
+
+    const hit = hitEndpoint(p.x, p.y, 18);
+    if (hit) {
+      state.draggingEndpoint = hit;
+      state.dragging = false;
+      const pt = state.endpoints[hit];
+      state.draggedPos = { xM: pt.xM, yM: pt.yM };
+      canvas.style.cursor = 'grabbing';
+      canvas.setPointerCapture?.(event.pointerId);
+      draw();
+      return;
+    }
+
+    state.draggingEndpoint = null;
+    state.draggedPos = null;
+    state.dragging = true;
     canvas.setPointerCapture?.(event.pointerId);
   }
 
   function onPointerMove(event) {
-    if (!state.dragging || event.pointerId !== state.pointerId) return;
     const p = localPointer(event);
-    state.centerXM -= (p.x - state.lastX) / state.pxPerM;
-    state.centerYM += (p.y - state.lastY) / state.pxPerM;
-    state.lastX = p.x;
-    state.lastY = p.y;
-    draw();
+
+    if (state.draggingEndpoint && event.pointerId === state.pointerId) {
+      const world = screenToWorld(p.x, p.y);
+      state.draggedPos = { xM: world.xM, yM: world.yM };
+      const rejection = selectionRejection(world.xM, world.yM);
+      state.selectionMessage = rejection || '';
+      draw();
+      return;
+    }
+
+    if (state.dragging && event.pointerId === state.pointerId) {
+      state.centerXM -= (p.x - state.lastX) / state.pxPerM;
+      state.centerYM += (p.y - state.lastY) / state.pxPerM;
+      state.lastX = p.x;
+      state.lastY = p.y;
+      draw();
+      return;
+    }
+
+    if (!state.dragging && !state.draggingEndpoint) {
+      const hit = hitEndpoint(p.x, p.y, 18);
+      if (hit !== state.hoverEndpoint) {
+        state.hoverEndpoint = hit;
+        canvas.style.cursor = hit ? 'grab' : (state.selectionMode ? 'crosshair' : '');
+      }
+    }
   }
 
   function onPointerUp(event) {
-    if (!state.dragging || event.pointerId !== state.pointerId) return;
+    if (event.pointerId !== state.pointerId) return;
     const p = localPointer(event);
+
+    if (state.draggingEndpoint) {
+      const kind = state.draggingEndpoint;
+      const world = screenToWorld(p.x, p.y);
+      const rejection = selectionRejection(world.xM, world.yM);
+
+      state.draggingEndpoint = null;
+      state.draggedPos = null;
+      canvas.style.cursor = '';
+      state.pointerId = null;
+
+      if (!rejection) {
+        state.endpoints[kind] = { xM: world.xM, yM: world.yM };
+        state.selectionMessage = '';
+        onPointSelected({ kind, xM: world.xM, yM: world.yM, byDrag: true });
+      } else {
+        state.selectionMessage = rejection;
+      }
+      draw();
+      return;
+    }
+
+    if (!state.dragging) return;
     const moved = Math.hypot(p.x - state.downX, p.y - state.downY);
     state.dragging = false;
     state.pointerId = null;
@@ -371,7 +457,7 @@ export function createMinimap({
       }
       state.selectionMessage = '';
       state.endpoints[kind] = point;
-      onPointSelected({ kind, ...point });
+      onPointSelected({ kind, ...point, byDrag: false });
       draw();
       return;
     }
@@ -391,9 +477,13 @@ export function createMinimap({
   }
 
   function onPointerCancel(event) {
-    if (!state.dragging || event.pointerId !== state.pointerId) return;
+    if (!state.dragging && !state.draggingEndpoint) return;
+    if (event.pointerId !== state.pointerId) return;
     state.dragging = false;
+    state.draggingEndpoint = null;
+    state.draggedPos = null;
     state.pointerId = null;
+    canvas.style.cursor = '';
     draw();
   }
 
@@ -445,6 +535,7 @@ export function createMinimap({
     getView() { return Object.freeze({ centerXM: state.centerXM, centerYM: state.centerYM, pxPerM: state.pxPerM }); },
     destroy() {
       state.destroyed = true;
+      canvas.style.cursor = '';
       resizeObserver?.disconnect();
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);

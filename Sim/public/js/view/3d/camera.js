@@ -5,7 +5,8 @@ const MIN_PITCH_RAD = (5 * Math.PI) / 180;
 const MAX_PITCH_RAD = (85 * Math.PI) / 180;
 const FIRST_PERSON_MIN_PITCH_RAD = (-85 * Math.PI) / 180;
 const FIRST_PERSON_MAX_PITCH_RAD = (85 * Math.PI) / 180;
-const FIRST_PERSON_EYE_HEIGHT_M = 1.75;
+// Match the presentation rig's helmet center (Z = 1.48 m) so the view is anchored at the avatar's head.
+const FIRST_PERSON_EYE_HEIGHT_M = 1.48;
 const FIRST_PERSON_FOV_Y_RAD = (80 * Math.PI) / 180; // 80 deg vertical FOV for natural exploration vista
 
 function finite(value, name) {

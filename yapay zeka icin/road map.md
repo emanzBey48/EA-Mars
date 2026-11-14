@@ -1,6 +1,6 @@
 # Marswalk — Tam Proje Yol Haritası
 
-**Son güncelleme:** 14 Kasım 2026 (gece — `04f12f4..f223414` commitleri sonrası güncel durum ve sonraki aşamaların iş bölümü)
+**Son güncelleme:** 14 Kasım 2026 (gece geç — 23D ve 21B-Ön teslimi sonrası; FAZ 3–6 devam planı eklendi, bkz. "DEVAM PLANI")
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Bu belge:** Kodlama planı ve karar kaydıdır; uygulama/test çalıştırma kaydı değildir.
 
@@ -21,6 +21,77 @@ Stage 13 `astronaut-rig.js`/test teslimi bu daldaki mevcut koddur; bu doğrulama
 **Alparslan'ın takip etmesi gereken smoke bulguları:** İlk 2D→3D açılışında terrain mesh, smoke'un 10 saniyelik bekleme penceresi içinde görünmedi (ölçülen ilk geçiş 10,975 ms; tekrar 2D→3D geçişi başarılı). Buna bağlı rig/mesh tanıları 6b/6i/6l boş kaldı. Kontrol 6h geçerli yüzey örneği (`sample=ok`) varken `grounded=false` ve kamera yönü testinde yaklaşık −4,45 m ilerleme bildirdi. Kontrol 5b, arşiv izi açıklamasındaki “güvenli rota bilgisi içermez” uyarısını smoke metin kontrolüne dahil etmiyor. Bu 6 başarısız kabul maddesi Stage 13 saf rig birim testlerinin başarısızlığı değildir; renderer/simülasyon/UI entegrasyon sahibi Alparslan'ın incelemesi gerekir. Smoke ekran görüntüleri HEAD'deki halleriyle geri yüklendi; kod değişmedi.
 
 **[KULLANICI BİLDİRDİ]** Alparslan regresyon kontrollerinin tümünün geçtiğini söyledi. Ayrıca 13 Kasım'da kullanıcı simülasyonun açıldığını, arayüzde “Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor)” uyarısını gördüğünü ve mevcut 3D görünümün hedef FPS deneyimine yakın olmadığını bildirdi. Bu kullanıcı gözlemleri bağımsız runtime kabulü değildir.
+
+## DEVAM PLANI — FAZ 3–6 (14 Kasım 2026, gece geç)
+
+Bu bölüm aşağıdaki eski "AÇIK/SIRADAKİ" etiketlerinin önündedir. Etkinlik tarihi (14–15 Kasım) bildirilmiştir; bu yüzden plan **önce demo kapanışı (FAZ 3)**, sonra veri doğruluğu borçları (FAZ 4), ardından tüm Mars kapsamı (FAZ 5) ve animasyon/performans kalitesi (FAZ 6) sırasıyla ilerler. FAZ 5 ve 6 yarışma sonrası/zaman kalırsa işlerdir; FAZ 3 hiçbirine bağlı olmadan yürür.
+
+### Durum mutabakatı (eski tabloların yerine bu geçer)
+
+| Aşama | Durum | Kanıt / not |
+|---|---|---|
+| 23A cost-model, 23B pathfinder + worker + `route-service.js`, 23C doğrulama raporu | **Kodda tamamlandı (Efe)** | `route/`, `test/cost-model|pathfinder|route-service`, `Sim/stage23a/b-*-audit.md`, `Sim/stage23-route-validation.md` (WB1→Roubion planlanan 730,5 m; arşiv izi 896,5 m; rover izinden "daha iyi" iddiası yok) |
+| 23D test eşlemesi | **Tamamlandı (Efe)** — `9cd0fd4`, `50507b5` | `minimap.test.mjs`, `mars-sun.test.mjs` (iki hatalı beklenti düzeltildi), core H1/H2 testleri; `node --test test/` **268/268** (Efe çalıştırdı). H5 zaten `geology.test.mjs` kapsamında |
+| 21B-Ön ortomozaik↔DTM hizası | **Tamamlandı, sonuç KANITLANAMADI (Efe)** — `67f89f9` | Hillshade en iyi tepe (+1,5, +0,5) px, r=0,317; ikinci tepeyle fark 0,006 (belirsiz); gradyan r=0,114 sınırda. `stage21b-registration-audit.md`. **21B kaplaması kapalı kalır** |
+| 24A, 24B, 25, 25B | **Kodda (Alparslan)** | `stage25b-visual-acceptance.md`: smoke **32/32** ve `npm test` 250/250 *raporlandı* (Efe tekrar çalıştırmadı); 24B/25 temel akış gözlendi |
+| 26A, 27 (kayıt katmanı) | **Kodda (Efe)** | `geo/trek-tiles.js` (43 test), `geo/geology-registry.js` (7 test); SIM 3292 entegre değil |
+| 26B, 28, 21B | **Açık (Alparslan)** | 26B/28 FAZ 5, 21B yalnız FAZ 4 kanıtına bağlı |
+
+**25B raporundan devreden açık maddeler (FAZ 3'ün girdisi):** görünür zıplama/iniş animasyonu ve kamera dip'i, Mars güneş aydınlatması (18B) görünümü, 19B jeoloji HUD/kontak, 22B galeri, 24A tüm pan/zoom ve gerçek no-data seçimi (fixture'da **0 no-data hücresi** var), Stage 25 yakın-alan kılavuz okunabilirliği, rig'in tüm yürüme pozlarında kırpılma/clipping incelemesi.
+
+**Dosya sahipliği (değişmez):** Efe = saf modüller (`geo/`, `route/`, yeni saf dosyalar), `scripts/`, `test/`, audit `.md`. Alparslan = `main.js`, `config.js`, `simulation/`, `surface/`, `input/`, `view/`, `server.mjs`, `index.html`, `styles.css`, belge uyumu. Efe'nin yeni saf dosyası bir `view/` klasöründe doğuyorsa **yeni dosya** olmalı, mevcut dosyaya dokunmaz; bağlantıyı Alparslan yapar. Her aşama kısa ömürlü branch + tek kabul ölçütü + ayrı commit; handoff'ta Efe teslim notuna kullanılan API'yi ve çalıştırılmayan testleri yazar.
+
+### FAZ 3 — Demo kapanışı (P0: etkinlik günü; önce bunlar)
+
+| Aşama | Sahip | Dosya sınırı | Çıktı | Kabul |
+|---|---|---|---|---|
+| **29A — Kalan görsel kabul turu** | **Alparslan** | `Sim/stage29-acceptance.md` (yeni); yalnız bulunan hatalar için ilgili `view/`/`sim.js` dosyaları | Yukarıdaki açık maddelerin her biri için tarayıcıda PASS/FAIL/NOT-TESTED kaydı (zıplama yayı + iniş dip'i, güneş, jeoloji HUD, galeri, minimap pan/zoom, yakın-alan kılavuz, aşağı bakışta bacak/kol kadrajı). | Hiçbir madde "incelenmedi" kalmaz veya neden yazılır; FAIL'lar ayrı küçük commit'lerle kapanır ya da bilinen sınırlama olarak demo notuna girer. |
+| **29B — No-data kapsamı: sentetik fixture ve testler** | **Efe** | `scripts/make-nodata-fixture.mjs` (yeni), `test/nodata-route.test.mjs` (yeni) | Pencere ortasında no-data adası (ve kenar şeridi) içeren deterministik küçük DTM fixture'ı; testler: A\* adayı dolaşır, uç nokta no-data'da `no_path`/red nedeni, minimap seçimi reddi, `sim` no-data üzerinde sahte zemin teması kurmaz, no-data hiçbir yerde 0'a dönmez. | Fixture yalnız test/script verisidir (gerçek veri değildir, etiketli). Tarayıcıda yüklenmesi için gereken yükleme yolunu Alparslan karar verir; Efe `main.js`/`surface/`'a dokunmaz. |
+| **29C — Demo öncesi ön uçuş kontrolü** | **Efe** | `scripts/preflight.mjs` (yeni), `test/preflight.test.mjs` (yeni) | Tek komut: gerekli veri dosyaları var mı, **Git LFS işaretçisi mi gerçek raster mı** (132 baytlık pointer tespiti — smoke'u engelleyen geçmiş sorun), manifest hash'leri (metin dosyalarında CRLF→LF normalizasyonu D3), `node --test` özeti. Çıkış kodu ve insan-okunur rapor. | Pointer dosyası varsa net hata ve `git lfs pull` önerisi; eksik veri sessizce geçmez. |
+| **30 — Demo akışı ve dondurma** | **Alparslan** | `main.js`, `view/hud.js`, `index.html`, README | 60–90 sn senaryo akışı (örnek görev → minimap'te yeni rota → 3D yürüyüş), hata durumunda 2D fallback, sunum modu; `main`'e entegrasyon, `demo-freeze` etiketi. | 29A FAIL listesi kapalı/belgelenmiş; `29C` temiz; smoke ve unit yeşil; sonrasında yalnız hata düzeltmesi. |
+| **31A — Kaynak/atıf derleyici** | **Efe** | `scripts/build-sources-list.mjs` (yeni), `Sim/SOURCES.md` (üretilir), test | `Sim/data/*/manifest.json` ve FGDC/USGS kayıtlarından kaynak, ürün kimliği, çözünürlük, lisans (kaynakta yoksa **"belirtilmemiş"**), atıf tablosu. | Hiçbir lisans uydurulmaz; kaynaksız alan boş değil "belirtilmemiş" yazar; test bunu kilitler. |
+| **31B — "Kaynaklar ve sınırlar" paneli + belge uyumu** | **Alparslan** | `index.html`, `styles.css`, `main.js`, `AGENTS.md`, `yapay zeka icin/SYSTEM_PROMPT.md` | Uygulama içi kaynaklar paneli (31A çıktısı) ve "güvenlik skoru yok" → "şeffaf yürünebilirlik puanı" kararının `AGENTS.md`/`SYSTEM_PROMPT.md`'ye işlenmesi. | Belgelerde "güvenli rota" iddiası kalmaz; panel 31A ile tutarlı. |
+| **31C — Jüri için bilimsel sınır kartı** | **Efe** | `Sim/DEMO_NOTES.md` (yeni) | Tek sayfa: hangi değer ölçüm / hesap / senaryo; yerçekimi 3,71 m/s² (NASA Planet Compare; NSSDC 3,73 yuvarlaması); atmosfer ortalama/mevsimsel, anlık Jezero değil; rover izi insan rotası değil; hizalama kanıtlanmadı → ortho kapalı; olası sorular ve dürüst yanıtlar. | Her sayı kaynak+birimle; çözülmemiş sınırlar saklanmaz. |
+
+### FAZ 4 — Veri doğruluğu borçları (P1: demo sonrası ilk iş)
+
+| Aşama | Sahip | Dosya sınırı | Çıktı | Kabul |
+|---|---|---|---|---|
+| **32A — Düşey datum ve bütünlük denetimi** | **Efe** | `scripts/validate-data-integrity.mjs` (yeni), `test/data-integrity.test.mjs`, `Sim/stage32-integrity-audit.md` | `config.js` `MAP_FRAME.verticalDatumVerified: true` ile `dtm_subset.json` `verticalDatum: null / verticalDatumVerified: false` tutarsızlığının ölçülü kaydı; metin dosyası hash'lerinin LF normalizasyonu sonrası eşleşme tablosu (D3). | Tutarsızlık bulgu olarak listelenir; Efe `config.js`'e dokunmaz. |
+| **32B — Datum bayrağı ve `.gitattributes`** | **Alparslan** | `config.js`, `.gitattributes`, `surface/` | Bayrağı kanıta göre düzelt (kanıt yoksa `false`/`needs_review`); `Sim/data/** -text` kuralı. | 32A raporuyla uyumlu; UI datum durumunu yanlış "doğrulanmış" göstermez. |
+| **33A — Ortomozaik kayıt teşhisi v2** | **Efe** | `scripts/validate-ortho-registration.mjs` (genişletme), `test/ortho-mosaic.test.mjs`, `Sim/stage33-ortho-diagnosis.md` | 21A'daki ~26 m / ~130 m waypoint çelişkisinin kökü; kaba+ince çok ölçekli korelasyon, güneş azimutuna bağlı olmayan kenar/gradyan ölçüsü, bağımsız referans noktaları (PDS waypoint'in ortho'daki ve DTM'deki konumu). Sonuç: ölçülmüş öteleme ± belirsizlik **veya** "kanıtlanamadı". | Yalnız ölçülenler yazılır; kanıt yoksa "hizalı" denmez. |
+| **33B — 21B ortomozaik kaplaması** | **Alparslan** | `config.js`, `surface/`, `view/render.js`, `view/3d/renderer.js`, `view/minimap/minimap.js`, `view/hud.js` | **Yalnız 33A hizayı kanıtlarsa** (veya ölçülen ötelemeyi belgeleyerek uygularsa) UV kaplama, katman anahtarı, atıf. | Kanıt yoksa kapalı kalır ve UI notu korunur; hillshade asla "ortho" adlandırılmaz. |
+| **34 — Gerçek PLACES traverse** (eski Aşama 7) | **Alparslan**, Efe ağ erişimiyle destekler | `scripts/`, `geo/traverse.js` | PDS birincil dosyası, label/frame dönüşümü, Sol 120–164 filtresi, DTM kapsam/no-data kontrolü. | Erişim yoksa park; "gerçek PLACES değil" etiketi sürer. 45–60 dk engel kuralı geçerli. |
+
+### FAZ 5 — Tüm Mars kapsamı (P2: demo sonrası; 26A/27 temeli üzerine)
+
+| Aşama | Sahip | Dosya sınırı | Çıktı | Kabul |
+|---|---|---|---|---|
+| **35A — MOLA/Trek ham kot okuyucu ve datum ölçümü** | **Efe** | `geo/trek-raster.js` (yeni, saf), `test/trek-raster.test.mjs`, `Sim/stage35-k0-audit.md` | ImageServer `exportImage` TIFF (F32/S16) ayrıştırıcı; `noData` semantiği; `GCS_Mars_2000` küre mi elipsoid mi sayısal ölçüm (26A uyarı 1); K0 örnekleyici. | Ölçülmeyen datum "needs_review"; no-data 0'a çevrilmez; K0 çıktısı yürünebilirlik puanı üretmez. |
+| **35B — Vekil/önbellek + K0 sağlayıcı** (26B) | **Alparslan** | `server.mjs`, `surface/` (yeni sağlayıcı), `main.js` | `searchItems`/`getLayerServices` vekili (CORS yok), `exportImage` önbelleği (15000×4100 sınırı), çevrimdışı demo önbelleği; erişilemeyen katman `unavailable`. | Ağ yokken önbellekten çalışır; atıf her katmanda. |
+| **36A — SIM 3292 jeoloji indeksi** | **Efe** | `scripts/build-sim3292-index.mjs` (yeni), `geo/geology-registry.js` yalnız ek, test | FeatureServer katman 3 (1311 çokgen, 2000 sınırı altında) bir kez indirilir; Mars küresi derecesine çevrilir (WKT/`outSR` doğrulanarak), `geology.js` uyumlu indeks; lisans **"not_stated"**; Jezero SIM 3464 ile `unitScheme` farkı beyan. | Nokta başına ağ sorgusu yok; indeks üretimi tekrarlanabilir; birim kodu çıkarımı uydurulmaz. |
+| **36B — Çok haritalı jeoloji UI** | **Alparslan** | `view/hud.js`, `view/minimap/minimap.js`, `main.js` | `sourceMapId`, `mapScale`, `conflict.note`, `fallbackChain` gösterimi; K0/K1'de "yürünebilirlik" dili yok. | 27 raporundaki öneri 4 karşılanır. |
+| **37A — K2 aday saha doğrulaması (Gale, Columbia Hills)** | **Efe** | `scripts/validate-k2-candidate.mjs` (yeni), test, `Sim/stage37-k2-audit.md` | Her aday için ham kot erişimi, datum, no-data semantiği, yarım piksel hizası, 1 m çözünürlük doğrulaması; geçen/kalan tablo. | Yalnız tüm ölçütleri geçen saha `eva_walkability`; diğerleri "bölgesel ön planlama". |
+| **37B — Saha seçici** (28) | **Alparslan** | `view/minimap/`, `main.js`, `surface/` | Küresel görünümde saha seçimi; 37A'yı geçenler EVA, diğerleri bölgesel mod. | `route-service.js` çözünürlük koruması (≤2 m EVA, ≤50 m bölgesel) bypass edilmez. |
+| **38A — Hiyerarşik planlayıcı** | **Efe** | `route/hierarchical.js` (yeni), test | K0/K1 koridor daraltma → K2 penceresinde EVA rotası; her sonuç katman ve çözünürlük etiketi taşır. | K0/K1 çıktısı hiçbir zaman "yürünebilirlik puanı" etiketlenmez; deterministik. |
+| **38B — Hiyerarşik rota UI** | **Alparslan** | `main.js`, `view/minimap/`, `view/hud.js` | Bölgesel ön rota + yerel EVA rotası birlikte gösterimi, mod etiketi. | 2D/3D fallback bozulmaz. |
+
+### FAZ 6 — Animasyon, görsel kalite ve performans (P1–P2; FAZ 4/5 ile paralel yürür, dosya çakışması yok)
+
+| Aşama | Sahip | Dosya sınırı | Çıktı | Kabul |
+|---|---|---|---|---|
+| **40A — Rig geçiş yumuşatma (R4)** | **Efe** | `view/3d/astronaut-rig.js`, `test/astronaut-rig.test.mjs` | Rig durumsuz; durdurma/iniş/yürüme-havada geçişlerindeki poz sıçramalarını azaltan saf `blendRigPoses(a, b, t)` ve geçiş ağırlıkları; `stage14-rig-audit.md` ölçümlerine göre önce/sonra poz-fark tablosu. | Girişler yalnız mevcut hareket API'si alanları; kaynaksız biyomekanik/atmosfer iddiası yok; deterministik. |
+| **40B — Rig geçiş entegrasyonu ve görsel kabul** | **Alparslan** | `view/3d/renderer.js`, `main.js` | 40A API'sinin renderer'a bağlanması; tarayıcıda gözlem. | 29A kadraj kabulünü bozmaz. |
+| **41A — Arazi LOD/chunk bütçesi** | **Efe** | `view/3d/terrain-lod.js` (yeni, saf), test | Kamera mesafesine göre mesh seyreltme/chunk bölme; no-data quad'ı triangulate edilmez ve boşluk üstünden üçgen kurulmaz kuralı korunur; bound/provenance metadata'sı korunur. | Aynı girdi → aynı mesh; ölçülmüş üçgen sayısı tasarrufu raporlanır. |
+| **41B — LOD entegrasyonu ve cihaz performans kabulü** | **Alparslan** | `view/3d/renderer.js`, `main.js` | LOD'un bağlanması; düşük GPU/gerçek cihazda kare süresi ölçümü. | Ölçülen FPS ve cihaz bilgisi kayda geçer; WebGL2 yoksa 2D fallback çalışır. |
+
+### Yürütme sırası ve paralel şeritler
+
+1. **Şerit A (Efe):** 29B → 29C → 31A → 31C → (demo sonrası) 32A → 33A → 40A → 35A → 36A → 37A → 38A → 41A.
+2. **Şerit B (Alparslan):** 29A → 30 → 31B → (demo sonrası) 32B → 33B (yalnız kanıtla) → 40B → 35B → 36B → 37B → 38B → 41B; 34 ağ erişimine bağlı olarak araya girer.
+3. **Bağımlılıklar:** 30 ← 29A, 29C; 31B ← 31A; 33B ← 33A (kanıt olmadan başlamaz); 36B ← 36A; 37B ← 37A; 38B ← 38A; 40B ← 40A; 41B ← 41A. Efe'nin teslimi Alparslan'ın aşamasını bloke etmez: Efe API'yi ve örnek çıktıyı teslim notunda yazar.
+4. **Zaman kesme çizgisi:** Demo gününe kadar yalnız FAZ 3. FAZ 3 içinde 29A, 29C ve 30 zorunlu; 29B, 31A/B/C kalite artırıcıdır. Etkinlik sonrası FAZ 4 hata/doğruluk borcunu önce kapatır; FAZ 5/6 yalnız FAZ 3–4 bittikten sonra başlar.
+5. **Değişmez ilkeler:** no-data asla sıfıra çevrilmez ve güvenli sayılmaz; bilinmeyen CRS/datum tahmin edilmez; kaba (>2 m) çözünürlükte yürünebilirlik puanı üretilmez; hillshade "ortogörüntü" değildir; eşikler kaynaksızsa "senaryo parametresi"; rover izi insan rotası değildir; canlı telemetri veya "güvenli rota" iddiası kurulmaz.
 
 ## ÜRÜN YÖNÜ GÜNCELLEMESİ — Minimap, otomatik rota ve tüm Mars kapsamı (14 Kasım 2026, akşam)
 

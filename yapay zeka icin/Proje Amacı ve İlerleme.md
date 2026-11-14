@@ -4,19 +4,23 @@
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Hedef uygulama:** `C:\Users\Erdem\OneDrive\Desktop\nasa space apps\Sim`
 
-## Güncel statik inceleme — 14 Kasım 2026
+## Güncel birleştirme durumu — 14 Kasım 2026
 
-**Güncel not:** `7df26df` and `1bc85f6` pushed to `codex/usgs-dtm-fail-closed`; independent static re-review PASS for prior code blockers. USGS candidate remains `needs_review` because product-specific vertical datum is unverified; legacy HiRISE fallback is active. No tests, `prepare-data`, or runtime run; Stage 6 terrain acceptance remains open. JP2 decoder unavailable.
+`origin/codex/alparslan-integration-followups` dalı `c2f3008`, `origin/codex/camera-eye-alignment` dalı `c10e885` merge commit'leriyle bu çalışma dalına alındı. 19B jeoloji snapshot/HUD/kontak, 20B arşiv sürüş izi, 22B rover fotoğraf galerisi/tahmini kamera yönü ve first-person kamera yüksekliğinin kask merkezine 1,48 m hizalanması kaynakta mevcut. 21B ortomozaik bindirmesi yapılmadı; DTM ile hizalama kanıtı olmadan açılmamalı. Bu dallar yeni ham `Sim/data/` dosyası getirmedi; Mars Trek, SIM 3464 ve Perseverance paketleri önceki `805f739` veri commit'inde zaten depodaydı. Bu turda kaynak kodu ve Git geçmişi statik incelendi; test, smoke veya tarayıcı çalıştırılmadı. Stage 15–18 görsel kabul ve 19–22 ürün/runtime kabulü açık.
 
-**USGS HiRISE DTM migration kabul edilmedi (FAIL).** `eb385ea` yeni USGS Mars 2020 TRN HiRISE DTM Mosaic’e geçişi ve pencereli TIFF provider’ını içeriyor; migration remote’a push edilmişti. Kodun mevcut olması verinin provenance/koordinat/datum/lisans kabulünü tamamlamaz. Stage 8–12 için önceki commit’lerde kaydedilen testler bu migration’ın test veya kabul sonucu değildir; bu yeni aşama için bağımsız test/kabul çalıştırması yapılmadı.
+## USGS DTM durum kaydı — 14 Kasım 2026
 
-Bağımsız review engelleri:
+`7df26df` ve `1bc85f6`, `codex/usgs-dtm-fail-closed` dalına push edildi; önceki kod engelleri için bağımsız statik tekrar incelemesi PASS olarak kaydedildi. USGS adayı ürün-özel düşey datum doğrulanmadığı için `needs_review`; HiRISE fallback etkin. Test, `prepare-data` veya runtime çalıştırılmadı; Stage 6 terrain kabulü açık. JP2 decoder mevcut değil.
+
+**Tarihsel ilk inceleme: FAIL / kabul edilmedi (`eb385ea`).** Sonraki kod düzeltmeleri bu tarihsel sonucu değiştirmiştir: kod engelleri statik tekrar incelemede kapalı bulundu; ürün-özel datum kanıtı ve runtime kabulü hâlâ gereklidir. Kodun mevcut olması verinin provenance/koordinat/datum/lisans kabulünü tamamlamaz. Stage 8–12 için önceki test kayıtları bu migration'ın kabul sonucu değildir.
+
+**Tarihsel ilk review engelleri (`eb385ea` dönemi):** sonraki fail-closed düzeltmelerden önce kaydedilen maddelerdir. `7df26df`/`1bc85f6` sonrası bağımsız statik tekrar incelemesi eski kod engelleri için PASS bildirdi; aşağıdaki ürün verisi/datum ve runtime kabul gereksinimleri hâlâ açık:
 
 1. `extract-dtm.mjs`, eksik TIFF tag’leri varken ürün kimliği, boyut, tiepoint/yarıçap, no-data, geçerli aralık, datum ve lisansı varsayıyor/sabitliyor; TIFF strip yerleşimi ve compression doğrulanmıyor.
-2. Manifest bayrakları ve `frameMatchesConfig` destek durumunu bağımsız transform doğrulaması olmadan verebiliyor. Raster örnek kontrolü yalnız sonlu değeri kontrol ediyor; sayısal koordinat dönüşüm/rezidüel ve footprint doğrulaması gösterilmedi.
+2. İlk sürümde manifest bayrakları ve `frameMatchesConfig` destek durumunu bağımsız transform doğrulaması olmadan verebiliyordu. Raster örnek kontrolü yalnız sonlu değeri kontrol ediyordu.
 3. Ürün etiketi/SIS, provenance, datum ve lisans/kullanım koşulu için QC kapısı hâlâ açık. USGS release sayfasındaki hak ifadesi **“This work is marked with CC0 1.0 Universal”** şeklindedir ([USGS data release](https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic)); bu ifade kaynak olarak ilişkilendirilmeli, ama tek başına yerel TIFF’in ürün kimliğini veya metadata eşleşmesini kanıtlamaz.
 
-**Sıradaki kod işi Alparslan’a:** bu çıkarıcı/manifest/koordinat doğrulama boşluklarını fail-closed biçimde kapatıp yeni bir bağımsız review ve kabul çalıştırması sunmak. Stage 13 (Efe’nin yalnız astronot rig’i ve birim testleri kapsamındaki loping/iniş kinematiği) ayrı kalır ve bundan sonra yürütülür. Eski IMG/JP2 dosyaları kullanıcı tarafından geçersiz bildirildi; migration başarısızlığı onları yeniden geçerli veri yapmaz.
+**Açık iş:** Alparslan ürün-özel düşey datum kanıtını edinip Stage 6 runtime kabulünü ayrıca tamamlar. Stage 13 ve 19–22 kod teslimleri kaynakta mevcuttur; bu merge için yeni test veya görsel kabul yapılmadı. Eski IMG/JP2 dosyaları kullanıcı tarafından geçersiz bildirildi; migration geçmişi onları yeniden geçerli veri yapmaz.
 
 İnceleme anındaki working tree’de legacy raster silmeleri, camera/renderer/test/screenshot değişiklikleri ve TIFF/`.crdownload` dosyaları not değişikliklerinden ayrı unstaged/untracked durumdaydı; bu notlar bunları sahiplenmez.
 

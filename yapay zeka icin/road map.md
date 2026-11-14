@@ -1,4 +1,4 @@
-﻿# Marswalk — Tam Proje Yol Haritası
+# Marswalk — Tam Proje Yol Haritası
 
 **Son güncelleme:** 14 Kasım 2026 (gece — `04f12f4..f223414` commitleri sonrası güncel durum ve sonraki aşamaların iş bölümü)
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  

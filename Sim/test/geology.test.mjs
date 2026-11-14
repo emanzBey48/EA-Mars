@@ -344,3 +344,27 @@ test('geology: manifest hashes match the data files after CRLF -> LF normalisati
   assert.equal(normalised.length, entry.size_bytes);
   assert.equal(sha(normalised), entry.sha256);
 });
+
+test('C3: caveats/uncertainty/attribution follow the index source; SIM 3464 output unchanged', () => {
+  const polys = collection([feat('Q', 'Quad', { type: 'Polygon', coordinates: [sq(0, 0, 1, 1)] }, 1)], [0, 0, 1, 1]);
+  const gen = createGeologyIndex(polys, { source: { title: 'Other map', citation: 'Someone, 2021, scale 1:20,000,000' } });
+  assert.equal(gen.provenance.sourceProfile, 'generic');
+  assert.doesNotMatch(gen.provenance.attribution, /SIM 3464/);
+  assert.ok(gen.provenance.caveats.every((c) => !/SIM 3464|1:75|100-200/.test(c)));
+  const gs = toGeologySnapshot(lookup(gen, 0.5, 0.5), gen);
+  assert.deepEqual(Object.keys(gs), [...GEOLOGY_SNAPSHOT_CONTRACT.keys]);
+  assert.deepEqual(gs.positionalUncertaintyM, { min: null, max: null }); // not stated -> unknown, never SIM's 100-200 m
+  assert.equal(gs.mapScale, '1:20,000,000');
+  assert.doesNotMatch(gs.caveatTr, /1:75|100–200/);
+  assert.match(gs.caveatTr, /1:20,000,000/);
+  assert.match(gs.caveatTr, /kaynakta belirtilmemiş/);
+  const stated = createGeologyIndex(polys, { source: { title: 'Other', citation: 'x', positional_uncertainty_m: { min: 5, max: 9 }, license: 'CC0' } });
+  const ss = toGeologySnapshot(lookup(stated, 0.5, 0.5), stated);
+  assert.deepEqual(ss.positionalUncertaintyM, { min: 5, max: 9 });
+  assert.equal(ss.license, 'CC0');
+  // SIM 3464 (real manifest) and source-less legacy indexes keep the exact SIM defaults.
+  assert.equal(realIndex.provenance.sourceProfile, 'usgs-sim3464');
+  assert.equal(snap(WAYPOINTS[0]).caveatTr, GEOLOGY_CAVEAT_TR);
+  const legacy = createGeologyIndex(polys);
+  assert.equal(toGeologySnapshot(lookup(legacy, 0.5, 0.5), legacy).caveatTr, GEOLOGY_CAVEAT_TR);
+});

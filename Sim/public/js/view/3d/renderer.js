@@ -93,6 +93,7 @@ uniform vec4 uShadowParams;
 uniform vec3 uShadowLightDir;
 uniform int uShadowMode;
 uniform float uReceiveShadow;
+uniform vec3 uSkySunDir;
 out vec4 outColor;
 ${MARS_LIGHTING_GLSL}
 ${TERRAIN_SHADING_GLSL}
@@ -107,6 +108,9 @@ vec4 finishColor(vec3 linearColor, float alpha) {
 void main() {
   if (uRenderPass == 4) { outColor = vec4(0.0); return; }
   vec3 sunDir = normalize(uLightDirection);
+  // Sky dome, sun disc and aerial haze live in DISPLAY space (rays are display vectors); the sun there is
+  // normalize(x, y, z * verticalScale). Equal to sunDir at verticalScale 1.
+  vec3 skySunDir = normalize(uSkySunDir);
   vec3 toCamera = uCameraEye - vWorldPos;
   float dist = length(toCamera);
   vec3 viewDir = dist > 1e-4 ? toCamera / dist : vec3(0.0, 0.0, 1.0);
@@ -115,9 +119,9 @@ void main() {
   if (uRenderPass == 3) {
     // Procedural Mars sky dome: butterscotch gradient, forward-scattering halo, ~21' sun disc.
     vec3 rayDir = normalize(rayV);
-    vec3 sky = marsSkyRadiance(rayDir, sunDir);
-    float angEdge = max(fwidth(length(rayDir - sunDir)), 0.0001);
-    sky += marsSunDiscRadiance(rayDir, sunDir, angEdge);
+    vec3 sky = marsSkyRadiance(rayDir, skySunDir);
+    float angEdge = max(fwidth(length(rayDir - skySunDir)), 0.0001);
+    sky += marsSunDiscRadiance(rayDir, skySunDir, angEdge);
     outColor = finishColor(sky, 1.0);
     return;
   }
@@ -170,11 +174,11 @@ void main() {
     vec3 ambient = marsSkyAmbient(nLit, sunDir);
     vec3 lit = albedo * (direct + ambient);
 
-    lit = applyAerialPerspective(lit, dist, rayV, sunDir, HAZE_DENSITY, HAZE_MAX);
+    lit = applyAerialPerspective(lit, dist, rayV, skySunDir, HAZE_DENSITY, HAZE_MAX);
     if (uTerrainBounds.z > uTerrainBounds.x) {
       float edgeM = min(min(vWorldPos.x - uTerrainBounds.x, uTerrainBounds.z - vWorldPos.x),
                         min(vWorldPos.y - uTerrainBounds.y, uTerrainBounds.w - vWorldPos.y));
-      lit = mix(lit, marsHazeColor(rayV, sunDir), terrainMeshEdgeFade(edgeM, dist));
+      lit = mix(lit, marsHazeColor(rayV, skySunDir), terrainMeshEdgeFade(edgeM, dist));
     }
     outColor = finishColor(lit, 1.0);
     return;
@@ -187,7 +191,7 @@ void main() {
     vec3 shaded = base * (marsSunIrradiance(sunDir) * ndotl + marsSkyAmbient(normal, sunDir));
     float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5) * 0.18;
     vec3 lit = base * (0.62 * EMISSIVE_GAIN) + 0.55 * shaded + vec3(rim) * base;
-    lit = applyAerialPerspective(lit, dist, rayV, sunDir, HAZE_DENSITY * 0.6, 0.45);
+    lit = applyAerialPerspective(lit, dist, rayV, skySunDir, HAZE_DENSITY * 0.6, 0.45);
     outColor = finishColor(lit, 1.0);
     return;
   }
@@ -202,7 +206,7 @@ void main() {
   float spec = pow(max(dot(normal, halfVec), 0.0), 32.0) * 0.12 * ndotl * shadow;
   float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.35;
   vec3 lit = albedo * (sunIrr * (ndotl * shadow) + ambient) + sunIrr * spec + ambient * rim;
-  lit = applyAerialPerspective(lit, dist, rayV, sunDir, HAZE_DENSITY, HAZE_MAX);
+  lit = applyAerialPerspective(lit, dist, rayV, skySunDir, HAZE_DENSITY, HAZE_MAX);
   outColor = finishColor(lit, uAlpha);
 }`;
 
@@ -427,6 +431,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     shadowMap: uniform('uShadowMap'),
     shadowParams: uniform('uShadowParams'),
     shadowLightDir: uniform('uShadowLightDir'),
+    skySunDir: uniform('uSkySunDir'),
     shadowMode: uniform('uShadowMode'),
     receiveShadow: uniform('uReceiveShadow'),
   };
@@ -894,6 +899,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.useProgram(program);
       gl.uniformMatrix4fv(locations.viewProjection, false, viewProjection);
       gl.uniform3fv(locations.lightDirection, light);
+      gl.uniform3fv(locations.skySunDir, sunDisplay);
       gl.uniform3f(locations.cameraEye, eye.xM, eye.yM, eye.zDisplay);
       gl.uniform2f(locations.elevBounds, minZDisplay, maxZDisplay);
       const tb = terrainMesh.bounds;

@@ -6,14 +6,17 @@
 // not calibrated W/m²/sr. Colours tagged "presentation" are visual approximations chosen for this
 // viewer, not measurements from rover images. Only the sun's apparent size is computed from sources.
 //
-// Sources (read for this module):
-// - NASA NSSDC Mars Fact Sheet, Mars/Earth semimajor-axis ratio 1.524:
+// Sources (re-read in Stage Visual A, Nov 2026):
+// - NASA NSSDC Mars Fact Sheet: semimajor axis 1.52366231 AU (the module uses the rounded 1.524; the
+//   difference changes the sun diameter by <0.1 %):
 //   https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html
-// - NASA NSSDC Sun Fact Sheet, apparent diameter at 1 AU = 1919 arcsec:
+// - NASA NSSDC Sun Fact Sheet: apparent diameter at 1 AU = 1919 arcsec (max 1952, min 1887):
 //   https://nssdc.gsfc.nasa.gov/planetary/factsheet/sunfact.html
-// - NASA Photojournal PIA19400 "Sunset in Mars' Gale Crater": fine dust lets blue light penetrate more
-//   efficiently and keeps blue "closer to sun's part of the sky"; "most pronounced near sunset":
+// - NASA Photojournal PIA19400 "Sunset in Mars' Gale Crater" caption: "Dust in the Martian atmosphere has
+//   fine particles that permit blue light to penetrate the atmosphere more efficiently"; blue colours stay
+//   "closer to sun's part of the sky"; "The effect is most pronounced near sunset":
 //   https://science.nasa.gov/photojournal/sunset-in-mars-gale-crater
+//   (The caption supports only the qualitative behaviour. It gives no numbers for colours or intensities.)
 // - Tone curve: K. Narkowicz, "ACES Filmic Tone Mapping Curve" (fitted approximation, 2016):
 //   https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/  (not re-read here;
 //   standard published coefficients, labelled as a rendering convention, not Mars science).

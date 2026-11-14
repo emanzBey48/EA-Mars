@@ -41,7 +41,7 @@ export const DEFAULT_COST_PARAMS = deepFreeze({
   roughnessRefM: leaf(0.25, 'm', 'scenario', 'Tasarım seçimi (scenario); kalibrasyon yok — 1 m DTM ölçeğinde 3x3 plan-artığı RMS yarı-puan değeri'),
   costK: leaf(9, '1', 'scenario', 'Tasarım seçimi: en kötü geçilebilir hücre maliyeti 1+costK'),
   costP: leaf(1.5, '1', 'scenario', 'Tasarım seçimi: maliyet eğrisi üssü'),
-  marsGravityMps2: leaf(3.71, 'm/s^2', 'sourced', 'NASA Planet Compare (Mars yüzey yerçekimi), https://solarsystem.nasa.gov/planet-compare/?intent=121 — değer proje config.js kaynak listesinden; bu modülde yeniden çekilmedi. Skorları etkilemez, yalnız bilgi amaçlı'),
+  marsGravityMps2: leaf(3.71, 'm/s^2', 'sourced', 'NASA Planet Compare (Mars yüzey yerçekimi), https://solarsystem.nasa.gov/planet-compare/?intent=121 — referans değer (config.js SOURCES; bu modülde yeniden çekilmedi); hesaba girmez (skor/maliyeti etkilemez, yalnız bilgi amaçlı)'),
 });
 
 const OVERRIDE_SOURCE = 'Kullanıcı geçersiz kılma (senaryo)';

@@ -38,7 +38,14 @@ export function createMinimap({
     terrainPixelsReadable: false,
     descriptor,
     endpoints: { start: endpoints.start ?? null, end: endpoints.end ?? null },
-    overlays: { geologySegments: [], archiveTraverse: null, geologyVisible: false, archiveVisible: false },
+    overlays: {
+      geologySegments: [],
+      archiveTraverse: null,
+      geologyVisible: false,
+      archiveVisible: false,
+      orthoOverlay: null,
+      orthoVisible: true,
+    },
     planning: { heatmap: null, route: null, heatmapVisible: false },
     selectionMode: selectionMode === 'start' || selectionMode === 'end' ? selectionMode : null,
     centerXM: 0,
@@ -211,6 +218,25 @@ export function createMinimap({
       ctx.fillStyle = '#ddd';
       ctx.font = '14px system-ui, sans-serif';
       ctx.fillText('HiRISE yüzey katmanı kullanılamıyor', 16, 42);
+    }
+
+    if (state.overlays.orthoVisible && state.overlays.orthoOverlay && state.overlays.orthoOverlay.mode !== 'hillshade') {
+      const overlay = state.overlays.orthoOverlay;
+      const isHybrid = overlay.mode === 'hybrid';
+      ctx.save();
+      ctx.globalAlpha = isHybrid ? 0.58 : 0.88;
+      if (isHybrid) {
+        ctx.globalCompositeOperation = 'multiply';
+      }
+      for (const tier of [overlay.coarse, overlay.fine]) {
+        const image = tier?.image;
+        const rb = tier?.renderBoundsM || tier?.layer?.renderBoundsM;
+        if (image && validBounds(rb)) {
+          const topLeft = worldToScreen(rb.nwXM, rb.nwYM);
+          ctx.drawImage(image, topLeft.x, topLeft.y, rb.widthM * state.pxPerM, rb.heightM * state.pxPerM);
+        }
+      }
+      ctx.restore();
     }
 
     if (state.overlays.geologyVisible) {
@@ -399,10 +425,12 @@ export function createMinimap({
     },
     setOverlays(nextOverlays = {}) {
       state.overlays = {
-        geologySegments: nextOverlays.geologySegments ?? [],
-        archiveTraverse: nextOverlays.archiveTraverse ?? null,
-        geologyVisible: Boolean(nextOverlays.geologyVisible),
-        archiveVisible: Boolean(nextOverlays.archiveVisible),
+        geologySegments: nextOverlays.geologySegments ?? state.overlays.geologySegments ?? [],
+        archiveTraverse: nextOverlays.archiveTraverse ?? state.overlays.archiveTraverse ?? null,
+        geologyVisible: nextOverlays.geologyVisible !== undefined ? Boolean(nextOverlays.geologyVisible) : state.overlays.geologyVisible,
+        archiveVisible: nextOverlays.archiveVisible !== undefined ? Boolean(nextOverlays.archiveVisible) : state.overlays.archiveVisible,
+        orthoOverlay: nextOverlays.orthoOverlay !== undefined ? nextOverlays.orthoOverlay : state.overlays.orthoOverlay,
+        orthoVisible: nextOverlays.orthoVisible !== undefined ? Boolean(nextOverlays.orthoVisible) : state.overlays.orthoVisible,
       };
       draw();
     },

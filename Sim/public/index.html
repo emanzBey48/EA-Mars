@@ -33,6 +33,11 @@
       <div class="view-toolbar" role="group" aria-label="Harita görünümü">
         <button id="btn-view-2d" type="button" aria-pressed="true">2D</button>
         <button id="btn-view-3d" type="button" aria-pressed="false" disabled>3D yükleniyor…</button>
+        <select id="select-ortho-mode" title="HiRISE Ortomozaik Kaplama Modu" aria-label="HiRISE Ortomozaik Kaplama Modu">
+          <option value="hybrid" selected>Hibrit (HiRISE Orto + DTM Rölyef)</option>
+          <option value="ortho">HiRISE Ortomozaik (WMTS z17/z14)</option>
+          <option value="hillshade">DTM Gölgeli Kabartma (Hillshade)</option>
+        </select>
       </div>
       <div id="view-note" class="view-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. Dikey ölçek 3× sunum abartısıdır.</div>
       <div id="view-status" class="banner info" hidden role="status" aria-live="polite"></div>
@@ -61,7 +66,7 @@
           <label><input type="checkbox" checked disabled> HiRISE DTM hillshade</label>
           <label><input id="minimap-toggle-geology" type="checkbox" checked> Jeoloji sınırları</label>
           <label><input id="minimap-toggle-archive" type="checkbox" checked> Arşiv sürüş izi</label>
-          <label class="disabled-layer"><input type="checkbox" disabled> Ortho — hizalama doğrulanmadı</label>
+          <label><input id="minimap-toggle-ortho" type="checkbox" checked> HiRISE WMTS Ortomozaik (z17 0.32m / z14 2.5m)</label>
           <label><input id="minimap-toggle-heatmap" type="checkbox"> Yürünebilirlik puanı (planlama göstergesi)</label>
           <label><input type="checkbox" checked disabled> Planlanan rota</label>
         </div>
@@ -149,6 +154,7 @@
         <p id="archive-traverse-status" class="muted small" aria-live="polite"></p>
         <p class="muted small">Mor çizgi arşiv sürüş izidir. Sarı düz hat ve koridor keşif senaryosuna aittir. Sürüş izi canlı telemetri veya güvenli rota bilgisi içermez. Kaynak: NASA/JPL Mars 2020 MMGIS. Lisans kaynakta belirtilmemiş.</p>
         <div id="layers"></div>
+        <p id="ortho-status" class="muted small" aria-live="polite">HiRISE WMTS Ortomozaik: z17 (0.318 m/px) ve z14 (2.544 m/px) · WMTS projeksiyon aritmetiği · Stage 39A · Lisans: kaynakta belirtilmemiş</p>
         <p class="muted small">Mars Trek HiRISE ortomozaik katmanı, etkin DTM ile piksel hizası doğrulanınca açılabilir. Kaynak: USGS Astrogeology / NASA MRO HiRISE, NASA JPL Mars Trek. Lisans kaynakta belirtilmemiş.</p>
       </section>
 

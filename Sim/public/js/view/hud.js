@@ -74,9 +74,9 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     const regBanner = layers.selectionReport
       ? `<div class="layer muted small"><b>SurfaceProvider Kayıt/Seçim:</b> Aktif sağlayıcı <code>${esc(layers.selectionReport.activeId)}</code> (${esc(layers.selectionReport.validation?.status ?? '—')}). ${esc(layers.selectionReport.competitionDataStatus)}</div>`
       : '';
-    $('layers').innerHTML = regBanner + [layers.dtm.descriptor, layers.ortho?.descriptor].filter(Boolean).map(layerCard).join('');
+    $('layers').innerHTML = regBanner + [layers.dtm.descriptor, layers.ortho?.descriptor, layers.orthoMosaic?.descriptor].filter(Boolean).map(layerCard).join('');
     const notes = [];
-    if (!layers.ortho?.available) notes.push('Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor / geçersiz bildirildi).');
+    if (!layers.ortho?.available) notes.push('Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor / yerel JP2 dosyası); DTM gölgeli kabartması ortogörüntü değildir. Mars Trek WMTS HiRISE ortomozaik karoları (z17/z14) ayrı katman olarak sunulmaktadır.');
     if (!layers.dtm.available) notes.push(`DTM kullanılamıyor: ${layers.dtm.descriptor.access.reason}`);
     const legend = $('legend');
     if (terrain) {

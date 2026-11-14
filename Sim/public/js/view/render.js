@@ -91,6 +91,7 @@ export function render(ctx, w, h, {
   camera,
   snapshot,
   terrain,
+  orthoOverlay = null,
   geologySegments = [],
   archiveTraverse = null,
   plannedRoute = null,
@@ -108,6 +109,25 @@ export function render(ctx, w, h, {
     ctx.drawImage(terrain.canvas, p.sx, p.sy, terrain.bounds.widthM * z, terrain.bounds.heightM * z);
   } else {
     drawGrid(ctx, w, h, camera);
+  }
+
+  // HiRISE WMTS Orthomosaic overlay (Stage 39B)
+  if (orthoOverlay && orthoOverlay.mode !== 'hillshade') {
+    const isHybrid = orthoOverlay.mode === 'hybrid';
+    ctx.save();
+    ctx.globalAlpha = isHybrid ? 0.62 : 0.88;
+    if (isHybrid) {
+      ctx.globalCompositeOperation = 'multiply';
+    }
+    for (const tier of [orthoOverlay.coarse, orthoOverlay.fine]) {
+      const image = tier?.image;
+      const b = tier?.renderBoundsM || tier?.layer?.renderBoundsM;
+      if (image && b && Number.isFinite(b.nwXM) && Number.isFinite(b.nwYM) && b.widthM > 0 && b.heightM > 0) {
+        const p = T(b.nwXM, b.nwYM);
+        ctx.drawImage(image, p.sx, p.sy, b.widthM * z, b.heightM * z);
+      }
+    }
+    ctx.restore();
   }
 
   // Only source unit boundaries are drawn; bbox clip edges are filtered upstream.

@@ -20,6 +20,7 @@ import { createTerrainRenderer } from './view/3d/renderer.js';
 import { ASTRONAUT_RIG } from './view/3d/astronaut-rig.js';
 import { buildTerrainMesh } from './view/3d/terrain-mesh.js';
 import { buildMarkerMeshes } from './view/3d/marker-mesh.js';
+import { buildRouteRibbon } from './view/3d/route-ribbon.js';
 import { bindControls } from './input/input.js';
 import { createStops } from './geo/rover-observations.js';
 import { createRoverGallery } from './view/rover-gallery.js';
@@ -83,6 +84,8 @@ const routeWorkerRequests = new Map();
 let routeHeatmap = null;
 let activeRoute = null;
 let plannedRouteLinePositions = new Float32Array();
+let plannedRouteRibbon = null;
+let plannedRoutePathCumulativeM = [];
 const footprintTrail = createFootprintTrail({ sampleElevation: (xM, yM) => layers.dtm.sampleElevation(xM, yM) });
 let footprintTrailSnapshot = footprintTrail.getSnapshot();
 let lastMinimapFootprintRefreshS = -Infinity;
@@ -182,7 +185,7 @@ function showSelectedPoint(kind, point, byDrag = false) {
   pendingPlanId = null;
   minimapController.setEndpoints(minimapEndpoints);
   activeRoute = null;
-  plannedRouteLinePositions = new Float32Array();
+  preparePlannedRouteGuide();
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
   renderRouteSummary({ status: 'idle', reason: 'Yeni nokta seçildi' });
   minimapStatus.textContent = 'Nokta kaydedildi. Planlama göstergesi — güvenli rota sertifikası değildir.';
@@ -300,7 +303,7 @@ function handleRouteWorkerMessage({ data }) {
     if (data.type !== 'window-ready') return;
     routeWorkerReady = true;
     routeHeatmap = updateHeatmap(data.heatmap);
-    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
+    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null, segments: activeRoute?.status === 'ok' ? activeRoute.segments : null });
     minimapStatus.textContent = routeHeatmap
       ? 'Dengeli EVA yürünebilirlik alanı hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
       : 'Rota planlama alanı hazır; ısı haritası verisi Worker yanıtında bulunamadı.';
@@ -347,7 +350,7 @@ function handleRouteWorkerMessage({ data }) {
   if (data.type === 'result' && pending.kind === 'plan') {
     activeRoute = data.result;
     preparePlannedRouteGuide();
-    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
+    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null, segments: activeRoute?.status === 'ok' ? activeRoute.segments : null });
     renderRouteSummary(activeRoute);
     minimapStatus.textContent = activeRoute?.status === 'ok'
       ? `Rota planlandı. ${activeRoute.mode === 'eva_walkability' ? 'EVA yürünebilirlik' : 'Bölgesel ön planlama'}. Planlama göstergesi — güvenli rota sertifikası değildir.`
@@ -474,7 +477,7 @@ minimapRoutePreference?.addEventListener('change', () => {
   }
 });
 minimapHeatmapToggle.addEventListener('change', () => {
-  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
+  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null, segments: activeRoute?.status === 'ok' ? activeRoute.segments : null });
 });
 $('minimap-fit').addEventListener('click', () => minimapController.fit());
 $('minimap-clear-points').addEventListener('click', () => {
@@ -490,7 +493,7 @@ $('minimap-clear-points').addEventListener('click', () => {
   pendingPlanId = null;
   minimapStatus.textContent = 'Noktalar temizlendi. Yeni başlangıç ve bitiş seçerek yeniden planlayın.';
   activeRoute = null;
-  plannedRouteLinePositions = new Float32Array();
+  preparePlannedRouteGuide();
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
   renderRouteSummary({ status: 'idle', reason: 'Noktalar temizlendi' });
   updateRouteButton();
@@ -646,6 +649,65 @@ function preparePlannedRouteGuide() {
       ribbonHalfWidthM: 0.22,
     })
     : new Float32Array();
+  plannedRouteRibbon = null;
+  plannedRoutePathCumulativeM = [];
+  if (activeRoute?.status !== 'ok' || !terrainMesh || !Array.isArray(activeRoute.path)) return;
+
+  const path = activeRoute.path;
+  plannedRoutePathCumulativeM = [0];
+  for (let i = 1; i < path.length; i++) {
+    plannedRoutePathCumulativeM.push(plannedRoutePathCumulativeM[i - 1] + Math.hypot(path[i].xM - path[i - 1].xM, path[i].yM - path[i - 1].yM));
+  }
+  const ribbon = buildRouteRibbon({
+    path,
+    segments: activeRoute.segments,
+    sampleElevation: (xM, yM) => layers.dtm.sampleElevation(xM, yM),
+    displayConfig: terrainMesh.displayConfig,
+    sampleSpacingM: 1.5,
+    provenance: { source: 'active route planner result', mode: activeRoute.mode ?? null },
+  });
+  const colorsRgb = new Float32Array(ribbon.positions.length);
+  const hasAlignedScores = Array.isArray(activeRoute.segments) && activeRoute.segments.length === path.length - 1;
+  for (let vertex = 0; vertex < ribbon.vertexCount; vertex++) {
+    const alongM = ribbon.uvs[vertex * 2];
+    let segmentIndex = 0;
+    while (segmentIndex + 1 < plannedRoutePathCumulativeM.length - 1 && alongM > plannedRoutePathCumulativeM[segmentIndex + 1]) segmentIndex++;
+    colorsRgb.set(routeScoreColor(hasAlignedScores ? activeRoute.segments[segmentIndex]?.score : null), vertex * 3);
+  }
+  plannedRouteRibbon = { ...ribbon, colorsRgb };
+}
+
+function routeScoreColor(score) {
+  if (!Number.isFinite(score)) return [0.74, 0.82, 0.84];
+  const value = Math.max(0, Math.min(100, score));
+  if (value <= 50) {
+    const t = value / 50;
+    return [0.96 + 0.04 * t, 0.24 + 0.34 * t, 0.20 - 0.08 * t];
+  }
+  const t = (value - 50) / 50;
+  return [1 - 0.72 * t, 0.58 + 0.34 * t, 0.12 + 0.58 * t];
+}
+
+function plannedRoutePulseDistance(player) {
+  const path = activeRoute?.status === 'ok' ? activeRoute.path : null;
+  if (!Array.isArray(path) || path.length < 2 || !Number.isFinite(player?.xM) || !Number.isFinite(player?.yM)) return 0;
+  let bestDistanceSq = Infinity;
+  let alongM = 0;
+  for (let i = 0; i + 1 < path.length; i++) {
+    const a = path[i], b = path[i + 1];
+    const dx = b.xM - a.xM, dy = b.yM - a.yM;
+    const lengthSq = dx * dx + dy * dy;
+    if (!(lengthSq > 0)) continue;
+    const t = Math.max(0, Math.min(1, ((player.xM - a.xM) * dx + (player.yM - a.yM) * dy) / lengthSq));
+    const x = a.xM + dx * t, y = a.yM + dy * t;
+    const distanceSq = (player.xM - x) ** 2 + (player.yM - y) ** 2;
+    if (distanceSq < bestDistanceSq) {
+      bestDistanceSq = distanceSq;
+      alongM = (plannedRoutePathCumulativeM[i] ?? 0) + Math.sqrt(lengthSq) * t;
+    }
+  }
+  const totalM = plannedRoutePathCumulativeM.at(-1) ?? 0;
+  return Math.min(totalM, alongM + 18);
 }
 
 function prepareArchiveDisplay() {
@@ -1380,6 +1442,8 @@ function frame(now) {
         archiveLinePositions: $('toggle-archive-traverse').checked ? archiveTraverse3d?.linePositions : null,
         geologyLinePositions: geologyLayerVisible ? geologyLinePositions : null,
         plannedRouteLinePositions,
+        plannedRouteRibbon,
+        plannedRoutePulseUM: plannedRoutePulseDistance(player),
         footprintTrail: footprintTrailSnapshot,
       });
       if (!hasElevation) {

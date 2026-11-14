@@ -168,21 +168,6 @@ function getFirstPersonNote(scale = currentVerticalScale) {
   return `Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. ${scaleText} Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.`;
 }
 
-const ROUTE_PREFERENCES = Object.freeze({
-  balanced: {
-    label: 'Dengeli EVA Yürünebilirlik',
-    costParams: { slopeWeight: 1.0, distanceWeight: 1.0 },
-  },
-  shortest: {
-    label: 'En Kısa Mesafe',
-    costParams: { slopeWeight: 0.3, distanceWeight: 2.0 },
-  },
-  flattest: {
-    label: 'En Düz / Düşük Eğim',
-    costParams: { slopeWeight: 3.0, distanceWeight: 0.5 },
-  },
-});
-
 function showSelectedPoint(kind, point, byDrag = false) {
   const label = `${point.xM.toFixed(1)} m doğu, ${point.yM.toFixed(1)} m kuzey (WB1 orijini)`;
   if (kind === 'start') minimapStartLabel.textContent = label;
@@ -313,7 +298,7 @@ function handleRouteWorkerMessage({ data }) {
     routeHeatmap = updateHeatmap(data.heatmap);
     minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
     minimapStatus.textContent = routeHeatmap
-      ? 'Yürünebilirlik ısı haritası hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
+      ? 'Dengeli EVA yürünebilirlik alanı hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
       : 'Rota planlama alanı hazır; ısı haritası verisi Worker yanıtında bulunamadı.';
     if (pendingDemoTour && minimapEndpoints.start && minimapEndpoints.end) {
       pendingDemoTour = false;
@@ -446,16 +431,12 @@ function planMinimapRoute() {
   routeWorkerRequests.set(id, { kind: 'plan', endpointRevision, preference: prefKey });
   minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi — güvenli rota sertifikası değildir.';
   updateRouteButton();
-  const pref = ROUTE_PREFERENCES[prefKey] ?? ROUTE_PREFERENCES.balanced;
-  const selectedCostParams = pref.costParams;
-
   ensureRouteWorker().postMessage({
     type: 'plan-walking-route',
     id,
     startLocal: minimapEndpoints.start,
     endLocal: minimapEndpoints.end,
-    costParams: selectedCostParams,
-    options: { preference: prefKey, costParams: selectedCostParams },
+    options: { preference: prefKey },
   });
 }
 

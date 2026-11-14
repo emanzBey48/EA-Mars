@@ -34,6 +34,8 @@ export function createMinimap({
 
   const state = {
     terrain,
+    terrainPixels: null,
+    terrainPixelsReadable: false,
     descriptor,
     endpoints: { start: endpoints.start ?? null, end: endpoints.end ?? null },
     overlays: { geologySegments: [], archiveTraverse: null, geologyVisible: false, archiveVisible: false },
@@ -53,6 +55,7 @@ export function createMinimap({
     width: 0,
     height: 0,
     destroyed: false,
+    selectionMessage: '',
   };
 
   const bounds = () => state.terrain?.bounds ?? null;
@@ -82,6 +85,37 @@ export function createMinimap({
     state.centerYM = b.nwYM - b.heightM / 2;
     state.pxPerM = clamp(Math.min(state.width / b.widthM, state.height / b.heightM) * 0.94, state.minPxPerM, state.maxPxPerM);
     draw();
+  }
+
+  // The prepared terrain image marks non-OK DTM cells with a magenta hatch.
+  // Cache that visual-only mask; interaction must not start surface sampling.
+  function cacheTerrainMask() {
+    state.terrainPixels = null;
+    state.terrainPixelsReadable = false;
+    const source = state.terrain?.canvas;
+    if (!source || !Number.isInteger(source.width) || !Number.isInteger(source.height) || source.width < 1 || source.height < 1) return;
+    try {
+      const image = source.getContext('2d')?.getImageData(0, 0, source.width, source.height);
+      if (!image) return;
+      state.terrainPixels = image;
+      state.terrainPixelsReadable = true;
+    } catch {
+      // Fail closed when the image cannot be inspected.
+    }
+  }
+
+  function selectionRejection(xM, yM) {
+    const b = bounds();
+    if (!state.terrain?.canvas || !validBounds(b)) return 'DTM kapsamı yüklenmedi; nokta seçilemez.';
+    if (xM < b.nwXM || xM >= b.nwXM + b.widthM || yM > b.nwYM || yM <= b.nwYM - b.heightM) return 'Nokta yüklenen DTM kapsamının dışında.';
+    if (!state.terrainPixelsReadable || !state.terrainPixels) return 'DTM hücresinin durumu okunamıyor; nokta seçilemez.';
+    const { width, height, data } = state.terrainPixels;
+    const col = Math.min(width - 1, Math.floor((xM - b.nwXM) / b.widthM * width));
+    const row = Math.min(height - 1, Math.floor((b.nwYM - yM) / b.heightM * height));
+    const offset = (row * width + col) * 4;
+    // buildTerrainImage paints non-OK cells as (255,0,255) or (90,0,90).
+    if (data[offset + 1] === 0 && data[offset] === data[offset + 2]) return 'Bu hücre no-data veya geçersiz; başka bir nokta seçin.';
+    return '';
   }
 
   function worldToScreen(xM, yM) {
@@ -235,6 +269,14 @@ export function createMinimap({
       ctx.font = '12px system-ui, sans-serif';
       ctx.fillText(`${state.selectionMode === 'start' ? 'Başlangıç' : 'Bitiş'} noktasını seçin`, 16, 55);
     }
+    if (state.selectionMessage) {
+      const y = state.selectionMode ? 86 : 39;
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(70, 22, 20, .92)';
+      ctx.fillRect(10, y, Math.min(state.width - 20, ctx.measureText(state.selectionMessage).width + 14), 24);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(state.selectionMessage, 16, y + 16);
+    }
   }
 
   function localPointer(event) {
@@ -275,6 +317,13 @@ export function createMinimap({
     if (state.selectionMode) {
       const kind = state.selectionMode;
       const point = { xM: world.xM, yM: world.yM };
+      const rejection = selectionRejection(point.xM, point.yM);
+      if (rejection) {
+        state.selectionMessage = rejection;
+        draw();
+        return;
+      }
+      state.selectionMessage = '';
       state.endpoints[kind] = point;
       onPointSelected({ kind, ...point });
       draw();
@@ -295,14 +344,22 @@ export function createMinimap({
     draw();
   }
 
+  function onPointerCancel(event) {
+    if (!state.dragging || event.pointerId !== state.pointerId) return;
+    state.dragging = false;
+    state.pointerId = null;
+    draw();
+  }
+
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerUp);
-  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(draw) : null;
   resizeObserver?.observe(canvas);
 
+  cacheTerrainMask();
   if (validBounds(bounds())) fit(); else draw();
 
   return Object.freeze({
@@ -310,6 +367,8 @@ export function createMinimap({
     fit,
     setTerrain(nextTerrain) {
       state.terrain = nextTerrain ?? null;
+      cacheTerrainMask();
+      state.selectionMessage = '';
       if (validBounds(bounds())) fit(); else draw();
     },
     setDescriptor(nextDescriptor) { state.descriptor = nextDescriptor ?? null; draw(); },
@@ -334,7 +393,7 @@ export function createMinimap({
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
-      canvas.removeEventListener('pointercancel', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerCancel);
       canvas.removeEventListener('wheel', onWheel);
     },
   });

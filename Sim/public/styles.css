@@ -37,12 +37,19 @@ main { display: flex; height: calc(100% - 58px); }
 .minimap-endpoints { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 7px 0; }
 .minimap-endpoints dt { margin: 0; }
 .minimap-endpoints dd { overflow-wrap: anywhere; }
+.minimap-preference-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; font-size: 11px; }
+.minimap-preference-row label { font-weight: 600; color: #ffb38a; white-space: nowrap; }
+.minimap-preference-row select { flex: 1; background: #252026; color: #f0e6df; border: 1px solid rgba(255, 179, 138, 0.4); border-radius: 5px; font-size: 11px; padding: 3px 6px; outline: none; cursor: pointer; }
+.minimap-preference-row select:focus { border-color: #ffb38a; box-shadow: 0 0 6px rgba(255, 179, 138, 0.4); }
 #minimap-plan-route:disabled { opacity: .65; cursor: not-allowed; }
 #minimap-status { margin: 6px 0; }
 .planning-disclaimer { margin: 5px 0; padding: 5px 7px; border-left: 3px solid #ffc56e; background: #332a1e; font-size: 11px; font-weight: 700; }
-.minimap-summary { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; margin: 7px 0; font-size: 12px; }
-.minimap-summary dt { font-weight: 700; }
-.minimap-summary dd { margin: 0; overflow-wrap: anywhere; }
+.minimap-summary { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; margin: 7px 0; font-size: 12px; background: rgba(20, 20, 28, 0.6); padding: 6px 8px; border-radius: 6px; border: 1px solid #38343f; }
+.minimap-summary dt { font-weight: 600; color: #c4bab3; }
+.minimap-summary dd { margin: 0; overflow-wrap: anywhere; color: #f0e6df; }
+.minimap-summary .summary-score-high { color: #7fe0a8; font-weight: 600; }
+.minimap-summary .summary-score-med { color: #ffb04a; font-weight: 600; }
+.minimap-summary .summary-score-low { color: #ff6b6b; font-weight: 600; }
 .minimap-cell-explanation { margin: 7px 0; padding: 8px; border: 1px solid #53616b; border-radius: 5px; background: #20262b; font-size: 12px; }
 .minimap-cell-explanation h3 { margin: 0 0 5px; font-size: 13px; }
 .minimap-cell-explanation p { margin: 3px 0; }

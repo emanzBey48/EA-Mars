@@ -138,6 +138,14 @@
           <dt>Başlangıç</dt><dd id="minimap-start">Seçilmedi</dd>
           <dt>Bitiş</dt><dd id="minimap-end">Seçilmedi</dd>
         </dl>
+        <div class="minimap-preference-row">
+          <label for="minimap-route-preference">Rota tercihi:</label>
+          <select id="minimap-route-preference" class="view-select">
+            <option value="balanced" selected>Dengeli EVA Yürünebilirlik</option>
+            <option value="shortest">En Kısa Mesafe</option>
+            <option value="flattest">En Düz / Düşük Eğim</option>
+          </select>
+        </div>
         <button id="minimap-plan-route" type="button" disabled>Başlangıç ve bitiş seçin</button>
         <p class="planning-disclaimer">Planlama göstergesi — güvenli rota sertifikası değildir.</p>
         <dl id="minimap-route-summary" class="minimap-summary" aria-live="polite"><dt>Rota</dt><dd>Henüz hesaplanmadı</dd></dl>

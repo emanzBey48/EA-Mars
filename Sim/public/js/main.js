@@ -106,6 +106,7 @@ const minimapOrthoToggle = $('minimap-toggle-ortho');
 const minimapLayerStatus = $('minimap-layer-status');
 const minimapHeatmapToggle = $('minimap-toggle-heatmap');
 const minimapPlanButton = $('minimap-plan-route');
+const minimapRoutePreference = $('minimap-route-preference');
 const minimapRouteSummary = $('minimap-route-summary');
 const minimapCellExplanation = $('minimap-cell-explanation');
 const orthoStatus = $('ortho-status');
@@ -166,7 +167,22 @@ function getFirstPersonNote(scale = currentVerticalScale) {
   return `Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. ${scaleText} Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.`;
 }
 
-function showSelectedPoint(kind, point) {
+const ROUTE_PREFERENCES = Object.freeze({
+  balanced: {
+    label: 'Dengeli EVA Yürünebilirlik',
+    costParams: { slopeWeight: 1.0, distanceWeight: 1.0 },
+  },
+  shortest: {
+    label: 'En Kısa Mesafe',
+    costParams: { slopeWeight: 0.3, distanceWeight: 2.0 },
+  },
+  flattest: {
+    label: 'En Düz / Düşük Eğim',
+    costParams: { slopeWeight: 3.0, distanceWeight: 0.5 },
+  },
+});
+
+function showSelectedPoint(kind, point, byDrag = false) {
   const label = `${point.xM.toFixed(1)} m doğu, ${point.yM.toFixed(1)} m kuzey (WB1 orijini)`;
   if (kind === 'start') minimapStartLabel.textContent = label;
   else minimapEndLabel.textContent = label;
@@ -184,13 +200,17 @@ function showSelectedPoint(kind, point) {
   minimapController.setSelectionMode(null);
   $('minimap-pick-start').setAttribute('aria-pressed', 'false');
   $('minimap-pick-end').setAttribute('aria-pressed', 'false');
+
+  if (byDrag && minimapEndpoints.start && minimapEndpoints.end && routeWorkerReady) {
+    planMinimapRoute();
+  }
 }
 
 const minimapController = createMinimap({
   canvas: minimapCanvas,
   terrain,
   descriptor: MAP_FRAME,
-  onPointSelected: ({ kind, xM, yM }) => showSelectedPoint(kind, { xM, yM }),
+  onPointSelected: ({ kind, xM, yM, byDrag }) => showSelectedPoint(kind, { xM, yM }, Boolean(byDrag)),
   onCellClick: (point) => explainMinimapCell(point),
 });
 
@@ -208,18 +228,42 @@ function updateRouteButton() {
 
 function renderRouteSummary(result) {
   const rows = [];
-  const add = (key, value) => rows.push([key, value]);
+  const add = (key, value, className = '') => rows.push([key, value, className]);
   const stats = result?.stats;
-  if (result?.status !== 'ok' || !stats) add('Rota', result?.reason || result?.status || 'Henüz hesaplanmadı');
-  else {
-    add('Uzunluk', Number.isFinite(stats.lengthM) ? `${stats.lengthM.toFixed(0)} m` : 'bilinmiyor');
-    add('Tahmini süre', Number.isFinite(stats.estimatedDurationS) ? `${(stats.estimatedDurationS / 60).toFixed(1)} dk (0,8 m/s senaryo hızı)` : 'yok (bölgesel çözünürlük)');
-    add('Kot kazanımı/kaybı', stats.elevationProfileComplete ? `+${stats.elevationGainM.toFixed(1)} / −${stats.elevationLossM.toFixed(1)} m` : 'profil eksik');
-    add('En zor segment göstergesi', Number.isFinite(stats.maxSlopeDeg) ? `${stats.maxSlopeDeg.toFixed(1)}° en yüksek eğim; maliyet çarpanı ${Number(stats.maxCost).toFixed(2)}` : `maliyet çarpanı ${Number(stats.maxCost).toFixed(2)}`);
+  if (result?.status !== 'ok' || !stats) {
+    add('Rota', result?.reason || result?.status || 'Henüz hesaplanmadı');
+  } else {
+    add('Toplam mesafe', Number.isFinite(stats.lengthM) ? `${stats.lengthM.toFixed(0)} m` : 'bilinmiyor');
+    if (Number.isFinite(stats.estimatedDurationS)) {
+      const mins = Math.floor(stats.estimatedDurationS / 60);
+      const secs = Math.round(stats.estimatedDurationS % 60);
+      const timeStr = mins > 0 ? `${mins} dk ${secs} sn` : `${secs} sn`;
+      add('Tahmini yürüme süresi', `${timeStr} (0,8 m/s senaryo hızı)`);
+    } else {
+      add('Tahmini yürüme süresi', 'yok (bölgesel çözünürlük)');
+    }
+    if (Number.isFinite(stats.meanScore)) {
+      const score = Math.round(stats.meanScore);
+      const scoreClass = score >= 70 ? 'summary-score-high' : score >= 40 ? 'summary-score-med' : 'summary-score-low';
+      add('Ortalama yürünebilirlik', `${score}/100`, scoreClass);
+    }
+    if (Number.isFinite(stats.maxSlopeDeg)) {
+      add('En dik eğim', `${stats.maxSlopeDeg.toFixed(1)}° (çarpan: ${Number(stats.maxCost).toFixed(2)})`);
+    } else {
+      add('En dik eğim', `çarpan: ${Number(stats.maxCost).toFixed(2)}`);
+    }
+    if (stats.elevationProfileComplete && Number.isFinite(stats.elevationGainM) && Number.isFinite(stats.elevationLossM)) {
+      const netDelta = stats.elevationGainM - stats.elevationLossM;
+      const netStr = netDelta >= 0 ? `+${netDelta.toFixed(1)} m` : `${netDelta.toFixed(1)} m`;
+      add('Kot değişimi (ΔZ)', `+${stats.elevationGainM.toFixed(1)} m / −${stats.elevationLossM.toFixed(1)} m (net: ${netStr})`);
+    } else {
+      add('Kot değişimi (ΔZ)', 'profil eksik');
+    }
   }
-  minimapRouteSummary.replaceChildren(...rows.flatMap(([key, value]) => {
+  minimapRouteSummary.replaceChildren(...rows.flatMap(([key, value, className]) => {
     const dt = document.createElement('dt'); dt.textContent = key;
     const dd = document.createElement('dd'); dd.textContent = value;
+    if (className) dd.className = className;
     return [dt, dd];
   }));
 }
@@ -386,7 +430,19 @@ function planMinimapRoute() {
   routeWorkerRequests.set(id, { kind: 'plan', endpointRevision });
   minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi — güvenli rota sertifikası değildir.';
   updateRouteButton();
-  ensureRouteWorker().postMessage({ type: 'plan-walking-route', id, startLocal: minimapEndpoints.start, endLocal: minimapEndpoints.end });
+
+  const prefKey = minimapRoutePreference?.value ?? 'balanced';
+  const pref = ROUTE_PREFERENCES[prefKey] ?? ROUTE_PREFERENCES.balanced;
+  const selectedCostParams = pref.costParams;
+
+  ensureRouteWorker().postMessage({
+    type: 'plan-walking-route',
+    id,
+    startLocal: minimapEndpoints.start,
+    endLocal: minimapEndpoints.end,
+    costParams: selectedCostParams,
+    options: { preference: prefKey, costParams: selectedCostParams },
+  });
 }
 
 function refreshMinimapOverlays() {
@@ -413,6 +469,11 @@ function setMinimapPickMode(kind) {
 $('minimap-pick-start').addEventListener('click', () => setMinimapPickMode('start'));
 $('minimap-pick-end').addEventListener('click', () => setMinimapPickMode('end'));
 $('minimap-plan-route').addEventListener('click', planMinimapRoute);
+minimapRoutePreference?.addEventListener('change', () => {
+  if (minimapEndpoints.start && minimapEndpoints.end && routeWorkerReady) {
+    planMinimapRoute();
+  }
+});
 minimapHeatmapToggle.addEventListener('change', () => {
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null });
 });

@@ -7,3 +7,6 @@ Thumbs.db
 Sim/.e2e-profile/
 
 # Large scientific binaries are tracked through Git LFS via .gitattributes.
+
+# Local-only raw Viking MDIM 2.1 mosaic (12.7 GB, exceeds GitHub size limits; not part of the repo)
+Mars_Viking_MDIM21_ClrMosaic_global_232m.tif

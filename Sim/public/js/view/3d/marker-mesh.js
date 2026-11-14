@@ -611,3 +611,81 @@ export function buildMarkerMeshes({
 
   return builder.build(metadata, displayConfig);
 }
+
+/**
+ * Additive builder: small micro-markers for intermediate archival sol stops (e.g. Sol 122..155 of the
+ * MMGIS traverse). Separate from buildMarkerMeshes, which is unchanged.
+ *
+ * Each stop: { id, sol, xM, yM } (local metres) plus optional elevationM / zM; otherwise the sampler is used.
+ * Archive elevations from the traverse file are NOT consumed here. Stops without a confirmed elevation
+ * are omitted (counted), never placed at zero.
+ *
+ * @param {object} options
+ * @param {Array<object>} options.stops
+ * @param {object} options.displayConfig - { referenceElevationM, verticalScale }
+ * @param {object} [options.surfaceProvider]
+ * @param {Function} [options.sampleElevation]
+ * @returns frozen mesh { positions, normals, colorsRgb, indices, vertexCount, triangleCount, bounds, metadata, displayConfig }
+ */
+export function buildIntermediateSolMarkers({
+  stops = [],
+  displayConfig,
+  surfaceProvider = null,
+  sampleElevation = null,
+} = {}) {
+  assertDisplayConfig(displayConfig);
+  if (!Array.isArray(stops)) throw new TypeError('stops must be an array');
+
+  const sampler = sampleElevation || (surfaceProvider?.sampleElevation ? (x, y) => surfaceProvider.sampleElevation(x, y) : null);
+  const { referenceElevationM, verticalScale } = displayConfig;
+  const builder = new MeshBuilder();
+  const stopMetadata = [];
+  let markerCount = 0;
+  let omittedCount = 0;
+
+  const baseColor = [0.30, 0.34, 0.38];
+  const postColor = [0.62, 0.55, 0.85];
+  const gemTop = [0.78, 0.66, 1.0];
+  const gemBottom = [0.52, 0.40, 0.82];
+
+  for (const stop of stops) {
+    const x = stop?.xM ?? stop?.local?.x ?? stop?.x;
+    const y = stop?.yM ?? stop?.local?.y ?? stop?.y;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) { omittedCount++; continue; }
+    const elev = resolveElevation({ ...stop, x, y }, sampler);
+    stopMetadata.push({
+      id: stop.id || 'unnamed-sol-stop',
+      sol: stop.sol ?? null,
+      localXM: x,
+      localYM: y,
+      elevationM: elev.value,
+      elevationStatus: elev.status,
+    });
+    if (elev.status !== 'ok' || !Number.isFinite(elev.value)) { omittedCount++; continue; }
+
+    const gz = (elev.value - referenceElevationM) * verticalScale;
+    builder.addPrism({
+      cx: x, cy: y, baseZ: gz, topZ: gz + 0.12, radius: 0.45, sides: 8,
+      colorTop: baseColor, colorSide: baseColor, colorBottom: baseColor,
+    });
+    builder.addPrism({
+      cx: x, cy: y, baseZ: gz + 0.12, topZ: gz + 1.32, radius: 0.07, sides: 6,
+      colorTop: postColor, colorSide: postColor, colorBottom: postColor,
+    });
+    builder.addOctahedron({
+      cx: x, cy: y, centerZ: gz + 1.55, radius: 0.2, halfHeight: 0.23, sides: 6,
+      colorTop: gemTop, colorBottom: gemBottom,
+    });
+    markerCount++;
+  }
+
+  const metadata = {
+    kind: '3d-intermediate-sol-markers',
+    description: 'Presentation-only micro-markers at archival end-of-drive stops of the MMGIS traverse.',
+    note: 'Archival markers; not live telemetry; not a safety route. Marker size is a presentation choice.',
+    markerCount,
+    omittedCount,
+    stops: stopMetadata,
+  };
+  return builder.build(metadata, displayConfig);
+}

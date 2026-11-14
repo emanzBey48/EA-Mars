@@ -3,6 +3,17 @@
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+function routeScoreColor(score) {
+  if (!Number.isFinite(score)) return '#63e6ff';
+  const value = clamp(score, 0, 100);
+  if (value <= 50) {
+    const t = value / 50;
+    return `rgb(${Math.round(245 + 10 * t)} ${Math.round(62 + 86 * t)} ${Math.round(50 - 20 * t)})`;
+  }
+  const t = (value - 50) / 50;
+  return `rgb(${Math.round(255 - 185 * t)} ${Math.round(148 + 74 * t)} ${Math.round(30 + 148 * t)})`;
+}
+
 function niceStep(value) {
   const magnitude = 10 ** Math.floor(Math.log10(Math.max(value, 1e-9)));
   for (const factor of [1, 2, 5, 10]) if (factor * magnitude >= value) return factor * magnitude;
@@ -47,7 +58,7 @@ export function createMinimap({
       orthoOverlay: null,
       orthoVisible: true,
     },
-    planning: { heatmap: null, route: null, heatmapVisible: false },
+    planning: { heatmap: null, route: null, segments: null, heatmapVisible: false },
     selectionMode: selectionMode === 'start' || selectionMode === 'end' ? selectionMode : null,
     centerXM: 0,
     centerYM: 0,
@@ -69,6 +80,7 @@ export function createMinimap({
     destroyed: false,
     selectionMessage: '',
   };
+  let routeAnimationFrame = null;
 
   const bounds = () => state.terrain?.bounds ?? null;
   const validBounds = (b) => b && [b.nwXM, b.nwYM, b.widthM, b.heightM].every(Number.isFinite) && b.widthM > 0 && b.heightM > 0;
@@ -309,13 +321,25 @@ export function createMinimap({
       }
     }
     if (state.planning.route?.length) {
-      ctx.save(); ctx.beginPath(); ctx.strokeStyle = '#63e6ff'; ctx.lineWidth = 3;
+      const route = state.planning.route;
+      const scores = state.planning.segments;
+      const hasAlignedScores = Array.isArray(scores) && scores.length === route.length - 1;
+      const phase = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.012;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      state.planning.route.forEach((point, i) => {
-        const p = worldToScreen(point.xM, point.yM);
-        i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
-      });
-      ctx.stroke(); ctx.restore();
+      for (let i = 1; i < route.length; i++) {
+        const a = worldToScreen(route[i - 1].xM, route[i - 1].yM);
+        const b = worldToScreen(route[i].xM, route[i].yM);
+        const color = routeScoreColor(hasAlignedScores ? scores[i - 1]?.score : null);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = color; ctx.lineWidth = 8; ctx.shadowBlur = 8; ctx.shadowColor = color;
+        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        ctx.shadowBlur = 0; ctx.strokeStyle = color; ctx.lineWidth = 3.2;
+        ctx.setLineDash([7, 6]); ctx.lineDashOffset = -phase; ctx.stroke();
+      }
+      ctx.setLineDash([]); ctx.restore();
     }
     if (state.overlays.footprintTrail?.count > 0) {
       const trail = state.overlays.footprintTrail;
@@ -383,6 +407,17 @@ export function createMinimap({
       ctx.fillRect(10, y, Math.min(state.width - 20, ctx.measureText(state.selectionMessage).width + 14), 24);
       ctx.fillStyle = '#fff';
       ctx.fillText(state.selectionMessage, 16, y + 16);
+    }
+    if (state.planning.route?.length) {
+      const legend = 'Renk: yürünebilirlik puanı • planlama göstergesi; güvenli rota sertifikası değildir';
+      ctx.fillStyle = 'rgba(7, 16, 22, .78)';
+      ctx.fillRect(10, state.height - 31, Math.min(state.width - 20, 420), 21);
+      ctx.fillStyle = '#e9fbff';
+      ctx.font = '9px system-ui, sans-serif';
+      ctx.fillText(legend, 16, state.height - 17, Math.max(1, state.width - 32));
+      if (routeAnimationFrame === null && typeof requestAnimationFrame === 'function') {
+        routeAnimationFrame = requestAnimationFrame(() => { routeAnimationFrame = null; draw(); });
+      }
     }
   }
 
@@ -562,13 +597,20 @@ export function createMinimap({
       state.planning = {
         heatmap: nextPlanning.heatmap ?? null,
         route: Array.isArray(nextPlanning.route) ? nextPlanning.route : null,
+        segments: Array.isArray(nextPlanning.segments) ? nextPlanning.segments : null,
         heatmapVisible: Boolean(nextPlanning.heatmapVisible),
       };
+      if (!state.planning.route?.length && routeAnimationFrame !== null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(routeAnimationFrame);
+        routeAnimationFrame = null;
+      }
       draw();
     },
     getView() { return Object.freeze({ centerXM: state.centerXM, centerYM: state.centerYM, pxPerM: state.pxPerM }); },
     destroy() {
       state.destroyed = true;
+      if (routeAnimationFrame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(routeAnimationFrame);
+      routeAnimationFrame = null;
       canvas.style.cursor = '';
       resizeObserver?.disconnect();
       canvas.removeEventListener('pointerdown', onPointerDown);

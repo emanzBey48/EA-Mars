@@ -23,6 +23,7 @@ in vec3 aPosition;
 in vec3 aNormal;
 in vec3 aColor;
 in float aAlpha;
+in vec2 aRouteUv;
 uniform mat4 uViewProjection;
 uniform vec3 uLightDirection;
 uniform vec3 uObjectOffset;
@@ -39,6 +40,7 @@ out vec3 vNormal;
 out vec3 vWorldPos;
 out vec3 vColor;
 out float vAlpha;
+out vec2 vRouteUv;
 vec3 rotateEuler(vec3 p, vec3 r) {
   float cx = cos(r.x), sx = sin(r.x);
   p = vec3(p.x, cx * p.y - sx * p.z, sx * p.y + cx * p.z);
@@ -63,6 +65,7 @@ void main() {
   vWorldPos = worldPosition;
   vColor = aColor;
   vAlpha = aAlpha;
+  vRouteUv = aRouteUv;
   gl_Position = uViewProjection * vec4(worldPosition, 1.0);
 }`;
 
@@ -77,6 +80,7 @@ in vec3 vNormal;
 in vec3 vWorldPos;
 in vec3 vColor;
 in float vAlpha;
+in vec2 vRouteUv;
 uniform vec3 uBaseColor;
 uniform vec3 uLightDirection;
 uniform vec3 uCameraEye;
@@ -85,6 +89,8 @@ uniform vec4 uTerrainBounds;
 uniform float uTerrainExaggeration;
 uniform int uRenderPass;
 uniform float uAlpha;
+uniform float uRouteTimeS;
+uniform float uRoutePulseUM;
 uniform sampler2D uOrthoTexFine;
 uniform sampler2D uOrthoTexCoarse;
 uniform vec4 uOrthoUvFine;
@@ -134,6 +140,17 @@ void main() {
   }
 
   vec3 normal = normalize(vNormal);
+
+  // Pass 6: planned-route emissive ribbon (pass 4 is the shadow depth pass and returns early above).
+  if (uRenderPass == 6) {
+    float flow = 0.5 + 0.5 * sin((vRouteUv.x - uRouteTimeS * 2.8) * 0.72);
+    float pulseDelta = abs(vRouteUv.x - uRoutePulseUM);
+    float pulse = exp(-pulseDelta * pulseDelta / 30.0);
+    // vColor is an sRGB score colour; go through the shared linear -> ACES -> sRGB output so the ribbon matches the scene.
+    vec3 glow = srgbToLinear(clamp(vColor, 0.0, 1.0)) * (0.72 + 0.32 * flow + 1.25 * pulse) * EMISSIVE_GAIN;
+    outColor = finishColor(glow, 0.68 + 0.22 * pulse);
+    return;
+  }
 
   if (uRenderPass == 0) {
     // Terrain normals contain the visual vertical exaggeration; restore the physical normal for lighting/slope.
@@ -444,6 +461,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     normal: gl.getAttribLocation(program, 'aNormal'),
     color: gl.getAttribLocation(program, 'aColor'),
     footprintAlpha: gl.getAttribLocation(program, 'aAlpha'),
+    routeUv: gl.getAttribLocation(program, 'aRouteUv'),
     viewProjection: uniform('uViewProjection'),
     lightDirection: uniform('uLightDirection'),
     objectOffset: uniform('uObjectOffset'),
@@ -478,11 +496,14 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     receiveShadow: uniform('uReceiveShadow'),
     partAlbedo: uniform('uPartAlbedo'),
     partRoughMetal: uniform('uPartRoughMetal'),
+    routeTimeS: uniform('uRouteTimeS'),
+    routePulseUM: uniform('uRoutePulseUM'),
   };
-  if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || locations.footprintAlpha < 0 || !locations.viewProjection || !locations.lightDirection ||
+  if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || locations.footprintAlpha < 0 || locations.routeUv < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
       !locations.partSize || !locations.partCenter || !locations.partOffset || !locations.partRotationRad ||
       !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass || !locations.alpha ||
+      !locations.routeTimeS || !locations.routePulseUM ||
       !locations.orthoTexFine || !locations.orthoTexCoarse || !locations.orthoUvFine || !locations.orthoUvCoarse || !locations.orthoMode || !locations.hasOrthoFine || !locations.hasOrthoCoarse ||
       !locations.lightVP || !locations.shadowMap || !locations.shadowParams || !locations.shadowLightDir || !locations.shadowMode || !locations.receiveShadow || !locations.terrainBounds ||
       !locations.partAlbedo || !locations.partRoughMetal) {
@@ -505,6 +526,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
   let uploadedMesh = null;
   let uploadedMarkerMesh = null;
+  let uploadedRouteRibbon = null;
   let disposed = false;
   let lastFrameDiagnostics = null;
 
@@ -819,6 +841,58 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
   const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
 
+  function releaseRouteRibbon() {
+    if (!uploadedRouteRibbon) return;
+    gl.deleteVertexArray(uploadedRouteRibbon.vao);
+    gl.deleteBuffer(uploadedRouteRibbon.positionBuffer);
+    gl.deleteBuffer(uploadedRouteRibbon.normalBuffer);
+    gl.deleteBuffer(uploadedRouteRibbon.colorBuffer);
+    gl.deleteBuffer(uploadedRouteRibbon.uvBuffer);
+    gl.deleteBuffer(uploadedRouteRibbon.indexBuffer);
+    uploadedRouteRibbon = null;
+  }
+
+  function uploadRouteRibbon(mesh) {
+    if (!mesh) { releaseRouteRibbon(); return; }
+    if (mesh === uploadedRouteRibbon?.source) return;
+    const vertexCount = mesh.positions?.length / 3;
+    if (!(mesh.positions instanceof Float32Array) || !(mesh.normals instanceof Float32Array) ||
+        !(mesh.colorsRgb instanceof Float32Array) || !(mesh.uvs instanceof Float32Array) ||
+        !(mesh.indices instanceof Uint32Array) || mesh.positions.length % 3 !== 0 ||
+        mesh.normals.length !== mesh.positions.length || mesh.colorsRgb.length !== mesh.positions.length ||
+        mesh.uvs.length !== vertexCount * 2 || mesh.indices.length % 3 !== 0) {
+      throw new TypeError('plannedRouteRibbon must provide aligned position, normal, color, UV and index arrays');
+    }
+    if (mesh.indices.length === 0) { releaseRouteRibbon(); return; }
+    releaseRouteRibbon();
+    const vao = gl.createVertexArray();
+    const positionBuffer = gl.createBuffer();
+    const normalBuffer = gl.createBuffer();
+    const colorBuffer = gl.createBuffer();
+    const uvBuffer = gl.createBuffer();
+    const indexBuffer = gl.createBuffer();
+    if (!vao || !positionBuffer || !normalBuffer || !colorBuffer || !uvBuffer || !indexBuffer) {
+      throw new Error('WebGL2 route ribbon buffer allocation failed');
+    }
+    gl.bindVertexArray(vao);
+    for (const [buffer, data, location, size] of [
+      [positionBuffer, mesh.positions, locations.position, 3],
+      [normalBuffer, mesh.normals, locations.normal, 3],
+      [colorBuffer, mesh.colorsRgb, locations.color, 3],
+      [uvBuffer, mesh.uvs, locations.routeUv, 2],
+    ]) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(location);
+      gl.vertexAttribPointer(location, size, gl.FLOAT, false, 0, 0);
+    }
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    uploadedRouteRibbon = { source: mesh, vao, positionBuffer, normalBuffer, colorBuffer, uvBuffer, indexBuffer, indexCount: mesh.indices.length };
+  }
+
   return {
     /** Sets the drawing buffer to CSS dimensions multiplied by device pixel ratio. */
     resize(width, height, pixelRatio = 1) {
@@ -834,7 +908,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null, footprintTrail = null }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null, plannedRouteRibbon = null, plannedRoutePulseUM = 0, footprintTrail = null }) {
       const frameStartedAt = collectDiagnostics ? now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -843,6 +917,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       if (!camera) throw new TypeError('A camera state is required');
       if (!(canvas.width > 0 && canvas.height > 0)) throw new Error('Call resize() before renderFrame()');
       uploadMesh(terrainMesh);
+      uploadRouteRibbon(plannedRouteRibbon);
 
       const viewProjection = getViewProjectionMatrix(camera, canvas.width / canvas.height);
       const eye = getCameraPosition(camera);
@@ -1082,6 +1157,23 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       drawSurfaceLines(plannedRouteLinePositions, 0.12, 0.92, 0.78, 0.96, 1, 3);
       lap('guidesMs');
 
+      if (uploadedRouteRibbon) {
+        gl.uniform1i(locations.renderPass, 6); // 6 = route ribbon (4 = shadow depth, 5 = footprints)
+        gl.uniform1f(locations.receiveShadow, 0);
+        gl.uniform1f(locations.alpha, 1);
+        gl.uniform1f(locations.routeTimeS, snapshot.astronaut.movement?.timeS ?? 0);
+        gl.uniform1f(locations.routePulseUM, Number.isFinite(plannedRoutePulseUM) ? plannedRoutePulseUM : 0);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        gl.depthMask(false);
+        gl.bindVertexArray(uploadedRouteRibbon.vao);
+        gl.drawElements(gl.TRIANGLES, uploadedRouteRibbon.indexCount, gl.UNSIGNED_INT, 0);
+        gl.bindVertexArray(null);
+        gl.depthMask(true);
+        gl.disable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      }
+
       let footprintCountDrawn = 0;
       const footprintCount = Number.isInteger(footprintTrail?.count) ? footprintTrail.count : 0;
       const footprintQuads = footprintTrail?.quads;
@@ -1252,6 +1344,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           footprintCount: footprintCountDrawn,
           footprintVertexCount: footprintCountDrawn * 6,
           plannedRouteLineVertexCount: plannedRouteLinePositions instanceof Float32Array ? plannedRouteLinePositions.length / 3 : 0,
+          plannedRouteRibbonVertexCount: uploadedRouteRibbon ? uploadedRouteRibbon.source.positions.length / 3 : 0,
+          plannedRouteRibbonTriangleCount: uploadedRouteRibbon ? uploadedRouteRibbon.indexCount / 3 : 0,
           markersDrawn,
           markerTriangles: uploadedMarkerMesh ? uploadedMarkerMesh.indexCount / 3 : 0,
           markerIndexCountDrawn,
@@ -1384,6 +1478,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       releaseMarkerMesh();
       releaseShadowTargets();
       if (dummyShadowTexture) gl.deleteTexture(dummyShadowTexture);
+      releaseRouteRibbon();
       if (orthoTexFine) { gl.deleteTexture(orthoTexFine); orthoTexFine = null; }
       if (orthoTexCoarse) { gl.deleteTexture(orthoTexCoarse); orthoTexCoarse = null; }
       if (dummyTexture) { gl.deleteTexture(dummyTexture); }

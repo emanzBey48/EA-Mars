@@ -2,5 +2,8 @@ data/*
 !data/dtm_subset.f32
 !data/dtm_subset.json
 !data/ortho_inspection.json
+!data/legacy-hirise/
+!data/legacy-hirise/dtm_subset.json
+!data/legacy-hirise/dtm_subset.f32
 .e2e-profile/
 node_modules/

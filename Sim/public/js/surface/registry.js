@@ -3,7 +3,117 @@
 // Only verified manifests become active SurfaceProviders; ambiguous (`needs_review`), `invalid` or
 // `unavailable` manifests fall back cleanly to `UnavailableLayer` (or a registered fallback provider).
 import { STATUS, makeDescriptor, UnavailableLayer, dtmBaseDescriptor, loadDtmLayer } from './layers.js';
-import { WAYPOINTS } from '../config.js';
+import { adapterFromLabel } from '../geo/geo.js';
+import { MAP_FRAME, WAYPOINTS } from '../config.js';
+
+const LEGACY_HIRISE_FRAME = Object.freeze({
+  productId: 'DTEEC_045994_1985_046060_1985_U01',
+  lines: 14266,
+  samples: 6673,
+  radiusKm: 3394.8398133163,
+  centerLatDeg: 15,
+  centerLonDeg: 77.44,
+  mapScaleM: 1.0096633268711,
+  lineProjectionOffset: 1088495.5,
+  sampleProjectionOffset: 3210.5000000001,
+  sourceUrl: 'https://pds.nasa.gov/ds-view/pds/viewDataset.jsp?dsid=MRO-M-HIRISE-5-DTM-V1.0',
+});
+
+function makeLegacyCoordinateBridge(canonicalAdapter, legacyLabel) {
+  const legacyAdapter = adapterFromLabel(legacyLabel, WAYPOINTS[0]);
+  const bridge = {
+    grid: legacyAdapter.grid,
+    localToCell(x, y) {
+      const latLon = canonicalAdapter.localToLatLon(x, y);
+      const legacyLocal = legacyAdapter.latLonToLocal(latLon.latDeg, latLon.lonDeg);
+      return legacyAdapter.localToCell(legacyLocal.x, legacyLocal.y);
+    },
+    pixelToLocal(row, col) {
+      const legacyLocal = legacyAdapter.pixelToLocal(row, col);
+      const latLon = legacyAdapter.localToLatLon(legacyLocal.x, legacyLocal.y);
+      return canonicalAdapter.latLonToLocal(latLon.latDeg, latLon.lonDeg);
+    },
+  };
+  const controls = WAYPOINTS.map((w) => {
+    const canonicalLocal = canonicalAdapter.latLonToLocal(w.latDeg, w.lonDeg);
+    const legacyLocal = legacyAdapter.latLonToLocal(w.latDeg, w.lonDeg);
+    const cell = legacyAdapter.localToCell(legacyLocal.x, legacyLocal.y);
+    const legacyCellLocal = legacyAdapter.pixelToLocal(cell.row, cell.col);
+    const cellLatLon = legacyAdapter.localToLatLon(legacyCellLocal.x, legacyCellLocal.y);
+    const canonicalCell = canonicalAdapter.latLonToLocal(cellLatLon.latDeg, cellLatLon.lonDeg);
+    const residualM = Math.hypot(canonicalCell.x - canonicalLocal.x, canonicalCell.y - canonicalLocal.y);
+    return { id: w.id, row: cell.row, col: cell.col, residualM };
+  });
+  const toleranceM = Math.SQRT1_2 * legacyLabel.mapScaleM;
+  if (controls.some((c) => !Number.isFinite(c.residualM) || c.residualM > toleranceM)) {
+    throw new Error(`Legacy DTM waypoint transform residual exceeds half-pixel diagonal (${toleranceM.toFixed(3)} m)`);
+  }
+  return { adapter: bridge, controls, toleranceM };
+}
+
+function validateLegacyFixture(meta) {
+  const label = meta?.label;
+  const window = meta?.window;
+  const checks = [
+    label?.productId === LEGACY_HIRISE_FRAME.productId,
+    label?.dataSetId === 'MRO-M-HIRISE-5-DTM-V1.0',
+    label?.lines === LEGACY_HIRISE_FRAME.lines && label?.samples === LEGACY_HIRISE_FRAME.samples,
+    label?.radiusKm === LEGACY_HIRISE_FRAME.radiusKm && label?.centerLatDeg === LEGACY_HIRISE_FRAME.centerLatDeg && label?.centerLonDeg === LEGACY_HIRISE_FRAME.centerLonDeg,
+    label?.mapScaleM === LEGACY_HIRISE_FRAME.mapScaleM && label?.lineProjectionOffset === LEGACY_HIRISE_FRAME.lineProjectionOffset && label?.sampleProjectionOffset === LEGACY_HIRISE_FRAME.sampleProjectionOffset,
+    label?.sampleType === 'PC_REAL' && label?.sampleBits === 32 && label?.bands === 1,
+    label?.missingConstantHex === 'FF7FFFFB' && Number.isFinite(label?.validMin) && Number.isFinite(label?.validMax) && label.validMin < label.validMax,
+    typeof label?.note === 'string' && label.note.includes('Mars 2000 Datum'),
+    meta?.dataFile === 'dtm_subset.f32' && Number.isInteger(window?.rows) && Number.isInteger(window?.cols) &&
+      Number.isInteger(window?.row0) && Number.isInteger(window?.col0) && window.rows > 0 && window.cols > 0,
+    meta?.coverage?.localBoundsM && WAYPOINTS.every((w) => {
+      const DEG = Math.PI / 180;
+      const kx = LEGACY_HIRISE_FRAME.radiusKm * 1000 * Math.cos(LEGACY_HIRISE_FRAME.centerLatDeg * DEG) * DEG;
+      const ky = LEGACY_HIRISE_FRAME.radiusKm * DEG;
+      const x = (w.lonDeg - WAYPOINTS[0].lonDeg) * kx;
+      const y = (w.latDeg - WAYPOINTS[0].latDeg) * ky;
+      const b = meta.coverage.localBoundsM;
+      return x >= b.xMin && x <= b.xMax && y >= b.yMin && y <= b.yMax;
+    }),
+  ];
+  const ok = checks.every(Boolean);
+  return {
+    status: ok ? VALIDATION_STATUS.SUPPORTED : VALIDATION_STATUS.INVALID,
+    samplingAllowed: ok,
+    reasonCode: ok ? 'verified_legacy_hirise_fixture' : 'invalid_legacy_hirise_fixture',
+    summary: ok
+      ? 'Önceden hazırlanmış MRO HiRISE PDS3 DTM fixture kimliği, datum notu, frame ve rota kapsaması doğrulandı.'
+      : 'Legacy HiRISE fixture metadata does not match the verified PDS3 dataset/frame contract.',
+    fields: {},
+    issues: ok ? [] : [{ field: 'legacyFixture', status: VALIDATION_STATUS.INVALID, message: 'Legacy DTM metadata/frame check failed.' }],
+  };
+}
+
+function buildLegacyDescriptor(meta, validation) {
+  const label = meta.label;
+  return makeDescriptor({
+    id: 'hirise-legacy-jezero-dtm',
+    kind: 'elevation',
+    title: 'HiRISE DTM (legacy PDS3 Jezero fixture)',
+    source: 'NASA Planetary Data System · MRO HiRISE',
+    product: label.productId,
+    version: label.productVersionId,
+    attribution: `${label.productId} · MRO-M-HIRISE-5-DTM-V1.0`,
+    license: null,
+    unit: 'm',
+    verticalDatum: 'Mars 2000 Datum (martian equipotential surface)',
+    verticalDatumVerified: true,
+    verticalDatumEvidence: label.note,
+    crs: meta.crsText,
+    pixelScaleM: label.mapScaleM,
+    size: { rows: label.lines, cols: label.samples, loadedWindow: meta.window, pixelRegistration: 'CENTER_PDS_1BASED' },
+    coverage: meta.coverage,
+    timeCoverage: meta.timeCoverage,
+    noData: { constantHex: label.missingConstantHex, rule: 'Exact 32-bit PDS3 MISSING_CONSTANT pattern → no_data' },
+    quality: { validMin: label.validMin, validMax: label.validMax, windowStats: meta.windowStats, transformControls: meta.waypointCells, sourceUrl: LEGACY_HIRISE_FRAME.sourceUrl },
+    validation,
+    access: { status: STATUS.OK, reason: null },
+  });
+}
 
 /** Overall validation & readiness states for a layer manifest. */
 export const VALIDATION_STATUS = Object.freeze({
@@ -371,6 +481,7 @@ export function buildHiriseManifestFromMeta(meta) {
       registration: meta.registration ?? null,
       transformControls: meta.transformControls ?? null,
       transformToleranceM: meta.transformToleranceM ?? null,
+      transformComparison: meta.transformComparison ?? null,
     },
     access: { status: STATUS.OK, reason: null },
     humanReviewRequired: false,
@@ -441,9 +552,8 @@ export function manifestToDescriptor(manifest, validation) {
 /**
  * Registry and factory for SurfaceProviders.
  * Keeps `SurfaceProvider` contract intact (`sampleElevation`, `sampleSlope`, `sampleSurface`).
- * Today's active verified provider is the USGS Jezero TRN HiRISE DTM mosaic (`hirise-jezero-dtm`).
- * If loading fails or no verified provider is available, it cleanly falls back to `UnavailableLayer`.
- * The invalidated old IMG and JP2 are NEVER chosen as active or fallback providers.
+ * The USGS Jezero TRN mosaic is preferred when validated; the prior PDS3 IMG-derived DTM remains a
+ * coordinate-bridged fallback. The JP2 source stays unavailable until a decoder is present.
  */
 export class SurfaceProviderRegistry {
   constructor({ expectedFrame, adapter, defaultProviderId = 'hirise-jezero-dtm' }) {
@@ -495,8 +605,9 @@ export class SurfaceProviderRegistry {
       return { id, provider: new UnavailableLayer(desc, desc.access.reason), validation };
     }
     try {
-      const loaded = await entry.load({ expectedFrame: this.expectedFrame, adapter: this.adapter, ...options });
-      const validation = validateLayerManifest(loaded.manifest, this.expectedFrame);
+      const expectedFrame = entry.expectedFrame ?? this.expectedFrame;
+      const loaded = await entry.load({ expectedFrame, adapter: this.adapter, ...options });
+      const validation = loaded.validation ?? validateLayerManifest(loaded.manifest, expectedFrame);
       const descriptor = manifestToDescriptor(loaded.manifest, validation);
       if (!validation.samplingAllowed) {
         return {
@@ -523,17 +634,43 @@ export class SurfaceProviderRegistry {
 
   async resolveActiveProvider({ preferredId = this.defaultProviderId, ...options } = {}) {
     const primary = await this.loadProvider(preferredId, options);
-    if (primary.provider.available || preferredId === this.defaultProviderId) {
+    if (primary.provider.available) {
       return {
         activeId: primary.id,
         provider: primary.provider,
         validation: primary.validation,
         fallbackUsed: false,
         rejectedCandidate: null,
-        competitionDataStatus: 'Doğrulanmış USGS Mars 2020 TRN HiRISE DTM mozaiği aktif (eski geçersiz IMG/JP2 kullanılmıyor).',
+        competitionDataStatus: 'Tercih edilen doğrulanmış USGS Mars 2020 TRN HiRISE DTM mozaiği aktif.',
       };
     }
-    const fallback = await this.loadProvider(this.defaultProviderId, options);
+    let failedDefault = null;
+    if (preferredId !== this.defaultProviderId) {
+      failedDefault = await this.loadProvider(this.defaultProviderId, options);
+      if (failedDefault.provider.available) {
+        return {
+          activeId: failedDefault.id,
+          provider: failedDefault.provider,
+          validation: failedDefault.validation,
+          fallbackUsed: true,
+          rejectedCandidate: { id: preferredId, status: primary.validation.status, reasonCode: primary.validation.reasonCode, summary: primary.validation.summary },
+          competitionDataStatus: `Aday katman (${preferredId}) reddedildi; doğrulanmış USGS HiRISE sağlayıcısı seçildi.`,
+        };
+      }
+    }
+    const fallback = this.entries.has('hirise-legacy-jezero-dtm')
+      ? await this.loadProvider('hirise-legacy-jezero-dtm', options)
+      : (failedDefault ?? primary);
+    if (!fallback.provider.available) {
+      return {
+        activeId: fallback.id,
+        provider: fallback.provider,
+        validation: fallback.validation,
+        fallbackUsed: fallback.id !== preferredId,
+        rejectedCandidate: { id: preferredId, status: primary.validation.status, reasonCode: primary.validation.reasonCode, summary: primary.validation.summary },
+        competitionDataStatus: `USGS adayı ve legacy HiRISE fallback kullanılamıyor: ${primary.validation.summary}${failedDefault ? ` · ${failedDefault.validation.summary}` : ''}`,
+      };
+    }
     return {
       activeId: fallback.id,
       provider: fallback.provider,
@@ -545,12 +682,12 @@ export class SurfaceProviderRegistry {
         reasonCode: primary.validation.reasonCode,
         summary: primary.validation.summary,
       },
-      competitionDataStatus: `Aday katman (${preferredId}) reddedildi (${primary.validation.status}: ${primary.validation.reasonCode}); doğrulanmış USGS HiRISE DTM sağlayıcısına dönüldü.`,
+      competitionDataStatus: `USGS adayı (${primary.validation.status}: ${primary.validation.reasonCode}) kullanılmadı; legacy PDS3 HiRISE DTM fallback aktif.`,
     };
   }
 }
 
-/** Creates the default registry with the verified local USGS Jezero TRN HiRISE DTM provider registered. */
+/** Creates the registry with the USGS Jezero DTM preferred and the older PDS3 DTM as its fallback. */
 export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl = 'data', fetchImpl = fetch }) {
   const registry = new SurfaceProviderRegistry({
     expectedFrame,
@@ -603,6 +740,54 @@ export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl =
           return layer;
         },
       };
+    },
+  });
+
+  registry.register({
+    id: 'hirise-legacy-jezero-dtm',
+    title: 'HiRISE PDS3 Jezero DTM legacy fallback',
+    expectedFrame: LEGACY_HIRISE_FRAME,
+    load: async ({ adapter: canonicalAdapter }) => {
+      try {
+        const res = await fetchImpl(`${baseUrl}/legacy-hirise/dtm_subset.json`);
+        if (!res.ok) throw new Error(`Legacy DTM metadata unavailable (HTTP ${res.status})`);
+        const meta = await res.json();
+        const validation = validateLegacyFixture(meta);
+        const manifest = buildLegacyDescriptor(meta, validation);
+        const bridge = validation.samplingAllowed ? makeLegacyCoordinateBridge(canonicalAdapter, meta.label) : null;
+        return {
+          manifest,
+          validation,
+          createLayer: async () => {
+            const layer = await loadDtmLayer({
+              baseUrl: `${baseUrl}/legacy-hirise`,
+              adapter: bridge.adapter,
+              expectedFrame: LEGACY_HIRISE_FRAME,
+              fetchImpl,
+            });
+            if (layer.available) {
+              layer.descriptor = {
+                ...manifest,
+                quality: { ...manifest.quality, transformControls: bridge.controls, transformToleranceM: bridge.toleranceM },
+                access: { status: STATUS.OK, reason: null },
+              };
+            }
+            return layer;
+          },
+        };
+      } catch (error) {
+        return {
+          manifest: { id: 'hirise-legacy-jezero-dtm', title: 'HiRISE PDS3 Jezero DTM legacy fallback', kind: 'elevation' },
+          validation: {
+            status: VALIDATION_STATUS.UNAVAILABLE,
+            samplingAllowed: false,
+            reasonCode: 'legacy_fixture_unavailable',
+            summary: error.message,
+            fields: {},
+            issues: [{ field: 'access', status: VALIDATION_STATUS.UNAVAILABLE, message: error.message }],
+          },
+        };
+      }
     },
   });
 

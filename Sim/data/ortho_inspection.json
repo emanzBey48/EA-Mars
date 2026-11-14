@@ -1,5 +1,5 @@
 {
-  "file": null,
+  "file": "ESP_046060_1985_RED_C_01_ORTHO.JP2",
   "available": false,
-  "decodeReason": "Kullanıcı eski JP2 ortogörüntüyü geçersiz bildirdi; yeni doğrulanmış orto ürün pakete henüz eklenmedi. Mevcut zemin DTM’den türetilmiş gölgeli kabartmadır (orto değildir)."
+  "decodeReason": "Kaynak JP2 mevcuttur ancak uygulamada JPEG2000 decoder yoktur. Mevcut zemin DTM’den türetilmiş gölgeli kabartmadır (orto değildir)."
 }

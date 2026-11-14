@@ -105,6 +105,13 @@ const samplesPerPixel = scalar(277, 3), rowsPerStrip = scalar(278, 4), planarCon
 const stripOffsets = required(273, 4), stripByteCounts = required(279, 4);
 const pixelScale = required(33550, 12, 3), tiepoint = required(33922, 12, 6);
 const noDataText = required(42113, 2, null).trim();
+const officialPdsGrid = Object.freeze({
+  lineProjectionOffset: 1106617.5,
+  sampleProjectionOffset: -4577366.5,
+  mapScaleM: 1,
+  radiusKm: 3396.19,
+  sourceUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl',
+});
 const geoKey = (id) => tiffInfo.geoKeys[id];
 const scalarKey = (id) => Array.isArray(geoKey(id)) && geoKey(id).length === 1 ? geoKey(id)[0] : geoKey(id);
 const rasterKey = scalarKey(1025), modelType = scalarKey(1024), coordTransform = scalarKey(3075);
@@ -118,6 +125,27 @@ if (!Number.isFinite(semiMajor) || semiMajor !== 3396190) throw new Error(`GeoKe
 const standardParallelDeg = scalarKey(3078), centralMeridianDeg = scalarKey(3080);
 if (standardParallelDeg !== 0 || centralMeridianDeg !== 0) throw new Error('GeoKey standard parallel/central meridian eksik veya beklenmeyen');
 if (pixelScale[0] !== 1 || pixelScale[1] !== 1 || pixelScale[2] !== 0 || tiepoint[0] !== 0 || tiepoint[1] !== 0 || tiepoint[2] !== 0) throw new Error('PixelScale/Tiepoint eksik veya beklenmeyen axis/origin içeriyor');
+if (pixelScale[0] !== officialPdsGrid.mapScaleM || semiMajor / 1000 !== officialPdsGrid.radiusKm) throw new Error('TIFF pixel scale or radius differs from official PDS3 grid metadata');
+const tiffGrid = {
+  lineProjectionOffset: tiepoint[4] - 0.5 * pixelScale[1],
+  sampleProjectionOffset: -(tiepoint[3] + 0.5 * pixelScale[0]),
+};
+const pdsControlPixels = [
+  { line: 1, sample: 1 },
+  { line: 1, sample: width },
+  { line: height, sample: 1 },
+  { line: height, sample: width },
+];
+const transformComparison = pdsControlPixels.map(({ line, sample }) => {
+  const tiffX = tiepoint[3] + (sample - 0.5) * pixelScale[0];
+  const tiffY = tiepoint[4] - (line - 0.5) * pixelScale[1];
+  const pdsX = (sample - 1 - officialPdsGrid.sampleProjectionOffset) * officialPdsGrid.mapScaleM;
+  const pdsY = (officialPdsGrid.lineProjectionOffset - line + 1) * officialPdsGrid.mapScaleM;
+  return { line, sample, residualM: Math.hypot(tiffX - pdsX, tiffY - pdsY) };
+});
+const pdsTransformToleranceM = Math.hypot(pixelScale[0], pixelScale[1]) / 2;
+if (transformComparison.some((c) => c.residualM > pdsTransformToleranceM)) throw new Error('TIFF affine differs from official PDS3 projection offsets by more than half a pixel');
+if (Math.abs(tiffGrid.lineProjectionOffset - officialPdsGrid.lineProjectionOffset) > pdsTransformToleranceM || Math.abs(tiffGrid.sampleProjectionOffset - officialPdsGrid.sampleProjectionOffset) > pdsTransformToleranceM) throw new Error('TIFF affine-derived offsets do not match official PDS3 projection offsets');
 if (stripOffsets.length !== stripByteCounts.length || stripOffsets.length !== Math.ceil(height / rowsPerStrip)) throw new Error('StripOffsets/StripByteCounts sayısı RowsPerStrip ile uyuşmuyor');
 if (!tiffInfo.le) throw new Error('Big-endian float TIFF desteklenmiyor; endian dönüşümü açıkça uygulanmalı');
 const strips = stripOffsets.map((offset, i) => {
@@ -167,6 +195,7 @@ const label = {
   latitudeType: 'PLANETOCENTRIC',
   positiveLongitude: 'EAST',
   radiusKm: semiMajor / 1000,
+  pdsGridEvidence: officialPdsGrid,
   centerLatDeg: standardParallelDeg,
   centerLonDeg: centralMeridianDeg,
   rotationDeg: 0,
@@ -397,6 +426,7 @@ const meta = {
   routeCheck,
   transformControls,
   transformToleranceM,
+  transformComparison: { sourceUrl: officialPdsGrid.sourceUrl, pdsGrid: officialPdsGrid, tiffGrid, toleranceM: pdsTransformToleranceM, points: transformComparison },
 };
 
 fs.writeFileSync(path.join(outDir, 'dtm_subset.json'), JSON.stringify(meta, null, 2));

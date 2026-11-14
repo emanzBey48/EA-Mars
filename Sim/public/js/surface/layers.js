@@ -95,7 +95,7 @@ export class GridElevationLayer {
       };
     }
     const i = r * this.cols + c;
-    if (this.bits[i] === this.noDataBits) return { status: STATUS.NO_DATA, reason: 'Ürün no-data hücresi (MISSING_CONSTANT / 0xFF7FFFFB)' };
+    if (this.bits[i] === this.noDataBits) return { status: STATUS.NO_DATA, reason: `Ürün no-data hücresi (tam bit deseni 0x${this.noDataBits.toString(16).padStart(8, '0').toUpperCase()})` };
     const v = this.values[i];
     if (!Number.isFinite(v) || v < this.validMin || v > this.validMax) {
       return { status: STATUS.INVALID, reason: 'Değer VALID_MINIMUM/VALID_MAXIMUM aralığı dışında veya non-finite' };
@@ -175,7 +175,7 @@ function sameFrame(a, b) {
   return bad;
 }
 
-/** Base descriptor for the USGS Mars 2020 TRN HiRISE DTM mosaic; filled in from the prepared metadata when available. */
+/** Base descriptor for the preferred USGS mosaic; unknown provenance claims stay empty until metadata is loaded. */
 export function dtmBaseDescriptor() {
   return makeDescriptor({
     id: 'hirise-dtm',
@@ -185,11 +185,11 @@ export function dtmBaseDescriptor() {
     product: 'JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40',
     version: 'soc_006_blend40',
     attribution: 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona',
-    license: 'Public Domain / USGS (Please cite authors: Fergason vd. 2020)',
+    license: null,
     unit: 'm',
-    verticalDatum: 'Mars equipotential surface (MOLA areoid / DeltaGeoid, tied to HRSC & CTX LVS)',
-    verticalDatumVerified: true,
-    verticalDatumEvidence: 'Fergason vd. 2020 (LPSC #2020), USGS FGDC XML (DOI: 10.5066/P9REJ9JN), CTX LVS tie (~0.4m median offset)',
+    verticalDatum: null,
+    verticalDatumVerified: false,
+    verticalDatumEvidence: null,
   });
 }
 
@@ -224,7 +224,7 @@ export async function loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl 
     size: { rows: label.lines, cols: label.samples, loadedWindow: meta.window, pixelRegistration: label.pixelRegistration },
     coverage: meta.coverage,
     timeCoverage: meta.timeCoverage,
-    noData: { constantHex: label.missingConstantHex, rule: 'Tam 32-bit desen eşleşmesi (0xFF7FFFFB) → no_data' },
+    noData: { constantHex: label.missingConstantHex, rule: `Tam 32-bit desen eşleşmesi (0x${label.missingConstantHex}) → no_data` },
     quality: { validMin: label.validMin, validMax: label.validMax, windowStats: meta.windowStats, registration: meta.registration },
   };
   if (mismatch.length) {
@@ -254,23 +254,18 @@ export async function loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl 
   });
 }
 
-/** Orthoimage descriptor. JP2 is invalidated and no new ortho is provided, so layer reports unavailable. */
-export async function loadOrthoDescriptor({ baseUrl, fetchImpl = fetch }) {
+/** Orthoimage descriptor. The source JP2 may be present; this runtime has no JPEG2000 decoder. */
+export async function loadOrthoDescriptor() {
   const base = makeDescriptor({
     id: 'hirise-ortho',
     kind: 'image',
-    title: 'HiRISE ortogörüntü (kullanılamıyor)',
+    title: 'HiRISE ortogörüntü (decoder yok)',
     source: 'NASA PDS / HiRISE',
-    product: 'ESP_046060_1985_RED_C_01_ORTHO (geçersiz)',
+    product: 'ESP_046060_1985_RED_C_01_ORTHO',
     attribution: 'NASA/JPL/Univ. of Arizona',
     unit: '8-bit DN (tek bant)',
   });
-  let info = null;
-  try {
-    const res = await fetchImpl(`${baseUrl}/ortho_inspection.json`);
-    if (res.ok) info = await res.json();
-  } catch { /* ignore */ }
-  const reason = info?.decodeReason ?? 'Kullanıcı eski JP2 ortogörüntüyü geçersiz bildirdi; yeni doğrulanmış orto ürün pakete henüz eklenmedi. Zemin kabartması DTM’den türetilmiştir (orto değildir).';
+  const reason = 'JPEG2000 decoder uygulamada bulunmadığından mevcut JP2 gösterilemiyor. Zemin kabartması DTM’den türetilmiştir; ortogörüntü değildir.';
   return new UnavailableLayer({
     ...base,
     access: { status: STATUS.UNAVAILABLE, reason },

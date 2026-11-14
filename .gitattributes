@@ -1,3 +1,4 @@
 /DTEEC_045994_1985_046060_1985_U01.IMG filter=lfs diff=lfs merge=lfs -text
 /ESP_046060_1985_RED_C_01_ORTHO.JP2 filter=lfs diff=lfs merge=lfs -text
 /Sim/data/dtm_subset.f32 filter=lfs diff=lfs merge=lfs -text
+/Sim/data/legacy-hirise/dtm_subset.f32 filter=lfs diff=lfs merge=lfs -text

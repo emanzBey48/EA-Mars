@@ -87,7 +87,7 @@ export function buildTerrainImage(layer) {
  * the prepared visual `terrain` asset. Never receives live `sim`, `layer`, or `adapter` instances,
  * and performs no raster sampling or route/deviation math.
  */
-export function render(ctx, w, h, { camera, snapshot, terrain }) {
+export function render(ctx, w, h, { camera, snapshot, terrain, geologySegments = [] }) {
   ctx.save();
   ctx.fillStyle = '#121216'; ctx.fillRect(0, 0, w, h);
   const T = (x, y) => camera.toScreen(x, y, w, h);
@@ -100,6 +100,14 @@ export function render(ctx, w, h, { camera, snapshot, terrain }) {
     ctx.drawImage(terrain.canvas, p.sx, p.sy, terrain.bounds.widthM * z, terrain.bounds.heightM * z);
   } else {
     drawGrid(ctx, w, h, camera);
+  }
+
+  // Only source unit boundaries are drawn; bbox clip edges are filtered upstream.
+  for (const segment of geologySegments) {
+    if (!Array.isArray(segment.xy) || segment.xy.length < 2) continue;
+    ctx.beginPath();
+    segment.xy.forEach(([x, y], i) => { const p = T(x, y); i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy); });
+    ctx.strokeStyle = 'rgba(255,220,90,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
   }
 
   const { route, astronaut, trail } = snapshot;

@@ -116,8 +116,12 @@ void main() {
     float strata = 0.975 + 0.025 * sin(vWorldPos.z * 2.4);
     regolith *= strata;
 
-    float spec = pow(ndoth, 20.0) * 0.07;
-    vec3 lit = regolith * vColor * (ambient + 0.78 * ndotl) + vec3(1.0, 0.82, 0.65) * spec;
+    // A low-angle, terrain-only presentation light makes modest DTM slopes legible in the
+    // first-person horizon view. It changes shading only; mesh Z/source elevations stay intact.
+    float reliefLight = max(dot(normal, normalize(vec3(-0.68, -0.48, 0.55))), 0.0);
+    vec3 terrainAmbient = mix(vec3(0.16, 0.11, 0.09), vec3(0.34, 0.24, 0.19), hemi);
+    float spec = pow(ndoth, 20.0) * 0.035;
+    vec3 lit = regolith * vColor * (terrainAmbient + 0.96 * reliefLight) + vec3(1.0, 0.82, 0.65) * spec;
     float fogFactor = clamp(1.0 - exp(-dist * 0.00045), 0.0, 0.82);
     outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
     return;
@@ -322,6 +326,15 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   let disposed = false;
   let lastFrameDiagnostics = null;
   const astronaut = createAstronautBuffers(gl, locations);
+  const geologyVao = gl.createVertexArray();
+  const geologyPositionBuffer = gl.createBuffer();
+  if (!geologyVao || !geologyPositionBuffer) throw new Error('WebGL2 geology boundary buffers unavailable');
+  gl.bindVertexArray(geologyVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, geologyPositionBuffer);
+  gl.enableVertexAttribArray(locations.position);
+  gl.vertexAttribPointer(locations.position, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.clearColor(clearColor[0], clearColor[1], clearColor[2], 1);
@@ -441,7 +454,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null }) {
       const frameStartedAt = collectDiagnostics ? performance.now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -523,6 +536,24 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.drawElements(gl.TRIANGLES, uploadedMarkerMesh.indexCount, gl.UNSIGNED_INT, 0);
         gl.bindVertexArray(null);
         markersDrawn = true;
+      }
+
+      if (geologyLinePositions instanceof Float32Array && geologyLinePositions.length >= 6) {
+        gl.uniform1i(locations.renderPass, 1);
+        gl.uniform3f(locations.objectOffset, 0, 0, 0);
+        gl.uniform1f(locations.headingRad, 0);
+        gl.uniform1f(locations.verticalScale, 1);
+        gl.uniform3f(locations.baseColor, 1.0, 0.84, 0.24);
+        gl.bindVertexArray(geologyVao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, geologyPositionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, geologyLinePositions, gl.DYNAMIC_DRAW);
+        gl.disableVertexAttribArray(locations.normal);
+        gl.vertexAttrib3f(locations.normal, 0, 0, 1);
+        gl.disableVertexAttribArray(locations.color);
+        gl.vertexAttrib3f(locations.color, 1, 0.82, 0.22);
+        gl.lineWidth(2);
+        gl.drawArrays(gl.LINES, 0, geologyLinePositions.length / 3);
+        gl.bindVertexArray(null);
       }
 
       const { astronaut: player } = snapshot;
@@ -645,6 +676,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       if (disposed) return;
       releaseMesh();
       releaseMarkerMesh();
+      gl.deleteVertexArray(geologyVao);
+      gl.deleteBuffer(geologyPositionBuffer);
       gl.deleteVertexArray(astronaut.vao);
       gl.deleteBuffer(astronaut.positionBuffer);
       gl.deleteBuffer(astronaut.normalBuffer);

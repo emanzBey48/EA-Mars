@@ -287,7 +287,7 @@ export function deepFreeze(obj) {
  * - `zM` is the Mars 2000 surface elevation (NOT astronaut body height); `null` whenever status !== 'ok' (never 0).
  * - Consumers (HUD, renderer) read exclusively from this snapshot and cannot mutate live simulation state.
  */
-export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints = [], routeNote = '' }) {
+export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints = [], routeNote = '', geology = null }) {
   const xM = sim.pos.x;
   const yM = sim.pos.y;
   const m = sim.metrics();
@@ -351,6 +351,12 @@ export function createWorldSnapshot({ sim, surfaceProvider, adapter, waypoints =
       elevation,
       slope,
     },
+    geology: geology ? {
+      status: geology.status ?? 'unavailable',
+      unitCode: geology.status === 'ok' ? geology.unit?.code ?? null : null,
+      unitName: geology.status === 'ok' ? geology.unit?.name ?? null : null,
+      onBoundary: geology.status === 'ok' ? Boolean(geology.onBoundary) : false,
+    } : { status: 'unavailable', unitCode: null, unitName: null, onBoundary: false },
     route: {
       a: { xM: sim.route.a.x, yM: sim.route.a.y },
       b: { xM: sim.route.b.x, yM: sim.route.b.y },

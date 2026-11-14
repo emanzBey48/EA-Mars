@@ -67,6 +67,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
   $('sources').innerHTML = sources.map((s) => `<li><a href="${s.url}" target="_blank" rel="noopener">${s.label}</a></li>`).join('') +
     '<li>Görüntü/veri: NASA / JPL-Caltech / University of Arizona / USGS Astrogeology Science Center.</li>';
   $('v-speed').textContent = `${scenario.walkSpeedMps} m/s senaryo hızı × ${scenario.timeScale} zaman hızlandırma (gerçek Mars yürüyüş hızı iddiası değil). 3D düşey ivme: ${scenario.marsGravityMps2} m/s² (NASA küresel referansı; Jezero yerel ölçümü değil). Space sıçrama girdisi ${scenario.jumpImpulseMps} m/s oyun varsayımıdır, suit performansı değildir.`;
+  $('geology-provenance').innerHTML = `<a href="https://doi.org/10.3133/sim3464" target="_blank" rel="noopener">USGS SIM 3464 (Sun &amp; Stack, 2020)</a> · ölçek 1:75.000 · konum ofseti ~100–200 m · lisans belirtilmemiş. Birimler ve sınırlar yalnız indikatiftir; mineraloji, saha gerçeği, güvenlik veya geçilebilirlik iddiası değildir.`;
 
   function renderLayerPanel(layers, terrain, currentCorridorM = corridorHalfWidthM) {
     const regBanner = layers.selectionReport
@@ -107,6 +108,14 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     dev.textContent = `${route.deviationM.toFixed(1)} m — ${route.outsideCorridor ? `koridor dışında (> ${route.corridorHalfWidthM} m)` : `koridor içinde (≤ ${route.corridorHalfWidthM} m)`} (yerel equirectangular düzlemde; güvenlik sınırı değil)`;
     dev.className = route.outsideCorridor ? 'status-bad' : 'status-ok';
     $('v-walked').textContent = `${distanceWalkedM.toFixed(1)} m`;
+
+    const geology = snapshot.geology ?? { status: 'unavailable' };
+    const geologyStatus = $('geology-status');
+    if (geology.status === 'ok') geologyStatus.textContent = `Haritalanmış birim: ${geology.unitCode} — ${geology.unitName}${geology.onBoundary ? ' (sınır üzerinde)' : ''}. İndikatiftir.`;
+    else if (geology.status === 'outside_coverage') geologyStatus.textContent = 'Bu konum koridor jeoloji veri kapsamı dışında; birim atanmadı.';
+    else if (geology.status === 'ambiguous') geologyStatus.textContent = 'Harita sınırında birden fazla birim adayı var; birim atanmadı.';
+    else geologyStatus.textContent = geology.status === 'loading' ? 'Jeoloji katmanı yükleniyor…' : 'Jeoloji katmanı kullanılamıyor; birim atanmadı.';
+    geologyStatus.dataset.status = geology.status;
 
     const e = surface.elevation;
     const s = surface.slope;

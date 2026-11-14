@@ -6,7 +6,9 @@ import { marsSunDirection } from './geo/mars-sun.js';
 import {
   createGeologyIndex, lookupGeologicUnitLocal, toGeologySnapshot,
   createGeologicContactField, nearestGeologicContactM,
+  GEOLOGY_POSITIONAL_UNCERTAINTY_M, GEOLOGY_LICENSE_NOT_STATED,
 } from './geo/geology.js';
+import { createGeologyRegistry, lookupBestGeologicUnit } from './geo/geology-registry.js';
 import { UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
 import { createDefaultSurfaceRegistry } from './surface/registry.js';
 import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
@@ -59,6 +61,7 @@ let renderer3dError = null;
 let terrainMeshError = null;
 let terrainMeshBuildMs = null;
 let geologyIndex = null;
+let geologyRegistry = null;
 let geologyContactField = null;
 let geologySegmentsLocal = [];
 let geologyLinePositions = new Float32Array();
@@ -440,7 +443,13 @@ function build3dTerrainOnce() {
 
 function preparePlannedRouteGuide() {
   plannedRouteLinePositions = activeRoute?.status === 'ok' && terrainMesh
-    ? buildPlannedRouteLinePositions({ route: activeRoute, surfaceProvider: layers.dtm, displayConfig: terrainMesh.displayConfig })
+    ? buildPlannedRouteLinePositions({
+      route: activeRoute,
+      surfaceProvider: layers.dtm,
+      displayConfig: terrainMesh.displayConfig,
+      liftDisplayM: 0.28,
+      ribbonHalfWidthM: 0.22,
+    })
     : new Float32Array();
 }
 
@@ -623,12 +632,39 @@ async function selectView(view) {
   viewStatus.hidden = true;
 }
 
-function buildSnapshot() {
-  const position = { xM: sim.pos.x, yM: sim.pos.y };
+function resolveGeologicContext(xM, yM) {
+  const position = { xM, yM };
+  if (geologyRegistry) {
+    const { latDeg, lonDeg } = adapter.localToLatLon(xM, yM);
+    const best = lookupBestGeologicUnit(geologyRegistry, { lonDeg, latDeg });
+    const geology = {
+      ...best.snapshot,
+      sourceMapId: best.sourceMapId,
+      mapScale: best.mapScale ?? best.snapshot.mapScale,
+      mapScaleDenominator: best.mapScaleDenominator,
+      fallbackChain: best.fallbackChain,
+      conflict: best.conflict,
+    };
+    const contact = geology.status === 'ok' || geology.status === 'ambiguous'
+      ? nearestGeologicContactM(geologyContactField, position) : null;
+    return { geology, contactDistanceM: contact?.distanceM ?? null };
+  }
   const lookup = geologyIndex ? lookupGeologicUnitLocal(geologyIndex, adapter, position) : null;
-  const geology = toGeologySnapshot(lookup, geologyIndex);
+  const base = toGeologySnapshot(lookup, geologyIndex);
+  const geology = {
+    ...base,
+    sourceMapId: null,
+    mapScaleDenominator: null,
+    fallbackChain: [],
+    conflict: null,
+  };
   const contact = geology.status === 'ok' || geology.status === 'ambiguous'
     ? nearestGeologicContactM(geologyContactField, position) : null;
+  return { geology, contactDistanceM: contact?.distanceM ?? null };
+}
+
+function buildSnapshot() {
+  const { geology, contactDistanceM } = resolveGeologicContext(sim.pos.x, sim.pos.y);
   lastSnapshot = createWorldSnapshot({
     sim,
     surfaceProvider: layers.dtm,
@@ -637,7 +673,7 @@ function buildSnapshot() {
     routeNote: ROUTE_ORIGIN_NOTE,
     geology,
     geologyLayerStatus: geologyStatus,
-    geologyContactDistanceM: contact?.distanceM,
+    geologyContactDistanceM: contactDistanceM,
   });
   return lastSnapshot;
 }
@@ -655,6 +691,15 @@ async function loadGeology() {
     if (!geologyIndex.counts.acceptedFeatures || geologyIndex.counts.skippedFeatures > 0) {
       throw new Error('Jeoloji verisinde poligon atlandı; kısmi katman kullanılmadı');
     }
+    geologyRegistry = createGeologyRegistry([{
+      id: 'usgs_sim3464_2020',
+      index: geologyIndex,
+      mapScaleDenominator: geologyIndex.provenance?.scaleDenominator ?? 75000,
+      positionalUncertaintyM: geologyIndex.provenance?.positionalUncertaintyM ?? GEOLOGY_POSITIONAL_UNCERTAINTY_M,
+      license: geologyIndex.provenance?.license ?? GEOLOGY_LICENSE_NOT_STATED,
+      citation: geologyIndex.provenance?.citation ?? 'Sun & Stack (2020), USGS SIM 3464',
+      unitScheme: 'usgs-sim3464',
+    }]);
     geologyContactField = createGeologicContactField(geologyIndex, adapter);
     geologySegmentsLocal = uniqueGeologySegments(geologyContactField.polylines);
     if (terrainMesh) geologyLinePositions = buildGeologyLinePositions();
@@ -663,6 +708,7 @@ async function loadGeology() {
     updateHud();
   } catch (error) {
     geologyIndex = null;
+    geologyRegistry = null;
     geologyContactField = null;
     geologySegmentsLocal = [];
     geologyLinePositions = new Float32Array();
@@ -869,9 +915,18 @@ function frame(now) {
   if (canvas2d.width !== pixelWidth || canvas2d.height !== pixelHeight) {
     canvas2d.width = pixelWidth; canvas2d.height = pixelHeight;
   }
+  const routeEndpoints = { start: minimapEndpoints.start, goal: minimapEndpoints.end };
   if (activeView === '2d') {
     ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-    render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [], archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null });
+    render(ctx2d, w, h, {
+      camera,
+      snapshot,
+      terrain,
+      geologySegments: geologyLayerVisible ? geologySegmentsLocal : [],
+      archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null,
+      plannedRoute: activeRoute?.status === 'ok' ? activeRoute.path : null,
+      routeEndpoints: routeEndpoints.start || routeEndpoints.goal ? { start: routeEndpoints.start, goal: routeEndpoints.goal } : null,
+    });
   } else if (renderer3d && terrainMesh) {
     try {
       renderer3d.resize(w, h, dpr);
@@ -949,7 +1004,15 @@ function frame(now) {
       viewStatus.textContent = `3D görünüm durdu: ${error.message}. 2D harita kullanılabilir.`;
       viewStatus.hidden = false;
       ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-      render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [], archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null });
+      render(ctx2d, w, h, {
+        camera,
+        snapshot,
+        terrain,
+        geologySegments: geologyLayerVisible ? geologySegmentsLocal : [],
+        archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null,
+        plannedRoute: activeRoute?.status === 'ok' ? activeRoute.path : null,
+        routeEndpoints: routeEndpoints.start || routeEndpoints.goal ? { start: routeEndpoints.start, goal: routeEndpoints.goal } : null,
+      });
     }
   }
   hudAcc += dt; if (hudAcc > 0.08) { hudAcc = 0; updateHudFromSnapshot(snapshot); }

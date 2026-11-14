@@ -605,7 +605,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         markersDrawn = markerIndexCountDrawn > 0;
       }
 
-      function drawSurfaceLines(positions, red, green, blue, baseGreen = 1, baseBlue = 1) {
+      function drawSurfaceLines(positions, red, green, blue, baseGreen = 1, baseBlue = 1, lineWidth = 2) {
         if (!(positions instanceof Float32Array) || positions.length < 6) return;
         gl.uniform1i(locations.renderPass, 1);
         gl.uniform3f(locations.objectOffset, 0, 0, 0);
@@ -619,13 +619,13 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.vertexAttrib3f(locations.normal, 0, 0, 1);
         gl.disableVertexAttribArray(locations.color);
         gl.vertexAttrib3f(locations.color, red, green, blue);
-        gl.lineWidth(2);
+        gl.lineWidth(lineWidth);
         gl.drawArrays(gl.LINES, 0, positions.length / 3);
         gl.bindVertexArray(null);
       }
-      drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24);
-      drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1);
-      drawSurfaceLines(plannedRouteLinePositions, 0.08, 0.88, 1, 0.92, 1);
+      drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24, 2);
+      drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1, 1, 1, 2);
+      drawSurfaceLines(plannedRouteLinePositions, 0.12, 0.92, 0.78, 0.96, 1, 3);
 
       const { astronaut: player } = snapshot;
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;

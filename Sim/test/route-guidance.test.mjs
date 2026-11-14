@@ -30,6 +30,19 @@ test('planned ground guide breaks at unknown samples and never invents elevation
   assert.ok([...positions].every(Number.isFinite));
 });
 
+test('planned ground guide densifies long segments (<= 4 m) and supports near-field parallel rails without bridging no-data', () => {
+  const positions = buildPlannedRouteLinePositions({
+    route: route([{ xM: 0, yM: 0 }, { xM: 12, yM: 0 }]),
+    surfaceProvider: provider(() => ({ status: 'ok', value: -10 }), 10),
+    displayConfig: { referenceElevationM: -12, verticalScale: 3 },
+    heightOffsetM: 0.28,
+    ribbonHalfWidthM: 0.22,
+  });
+  // 12 m segment with <= 4 m spacing -> 3 intervals -> 3 lines (center + left + right) * 3 segments * 6 floats = 54 floats
+  assert.equal(positions.length, 54);
+  assert.ok(Math.abs(positions[2] - 6.28) < 1e-5);
+});
+
 test('route guidance points to the next route cell and expresses direction relative to heading', () => {
   const guidance = derivePlannedRouteGuidance({
     route: route([{ xM: 0, yM: 0 }, { xM: 1, yM: 0 }, { xM: 2, yM: 0 }]),

@@ -661,3 +661,90 @@ test('Stage 12: First-person camera dynamic offsets and view-projection calculat
   assert.equal(camera.dynamicPitchOffsetRad, 0);
   assert.ok(Math.abs(camera.zDisplay - (5 + 1.48 * 3)) < 1e-9);
 });
+
+test('H1: body above a LOWER valid ground re-enters flight, falls until landing, and never reports contact before then', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const high = { status: STATUS.OK, value: -2500 };
+  sim.resolveSurfaceContact(high);
+  sim.stepFirstPerson(0.01, { jump: true }, high);
+  for (let i = 0; i < 5; i++) sim.stepFirstPerson(0.01, {}, high); // 0.4 s sim time, well before ~1.29 s landing
+  assert.equal(sim.airborne, true);
+  assert.ok(sim.heightAboveReferenceM > 0);
+
+  // Valid sample 2 m lower than the retained ground: body is still above it, so flight continues.
+  const lower = { status: STATUS.OK, value: -2502 };
+  const bodyBefore = sim.bodyWorldZM;
+  assert.equal(sim.resolveSurfaceContact(lower), true);
+  assert.equal(sim.airborne, true, 'lower valid ground with heightAbove > 0 keeps the body airborne');
+  assert.equal(sim.grounded, false);
+  assert.ok(Math.abs(sim.bodyWorldZM - bodyBefore) < 1e-9, 'resampling does not teleport the body');
+  assert.ok(Math.abs(sim.heightAboveReferenceM - (bodyBefore - lower.value)) < 1e-9);
+
+  let steps = 0;
+  while (sim.airborne && steps < 5000) {
+    sim.stepFirstPerson(0.01, {}, lower);
+    if (sim.airborne) assert.equal(sim.grounded, false, 'no ground contact is reported mid-fall');
+    steps++;
+  }
+  assert.ok(steps > 0, 'the fall takes time');
+  assert.equal(sim.grounded, true, 'landing occurs on the lower valid ground');
+  assert.equal(sim.bodyWorldZReferenceM, -2502);
+  assert.equal(sim.heightAboveReferenceM, 0);
+  assert.equal(sim.landingRecovery, true);
+});
+
+test('H1: no-data sample mid-fall creates no fake contact, landing, or recovery', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const known = { status: STATUS.OK, value: -2500 };
+  const noData = { status: STATUS.NO_DATA, value: null };
+  sim.resolveSurfaceContact(known);
+  sim.stepFirstPerson(0.01, { jump: true }, known);
+  sim.stepFirstPerson(0.01, {}, known);
+  assert.equal(sim.airborne, true);
+
+  const refBefore = sim.bodyWorldZReferenceM;
+  for (let i = 0; i < 5; i++) {
+    sim.stepFirstPerson(0.01, {}, noData);
+    assert.equal(sim.grounded, false, 'no-data is never ground contact');
+    assert.equal(sim.landingRecovery, false, 'no-data never starts landing recovery');
+    assert.equal(sim.bodyWorldZReferenceM, refBefore, 'no-data does not reseed the ground origin');
+  }
+  assert.equal(sim.resolveSurfaceContact(noData), false);
+  assert.equal(sim.grounded, false);
+  assert.equal(sim.landingRecovery, false);
+});
+
+test('H2: PAUSED freezes flight -- stepFirstPerson and resolveSurfaceContact return early, momentum intact', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  const known = { status: STATUS.OK, value: -2500 };
+  sim.resolveSurfaceContact(known);
+  sim.stepFirstPerson(0.01, { moveX: 1, jump: true }, known);
+  sim.stepFirstPerson(0.01, { moveX: 1 }, known);
+  assert.equal(sim.airborne, true);
+  assert.equal(sim.togglePause(), PHASE.PAUSED);
+
+  const frozen = {
+    x: sim.pos.x, y: sim.pos.y, t: sim.simTimeS,
+    vx: sim.horizontalVelocityXMps, vy: sim.horizontalVelocityYMps, vz: sim.verticalSpeedMps,
+    h: sim.heightAboveReferenceM, ref: sim.bodyWorldZReferenceM,
+    grounded: sim.grounded, airborne: sim.airborne, recovery: sim.landingRecovery,
+  };
+  assert.ok(frozen.vx > 0 && frozen.vz !== 0, 'flight has horizontal and vertical momentum before pause');
+
+  const unknown = { status: STATUS.UNAVAILABLE, value: null };
+  assert.equal(sim.resolveSurfaceContact(unknown), false);
+  assert.equal(sim.resolveSurfaceContact(known), false, 'paused resolve does not reconcile');
+  sim.stepFirstPerson(0.05, { moveX: -1, jump: true }, unknown);
+  sim.stepFirstPerson(0.05, { moveX: -1 }, known);
+
+  assert.deepEqual({
+    x: sim.pos.x, y: sim.pos.y, t: sim.simTimeS,
+    vx: sim.horizontalVelocityXMps, vy: sim.horizontalVelocityYMps, vz: sim.verticalSpeedMps,
+    h: sim.heightAboveReferenceM, ref: sim.bodyWorldZReferenceM,
+    grounded: sim.grounded, airborne: sim.airborne, recovery: sim.landingRecovery,
+  }, frozen, 'paused frames change nothing, including air momentum');
+
+  assert.equal(sim.togglePause(), PHASE.RUNNING);
+  sim.stepFirstPerson(0.01, { moveX: -1 }, known);
+  assert.equal(sim.horizontalVelocityXMps, frozen.vx, 'ballistic momentum survives resume unchanged');
+});

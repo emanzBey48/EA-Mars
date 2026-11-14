@@ -25,7 +25,7 @@ Bu 24B/25 gözlemleri ekip içindeki bağımsız tarayıcı kabul çalışmasın
 - **22B galeri — incelenmedi.** Galeri içeriği/panel kaydırması görsel olarak doğrulanmadı.
 - **24A minimap etkileşimi — kısmi.** 24B uç nokta seçimi için minimap üzerinde etkileşim kullanıldı ve kapsam dışı seçim reddedildi; 24A'nın tüm pan/zoom ve gerçek no-data seçimi kabul ölçütleri çalıştırılmadı.
 - **24B gerçek no-data seçimi — incelenmedi.** Kullanılan fixture no-data hücresi içermiyordu. Kapsam dışı reddi no-data reddinin yerine geçmez.
-- **Stage 25 yakın-alan kılavuz görünürlüğü — açık.** Uzak 3D çizgi gözlendi; oyuncu yakınında çizginin kalınlık/örtüşme/okunabilirliği hakkında PASS verilmedi.
+- **Stage 25 yakın-alan kılavuz görünürlüğü ve 2D ana harita izi — kodda iyileştirildi (`246a99d`), görsel kabul açık.** `render.js` içinde 2D ana haritaya camgöbeği kesikli çift katmanlı planlanan rota izi ve `S`/`G` uç nokta işaretçileri (`drawPlannedRoute`) eklendi; `route-guidance.js` ve `renderer.js` içinde 3D kılavuz ≤4 m aralıkla sıklaştırılıp zeminden yükseltilmiş (`liftDisplayM = 0.28`) paralel yan şeritlerle (`ribbonHalfWidthM = 0.22`) desteklendi. Bu kod güncellemesi sonrası tarayıcı çalıştırılmadı.
 
 ## Kayıt ve sınırlar
 

@@ -5,6 +5,8 @@ const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(v
 /**
  * Build a camera-independent ground guide from a successful planned route.
  * Each interval is sampled against the active surface provider; an unknown sample breaks the line.
+ * When `ribbonHalfWidthM > 0`, parallel left/right rails are also sampled to improve near-field
+ * 3D readability without bridging across no-data cells.
  */
 export function buildPlannedRouteLinePositions({
   route,
@@ -12,37 +14,86 @@ export function buildPlannedRouteLinePositions({
   displayConfig,
   maxSampleSpacingM,
   liftDisplayM = 0.12,
+  heightOffsetM,
+  ribbonHalfWidthM = 0,
 } = {}) {
   if (route?.status !== 'ok' || !Array.isArray(route.path) || route.path.length < 2) return new Float32Array();
   if (typeof surfaceProvider?.sampleElevation !== 'function') return new Float32Array();
   const reference = displayConfig?.referenceElevationM;
   const scale = displayConfig?.verticalScale;
   const cellSize = surfaceProvider.cellSizeM;
-  if (![reference, scale, cellSize, liftDisplayM].every(isFiniteNumber) || scale <= 0 || cellSize <= 0) return new Float32Array();
+  const lift = isFiniteNumber(heightOffsetM) ? heightOffsetM : liftDisplayM;
+  if (![reference, scale, cellSize, lift].every(isFiniteNumber) || scale <= 0 || cellSize <= 0) return new Float32Array();
   const spacing = isFiniteNumber(maxSampleSpacingM) && maxSampleSpacingM > 0
-    ? Math.min(maxSampleSpacingM, cellSize)
-    : Math.max(0.25, cellSize * 0.5);
+    ? Math.min(maxSampleSpacingM, cellSize, 4)
+    : Math.min(4, Math.max(0.25, cellSize * 0.5));
+  const halfWidth = isFiniteNumber(ribbonHalfWidthM) && ribbonHalfWidthM > 0 ? ribbonHalfWidthM : 0;
   const positions = [];
-  let previous = null;
-  const appendSample = (xM, yM) => {
+  let previousCenter = null;
+  let previousLeft = null;
+  let previousRight = null;
+
+  const sampleVertex = (xM, yM, extraLift = lift) => {
     const sample = surfaceProvider.sampleElevation(xM, yM);
-    if (sample?.status !== 'ok' || !isFiniteNumber(sample.value)) {
-      previous = null;
+    if (sample?.status !== 'ok' || !isFiniteNumber(sample.value)) return null;
+    return [xM, yM, (sample.value - reference) * scale + extraLift];
+  };
+
+  const appendCenterSample = (xM, yM) => {
+    const current = sampleVertex(xM, yM, lift);
+    if (!current) {
+      previousCenter = null;
       return;
     }
-    const current = [xM, yM, (sample.value - reference) * scale + liftDisplayM];
-    if (previous && (previous[0] !== current[0] || previous[1] !== current[1])) positions.push(...previous, ...current);
-    previous = current;
+    if (previousCenter && (previousCenter[0] !== current[0] || previousCenter[1] !== current[1])) {
+      positions.push(...previousCenter, ...current);
+    }
+    previousCenter = current;
+  };
+
+  const appendRailSample = (xM, yM, nx, ny) => {
+    const railLift = Math.max(0.06, lift * 0.88);
+    const left = sampleVertex(xM + nx * halfWidth, yM + ny * halfWidth, railLift);
+    if (!left) {
+      previousLeft = null;
+    } else {
+      if (previousLeft && (previousLeft[0] !== left[0] || previousLeft[1] !== left[1])) {
+        positions.push(...previousLeft, ...left);
+      }
+      previousLeft = left;
+    }
+    const right = sampleVertex(xM - nx * halfWidth, yM - ny * halfWidth, railLift);
+    if (!right) {
+      previousRight = null;
+    } else {
+      if (previousRight && (previousRight[0] !== right[0] || previousRight[1] !== right[1])) {
+        positions.push(...previousRight, ...right);
+      }
+      previousRight = right;
+    }
   };
 
   for (let index = 1; index < route.path.length; index++) {
     const a = route.path[index - 1], b = route.path[index];
-    if (![a?.xM, a?.yM, b?.xM, b?.yM].every(isFiniteNumber)) { previous = null; continue; }
-    const length = Math.hypot(b.xM - a.xM, b.yM - a.yM);
+    if (![a?.xM, a?.yM, b?.xM, b?.yM].every(isFiniteNumber)) {
+      previousCenter = null;
+      previousLeft = null;
+      previousRight = null;
+      continue;
+    }
+    const dx = b.xM - a.xM, dy = b.yM - a.yM;
+    const length = Math.hypot(dx, dy);
+    const nx = length > 1e-6 ? -dy / length : 0;
+    const ny = length > 1e-6 ? dx / length : 0;
     const steps = Math.max(1, Math.ceil(length / spacing));
     for (let step = 0; step <= steps; step++) {
       const t = step / steps;
-      appendSample(a.xM + (b.xM - a.xM) * t, a.yM + (b.yM - a.yM) * t);
+      const sx = a.xM + dx * t;
+      const sy = a.yM + dy * t;
+      appendCenterSample(sx, sy);
+      if (halfWidth > 0 && length > 1e-6) {
+        appendRailSample(sx, sy, nx, ny);
+      }
     }
   }
   return new Float32Array(positions);

@@ -63,6 +63,13 @@ uniform vec2 uElevBounds;
 uniform float uTerrainExaggeration;
 uniform int uRenderPass;
 uniform float uAlpha;
+uniform sampler2D uOrthoTexFine;
+uniform sampler2D uOrthoTexCoarse;
+uniform vec4 uOrthoUvFine;
+uniform vec4 uOrthoUvCoarse;
+uniform int uOrthoMode;
+uniform int uHasOrthoFine;
+uniform int uHasOrthoCoarse;
 out vec4 outColor;
 
 void main() {
@@ -123,6 +130,43 @@ void main() {
     regolith = mix(regolith, bedrock, smoothstep(0.18, 0.85, slope) * 0.65);
     float strata = 0.975 + 0.025 * sin(vWorldPos.z * 2.4);
     regolith *= strata;
+
+    // HiRISE WMTS Orthomosaic overlay (Stage 39B)
+    if (uOrthoMode > 0) {
+      vec2 uvFine = vec2(vWorldPos.x * uOrthoUvFine.x + uOrthoUvFine.y, vWorldPos.y * uOrthoUvFine.z + uOrthoUvFine.w);
+      vec2 uvCoarse = vec2(vWorldPos.x * uOrthoUvCoarse.x + uOrthoUvCoarse.y, vWorldPos.y * uOrthoUvCoarse.z + uOrthoUvCoarse.w);
+      bool inFine = uvFine.x >= 0.0 && uvFine.x <= 1.0 && uvFine.y >= 0.0 && uvFine.y <= 1.0;
+      bool inCoarse = uvCoarse.x >= 0.0 && uvCoarse.x <= 1.0 && uvCoarse.y >= 0.0 && uvCoarse.y <= 1.0;
+      vec4 orthoTexel = vec4(0.0);
+      bool hasSample = false;
+
+      if (uHasOrthoFine == 1 && inFine) {
+        vec4 fTex = texture(uOrthoTexFine, uvFine);
+        if (fTex.a > 0.5) {
+          orthoTexel = fTex;
+          hasSample = true;
+        }
+      }
+      if (!hasSample && uHasOrthoCoarse == 1 && inCoarse) {
+        vec4 cTex = texture(uOrthoTexCoarse, uvCoarse);
+        if (cTex.a > 0.5) {
+          orthoTexel = cTex;
+          hasSample = true;
+        }
+      }
+
+      if (hasSample) {
+        float orthoLum = orthoTexel.r;
+        if (uOrthoMode == 1) {
+          // Hybrid: modulate base regolith with contrast-rich detail multiplier
+          float detailMult = mix(0.45, 1.45, orthoLum);
+          regolith = regolith * detailMult;
+        } else if (uOrthoMode == 2) {
+          // Pure HiRISE grayscale albedo
+          regolith = vec3(orthoLum);
+        }
+      }
+    }
 
     // Terrain positions are pre-scaled, so these normals still contain the
     // visual exaggeration. Restore source slopes before calculating sunlight.
@@ -360,11 +404,19 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     terrainExaggeration: gl.getUniformLocation(program, 'uTerrainExaggeration'),
     renderPass: gl.getUniformLocation(program, 'uRenderPass'),
     alpha: gl.getUniformLocation(program, 'uAlpha'),
+    orthoTexFine: gl.getUniformLocation(program, 'uOrthoTexFine'),
+    orthoTexCoarse: gl.getUniformLocation(program, 'uOrthoTexCoarse'),
+    orthoUvFine: gl.getUniformLocation(program, 'uOrthoUvFine'),
+    orthoUvCoarse: gl.getUniformLocation(program, 'uOrthoUvCoarse'),
+    orthoMode: gl.getUniformLocation(program, 'uOrthoMode'),
+    hasOrthoFine: gl.getUniformLocation(program, 'uHasOrthoFine'),
+    hasOrthoCoarse: gl.getUniformLocation(program, 'uHasOrthoCoarse'),
   };
   if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
       !locations.partSize || !locations.partCenter || !locations.partOffset || !locations.partRotationRad ||
-      !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass || !locations.alpha) {
+      !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass || !locations.alpha ||
+      !locations.orthoTexFine || !locations.orthoTexCoarse || !locations.orthoUvFine || !locations.orthoUvCoarse || !locations.orthoMode || !locations.hasOrthoFine || !locations.hasOrthoCoarse) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
   }
@@ -380,6 +432,46 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   let uploadedMarkerMesh = null;
   let disposed = false;
   let lastFrameDiagnostics = null;
+
+  let orthoTexFine = null;
+  let orthoTexCoarse = null;
+  let orthoMode = 1; // 0 = hillshade, 1 = hybrid, 2 = ortho
+  let hasOrthoFine = 0;
+  let hasOrthoCoarse = 0;
+  const orthoUvFine = new Float32Array(4);
+  const orthoUvCoarse = new Float32Array(4);
+  let currentOrthoAssets = null;
+
+  function create1x1Texture(glInstance) {
+    const tex = glInstance.createTexture();
+    glInstance.bindTexture(glInstance.TEXTURE_2D, tex);
+    glInstance.texImage2D(glInstance.TEXTURE_2D, 0, glInstance.RGBA, 1, 1, 0, glInstance.RGBA, glInstance.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_MIN_FILTER, glInstance.LINEAR);
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_MAG_FILTER, glInstance.LINEAR);
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_WRAP_S, glInstance.CLAMP_TO_EDGE);
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_WRAP_T, glInstance.CLAMP_TO_EDGE);
+    glInstance.bindTexture(glInstance.TEXTURE_2D, null);
+    return tex;
+  }
+  const dummyTexture = create1x1Texture(gl);
+
+  function uploadOrthoTexture(glInstance, existingTex, image) {
+    const tex = existingTex || glInstance.createTexture();
+    glInstance.bindTexture(glInstance.TEXTURE_2D, tex);
+    glInstance.pixelStorei(glInstance.UNPACK_FLIP_Y_WEBGL, false);
+    glInstance.pixelStorei(glInstance.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    if (image instanceof HTMLImageElement || image instanceof ImageBitmap || image instanceof HTMLCanvasElement) {
+      glInstance.texImage2D(glInstance.TEXTURE_2D, 0, glInstance.RGBA, glInstance.RGBA, glInstance.UNSIGNED_BYTE, image);
+    } else if (image && image.data && image.width && image.height) {
+      glInstance.texImage2D(glInstance.TEXTURE_2D, 0, glInstance.RGBA, image.width, image.height, 0, glInstance.RGBA, glInstance.UNSIGNED_BYTE, image.data);
+    }
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_MIN_FILTER, glInstance.LINEAR);
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_MAG_FILTER, glInstance.LINEAR);
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_WRAP_S, glInstance.CLAMP_TO_EDGE);
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_WRAP_T, glInstance.CLAMP_TO_EDGE);
+    glInstance.bindTexture(glInstance.TEXTURE_2D, null);
+    return tex;
+  }
   const astronaut = createAstronautBuffers(gl, locations);
   const geologyVao = gl.createVertexArray();
   const geologyPositionBuffer = gl.createBuffer();
@@ -568,6 +660,22 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.uniform3f(locations.baseColor, 0.78, 0.43, 0.25);
       gl.disableVertexAttribArray(locations.color);
       gl.vertexAttrib3f(locations.color, 1, 1, 1);
+
+      // HiRISE Orthomosaic texture bindings & uniforms (Stage 39B)
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, hasOrthoFine && orthoTexFine ? orthoTexFine : dummyTexture);
+      gl.uniform1i(locations.orthoTexFine, 0);
+
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, hasOrthoCoarse && orthoTexCoarse ? orthoTexCoarse : dummyTexture);
+      gl.uniform1i(locations.orthoTexCoarse, 1);
+
+      gl.uniform4fv(locations.orthoUvFine, orthoUvFine);
+      gl.uniform4fv(locations.orthoUvCoarse, orthoUvCoarse);
+      gl.uniform1i(locations.orthoMode, orthoMode);
+      gl.uniform1i(locations.hasOrthoFine, hasOrthoFine);
+      gl.uniform1i(locations.hasOrthoCoarse, hasOrthoCoarse);
+
       gl.bindVertexArray(uploadedMesh.vao);
       gl.drawElements(gl.TRIANGLES, uploadedMesh.indexCount, gl.UNSIGNED_INT, 0);
 
@@ -605,7 +713,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         markersDrawn = markerIndexCountDrawn > 0;
       }
 
-      function drawSurfaceLines(positions, red, green, blue, baseGreen = 1, baseBlue = 1) {
+      function drawSurfaceLines(positions, red, green, blue, baseGreen = 1, baseBlue = 1, lineWidth = 2) {
         if (!(positions instanceof Float32Array) || positions.length < 6) return;
         gl.uniform1i(locations.renderPass, 1);
         gl.uniform3f(locations.objectOffset, 0, 0, 0);
@@ -619,13 +727,13 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.vertexAttrib3f(locations.normal, 0, 0, 1);
         gl.disableVertexAttribArray(locations.color);
         gl.vertexAttrib3f(locations.color, red, green, blue);
-        gl.lineWidth(2);
+        gl.lineWidth(lineWidth);
         gl.drawArrays(gl.LINES, 0, positions.length / 3);
         gl.bindVertexArray(null);
       }
-      drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24);
-      drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1);
-      drawSurfaceLines(plannedRouteLinePositions, 0.08, 0.88, 1, 0.92, 1);
+      drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24, 2);
+      drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1, 1, 1, 2);
+      drawSurfaceLines(plannedRouteLinePositions, 0.12, 0.92, 0.78, 0.96, 1, 3);
 
       const { astronaut: player } = snapshot;
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
@@ -758,8 +866,63 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           rigHeadingRad: rigPose ? ((Number.isFinite(camera.yawRad) ? camera.yawRad : player.headingRad) + ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad) : null,
           surfaceContactStatus: movement?.groundContactStatus ?? null,
           sampledElevationKnown: elevationKnown,
+          orthoMode: orthoMode === 2 ? 'ortho' : (orthoMode === 1 ? 'hybrid' : 'hillshade'),
+          orthoFineLoaded: Boolean(hasOrthoFine),
+          orthoCoarseLoaded: Boolean(hasOrthoCoarse),
         };
       }
+    },
+
+    /**
+     * Updates or binds the multi-tier HiRISE orthomosaic assets.
+     * @param {Object|null} orthoAssets - { mode, fine: { layer, image }, coarse: { layer, image } }
+     */
+    setOrthoOverlay(orthoAssets) {
+      if (disposed) return;
+      currentOrthoAssets = orthoAssets ?? null;
+      if (!orthoAssets) {
+        hasOrthoFine = 0;
+        hasOrthoCoarse = 0;
+        return;
+      }
+      const modeStr = orthoAssets.mode ?? 'hybrid';
+      orthoMode = modeStr === 'ortho' ? 2 : (modeStr === 'hybrid' ? 1 : 0);
+
+      const fine = orthoAssets.fine;
+      if (fine?.image) {
+        orthoTexFine = uploadOrthoTexture(gl, orthoTexFine, fine.image);
+        hasOrthoFine = 1;
+        const uvT = fine.layer?.uvTransformVec4 || fine.uvTransformVec4;
+        if (uvT && uvT.length === 4) {
+          orthoUvFine.set(uvT);
+        } else if (fine.layer?.uvMapping) {
+          const m = fine.layer.uvMapping;
+          orthoUvFine.set([m.uScale, m.uOffset, m.vScale, m.vOffset]);
+        }
+      } else {
+        hasOrthoFine = 0;
+      }
+
+      const coarse = orthoAssets.coarse;
+      if (coarse?.image) {
+        orthoTexCoarse = uploadOrthoTexture(gl, orthoTexCoarse, coarse.image);
+        hasOrthoCoarse = 1;
+        const uvT = coarse.layer?.uvTransformVec4 || coarse.uvTransformVec4;
+        if (uvT && uvT.length === 4) {
+          orthoUvCoarse.set(uvT);
+        } else if (coarse.layer?.uvMapping) {
+          const m = coarse.layer.uvMapping;
+          orthoUvCoarse.set([m.uScale, m.uOffset, m.vScale, m.vOffset]);
+        }
+      } else {
+        hasOrthoCoarse = 0;
+      }
+    },
+
+    /** Updates the orthomosaic blending mode without re-uploading textures. */
+    setOrthoMode(mode) {
+      if (currentOrthoAssets) currentOrthoAssets.mode = mode;
+      orthoMode = mode === 'ortho' ? 2 : (mode === 'hybrid' ? 1 : 0);
     },
 
     ...(collectDiagnostics ? { getDiagnostics: () => lastFrameDiagnostics ? { ...lastFrameDiagnostics } : null } : {}),
@@ -768,6 +931,9 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       if (disposed) return;
       releaseMesh();
       releaseMarkerMesh();
+      if (orthoTexFine) { gl.deleteTexture(orthoTexFine); orthoTexFine = null; }
+      if (orthoTexCoarse) { gl.deleteTexture(orthoTexCoarse); orthoTexCoarse = null; }
+      if (dummyTexture) { gl.deleteTexture(dummyTexture); }
       gl.deleteVertexArray(geologyVao);
       gl.deleteBuffer(geologyPositionBuffer);
       gl.deleteVertexArray(astronaut.vao);

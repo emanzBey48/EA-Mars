@@ -67,3 +67,13 @@ export const SOURCES = [
   { label: 'Mars 2020 Initial Reports (waypoint bağlamı)', url: 'https://pds-geosciences.wustl.edu/missions/mars2020/Mars%202020%20Initial%20Reports%201-4%20April%202022.pdf' },
   { label: 'Mars 2020 PLACES bilgi sayfası (gerçek iz — bu demoda kullanılmadı)', url: 'https://pds-geosciences.wustl.edu/missions/mars2020/places.htm' },
 ];
+
+export const ORTHO_MOSAIC_SOURCES = {
+  z17Manifest: '/data/ortho/ortho-alignment-z17-tiles.json',
+  z17Image: '/data/ortho/ortho-mosaic-z17-tiles.png',
+  z14Manifest: '/data/ortho/ortho-alignment-z14-tiles.json',
+  z14Image: '/data/ortho/ortho-mosaic-z14-tiles.png',
+  defaultMode: 'hybrid', // 'hybrid' = HiRISE Ortomozaik + Rölyef/Mars Regolit Renklendirmesi, 'ortho' = Saf HiRISE Ortomozaik Albedo, 'hillshade' = Yalnız DTM Gölgeli Kabartma
+  licenseNotice: 'Lisans: kaynakta belirtilmemiş',
+};
+

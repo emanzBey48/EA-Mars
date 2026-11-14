@@ -1,12 +1,14 @@
 // App bootstrap (composition root): coordinates simulation, SurfaceProvider sampling,
 // immutable WorldSnapshot creation, canvas rendering, input and HUD.
-import { SCENARIO, WAYPOINTS, MAP_FRAME, ROUTE_ORIGIN_NOTE, SOURCES } from './config.js';
+import { SCENARIO, WAYPOINTS, MAP_FRAME, ROUTE_ORIGIN_NOTE, SOURCES, ORTHO_MOSAIC_SOURCES } from './config.js';
 import { adapterFromLabel } from './geo/geo.js';
 import { marsSunDirection } from './geo/mars-sun.js';
 import {
   createGeologyIndex, lookupGeologicUnitLocal, toGeologySnapshot,
   createGeologicContactField, nearestGeologicContactM,
+  GEOLOGY_POSITIONAL_UNCERTAINTY_M, GEOLOGY_LICENSE_NOT_STATED,
 } from './geo/geology.js';
+import { createGeologyRegistry, lookupBestGeologicUnit } from './geo/geology-registry.js';
 import { UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
 import { createDefaultSurfaceRegistry } from './surface/registry.js';
 import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
@@ -59,6 +61,7 @@ let renderer3dError = null;
 let terrainMeshError = null;
 let terrainMeshBuildMs = null;
 let geologyIndex = null;
+let geologyRegistry = null;
 let geologyContactField = null;
 let geologySegmentsLocal = [];
 let geologyLinePositions = new Float32Array();
@@ -76,6 +79,7 @@ const routeWorkerRequests = new Map();
 let routeHeatmap = null;
 let activeRoute = null;
 let plannedRouteLinePositions = new Float32Array();
+let orthoOverlay = null;
 
 const mapWrap = $('mapwrap');
 const canvas2d = $('map');
@@ -83,6 +87,7 @@ const canvas3d = $('map-3d');
 const ctx2d = canvas2d.getContext('2d');
 const view2dBtn = $('btn-view-2d');
 const view3dBtn = $('btn-view-3d');
+const selectOrthoMode = $('select-ortho-mode');
 const viewNote = $('view-note');
 const viewStatus = $('view-status');
 const fpReticle = $('fp-reticle');
@@ -94,11 +99,13 @@ const minimapEndLabel = $('minimap-end');
 const minimapStatus = $('minimap-status');
 const minimapGeologyToggle = $('minimap-toggle-geology');
 const minimapArchiveToggle = $('minimap-toggle-archive');
+const minimapOrthoToggle = $('minimap-toggle-ortho');
 const minimapLayerStatus = $('minimap-layer-status');
 const minimapHeatmapToggle = $('minimap-toggle-heatmap');
 const minimapPlanButton = $('minimap-plan-route');
 const minimapRouteSummary = $('minimap-route-summary');
 const minimapCellExplanation = $('minimap-cell-explanation');
+const orthoStatus = $('ortho-status');
 const FIRST_PERSON_NOTE = 'Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. Arazi yüksekliği 3× abartılı. Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.';
 
 function showSelectedPoint(kind, point) {
@@ -114,7 +121,7 @@ function showSelectedPoint(kind, point) {
   plannedRouteLinePositions = new Float32Array();
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
   renderRouteSummary({ status: 'idle', reason: 'Yeni nokta seçildi' });
-  minimapStatus.textContent = 'Nokta kaydedildi. Planlama göstergesi güvenli rota sertifikası değildir.';
+  minimapStatus.textContent = 'Nokta kaydedildi. Planlama göstergesi — güvenli rota sertifikası değildir.';
   updateRouteButton();
   minimapController.setSelectionMode(null);
   $('minimap-pick-start').setAttribute('aria-pressed', 'false');
@@ -312,7 +319,7 @@ function planMinimapRoute() {
   renderRouteSummary({ status: 'pending', reason: 'Rota hesaplanıyor' });
   pendingPlanId = id;
   routeWorkerRequests.set(id, { kind: 'plan', endpointRevision });
-  minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi güvenli rota sertifikası değildir.';
+  minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi — güvenli rota sertifikası değildir.';
   updateRouteButton();
   ensureRouteWorker().postMessage({ type: 'plan-walking-route', id, startLocal: minimapEndpoints.start, endLocal: minimapEndpoints.end });
 }
@@ -323,6 +330,8 @@ function refreshMinimapOverlays() {
     archiveTraverse,
     geologyVisible: minimapGeologyToggle.checked && geologyLayerVisible,
     archiveVisible: minimapArchiveToggle.checked && $('toggle-archive-traverse').checked,
+    orthoOverlay,
+    orthoVisible: minimapOrthoToggle ? minimapOrthoToggle.checked : true,
   });
   const geologyText = geologyStatus === 'ready' ? 'hazır' : geologyStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
   const archiveText = archiveTraverseStatus === 'ready' ? 'hazır' : archiveTraverseStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
@@ -368,6 +377,13 @@ minimapGeologyToggle.addEventListener('change', () => {
   updateHud();
 });
 minimapArchiveToggle.addEventListener('change', refreshMinimapOverlays);
+minimapOrthoToggle?.addEventListener('change', refreshMinimapOverlays);
+selectOrthoMode?.addEventListener('change', () => {
+  const mode = selectOrthoMode.value;
+  if (orthoOverlay) orthoOverlay.mode = mode;
+  renderer3d?.setOrthoMode?.(mode);
+  refreshMinimapOverlays();
+});
 refreshMinimapOverlays();
 
 try {
@@ -376,6 +392,7 @@ try {
     collectDiagnostics: debugEnabled,
     lightDirection: marsSunDirection({ latitudeDeg: WAYPOINTS[0].latDeg, solarLongitudeDeg: 0, trueSolarHour: 15 }),
   });
+  if (orthoOverlay) renderer3d.setOrthoOverlay(orthoOverlay);
 } catch (error) {
   renderer3dError = error;
   view3dBtn.disabled = true;
@@ -440,7 +457,13 @@ function build3dTerrainOnce() {
 
 function preparePlannedRouteGuide() {
   plannedRouteLinePositions = activeRoute?.status === 'ok' && terrainMesh
-    ? buildPlannedRouteLinePositions({ route: activeRoute, surfaceProvider: layers.dtm, displayConfig: terrainMesh.displayConfig })
+    ? buildPlannedRouteLinePositions({
+      route: activeRoute,
+      surfaceProvider: layers.dtm,
+      displayConfig: terrainMesh.displayConfig,
+      liftDisplayM: 0.28,
+      ribbonHalfWidthM: 0.22,
+    })
     : new Float32Array();
 }
 
@@ -623,12 +646,39 @@ async function selectView(view) {
   viewStatus.hidden = true;
 }
 
-function buildSnapshot() {
-  const position = { xM: sim.pos.x, yM: sim.pos.y };
+function resolveGeologicContext(xM, yM) {
+  const position = { xM, yM };
+  if (geologyRegistry) {
+    const { latDeg, lonDeg } = adapter.localToLatLon(xM, yM);
+    const best = lookupBestGeologicUnit(geologyRegistry, { lonDeg, latDeg });
+    const geology = {
+      ...best.snapshot,
+      sourceMapId: best.sourceMapId,
+      mapScale: best.mapScale ?? best.snapshot.mapScale,
+      mapScaleDenominator: best.mapScaleDenominator,
+      fallbackChain: best.fallbackChain,
+      conflict: best.conflict,
+    };
+    const contact = geology.status === 'ok' || geology.status === 'ambiguous'
+      ? nearestGeologicContactM(geologyContactField, position) : null;
+    return { geology, contactDistanceM: contact?.distanceM ?? null };
+  }
   const lookup = geologyIndex ? lookupGeologicUnitLocal(geologyIndex, adapter, position) : null;
-  const geology = toGeologySnapshot(lookup, geologyIndex);
+  const base = toGeologySnapshot(lookup, geologyIndex);
+  const geology = {
+    ...base,
+    sourceMapId: null,
+    mapScaleDenominator: null,
+    fallbackChain: [],
+    conflict: null,
+  };
   const contact = geology.status === 'ok' || geology.status === 'ambiguous'
     ? nearestGeologicContactM(geologyContactField, position) : null;
+  return { geology, contactDistanceM: contact?.distanceM ?? null };
+}
+
+function buildSnapshot() {
+  const { geology, contactDistanceM } = resolveGeologicContext(sim.pos.x, sim.pos.y);
   lastSnapshot = createWorldSnapshot({
     sim,
     surfaceProvider: layers.dtm,
@@ -637,7 +687,7 @@ function buildSnapshot() {
     routeNote: ROUTE_ORIGIN_NOTE,
     geology,
     geologyLayerStatus: geologyStatus,
-    geologyContactDistanceM: contact?.distanceM,
+    geologyContactDistanceM: contactDistanceM,
   });
   return lastSnapshot;
 }
@@ -655,6 +705,15 @@ async function loadGeology() {
     if (!geologyIndex.counts.acceptedFeatures || geologyIndex.counts.skippedFeatures > 0) {
       throw new Error('Jeoloji verisinde poligon atlandı; kısmi katman kullanılmadı');
     }
+    geologyRegistry = createGeologyRegistry([{
+      id: 'usgs_sim3464_2020',
+      index: geologyIndex,
+      mapScaleDenominator: geologyIndex.provenance?.scaleDenominator ?? 75000,
+      positionalUncertaintyM: geologyIndex.provenance?.positionalUncertaintyM ?? GEOLOGY_POSITIONAL_UNCERTAINTY_M,
+      license: geologyIndex.provenance?.license ?? GEOLOGY_LICENSE_NOT_STATED,
+      citation: geologyIndex.provenance?.citation ?? 'Sun & Stack (2020), USGS SIM 3464',
+      unitScheme: 'usgs-sim3464',
+    }]);
     geologyContactField = createGeologicContactField(geologyIndex, adapter);
     geologySegmentsLocal = uniqueGeologySegments(geologyContactField.polylines);
     if (terrainMesh) geologyLinePositions = buildGeologyLinePositions();
@@ -663,6 +722,7 @@ async function loadGeology() {
     updateHud();
   } catch (error) {
     geologyIndex = null;
+    geologyRegistry = null;
     geologyContactField = null;
     geologySegmentsLocal = [];
     geologyLinePositions = new Float32Array();
@@ -741,6 +801,138 @@ async function loadRoverGallery() {
   updateHud();
 }
 
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Görsel yüklenemedi: ${src}`));
+    img.src = src;
+  });
+}
+
+async function loadOrthoMosaics() {
+  try {
+    let orthoLayerMod = null;
+    try {
+      orthoLayerMod = await import('./surface/ortho-layer.js');
+    } catch (err) {
+      console.warn('ortho-layer.js modülü dinamik yüklenemedi:', err);
+    }
+
+    const [z17ManifestResp, z14ManifestResp] = await Promise.all([
+      fetch(ORTHO_MOSAIC_SOURCES.z17Manifest),
+      fetch(ORTHO_MOSAIC_SOURCES.z14Manifest),
+    ]);
+    if (!z17ManifestResp.ok || !z14ManifestResp.ok) {
+      throw new Error(`Manifest HTTP hatası: z17=${z17ManifestResp.status}, z14=${z14ManifestResp.status}`);
+    }
+    const [z17Manifest, z14Manifest] = await Promise.all([
+      z17ManifestResp.json(),
+      z14ManifestResp.json(),
+    ]);
+
+    const [z17Img, z14Img] = await Promise.all([
+      loadImage(ORTHO_MOSAIC_SOURCES.z17Image),
+      loadImage(ORTHO_MOSAIC_SOURCES.z14Image),
+    ]);
+
+    let fineLayer = null;
+    let coarseLayer = null;
+    let descriptor = null;
+
+    if (orthoLayerMod?.createOrthoLayer) {
+      fineLayer = orthoLayerMod.createOrthoLayer(z17Manifest);
+      coarseLayer = orthoLayerMod.createOrthoLayer(z14Manifest);
+      if (orthoLayerMod.createMultiZoomOrthoDescriptor) {
+        descriptor = orthoLayerMod.createMultiZoomOrthoDescriptor({
+          fineLayer,
+          coarseLayer,
+          mode: selectOrthoMode?.value ?? ORTHO_MOSAIC_SOURCES.defaultMode,
+        });
+      }
+    } else {
+      const makeLayer = (m) => {
+        const b = m.window.localBoundsM;
+        const uv = m.uvMapping;
+        return {
+          available: true,
+          zoom: m.product.zoom,
+          layerId: m.product.layerId,
+          gsdM: m.groundSampleDistance.northSouthM,
+          localBoundsM: { ...b },
+          renderBoundsM: { nwXM: b.xMin, nwYM: b.yMax, widthM: b.xMax - b.xMin, heightM: b.yMax - b.yMin },
+          uvMapping: { ...uv },
+          uvTransformVec4: new Float32Array([uv.uScale, uv.uOffset, uv.vScale, uv.vOffset]),
+          attribution: 'NASA Mars Trek / USGS Astrogeology / HiRISE',
+          registration: m.registration,
+        };
+      };
+      fineLayer = makeLayer(z17Manifest);
+      coarseLayer = makeLayer(z14Manifest);
+    }
+
+    const mode = selectOrthoMode?.value ?? ORTHO_MOSAIC_SOURCES.defaultMode;
+    orthoOverlay = {
+      mode,
+      fine: {
+        layer: fineLayer,
+        image: z17Img,
+        renderBoundsM: fineLayer.renderBoundsM,
+        uvTransformVec4: fineLayer.uvTransformVec4,
+      },
+      coarse: {
+        layer: coarseLayer,
+        image: z14Img,
+        renderBoundsM: coarseLayer.renderBoundsM,
+        uvTransformVec4: coarseLayer.uvTransformVec4,
+      },
+      descriptor,
+    };
+
+    if (renderer3d) {
+      renderer3d.setOrthoOverlay(orthoOverlay);
+    }
+    refreshMinimapOverlays();
+
+    layers.orthoMosaic = {
+      descriptor: {
+        title: 'USGS/NASA MRO HiRISE Kontrollü Ortomozaik (WMTS z17/z14)',
+        product: 'JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd',
+        version: 'WMTS z17/z14',
+        body: 'MARS',
+        source: 'NASA JPL Mars Trek / USGS Astrogeology',
+        attribution: 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona',
+        license: 'Lisans: kaynakta belirtilmemiş',
+        unit: 'Albedo (gri tonlama albedo)',
+        crs: 'urn:ogc:def:crs:EPSG::104905 (Equirectangular Mars 2000 Sphere)',
+        pixelScaleM: fineLayer.gsdM,
+        access: { status: 'ok' },
+        validation: { status: 'supported', summary: 'WMTS karo projeksiyon aritmetiğiyle hizalandı (Stage 39A)' },
+        size: {
+          rows: fineLayer.mosaicMeta?.heightPx ?? 2304,
+          cols: fineLayer.mosaicMeta?.widthPx ?? 1536,
+          pixelRegistration: 'PIXEL_IS_AREA (WMTS)',
+        },
+        coverage: { description: 'Jezero krateri rover keşif koridoru (z17: 0.318 m/px) ve tüm DTM penceresi (z14: 2.544 m/px)' },
+        timeCoverage: 'MRO HiRISE arşiv ürünü',
+        quality: { registration: { note: 'WMTS projeksiyon aritmetiği; görsel kayaç kontrolü doğrulanmadı' } },
+      },
+    };
+    hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM);
+
+    if (orthoStatus) {
+      const gsd17 = (fineLayer.gsdM || 0.318).toFixed(3);
+      const gsd14 = (coarseLayer.gsdM || 2.544).toFixed(3);
+      orthoStatus.textContent = `HiRISE WMTS Ortomozaik: z17 (${gsd17} m/px) ve z14 (${gsd14} m/px) yüklendi · WMTS projeksiyon aritmetiği · ${ORTHO_MOSAIC_SOURCES.licenseNotice}`;
+    }
+  } catch (err) {
+    console.warn('HiRISE ortomozaik yüklenemedi:', err);
+    if (orthoStatus) {
+      orthoStatus.textContent = `HiRISE WMTS Ortomozaik: Yüklenemedi (${err.message}) · DTM kabartması gösterilmeye devam ediliyor.`;
+    }
+  }
+}
+
 void loadRoverGallery();
 geologyToggle?.addEventListener('change', () => {
   geologyLayerVisible = geologyToggle.checked;
@@ -751,6 +943,7 @@ geologyToggle?.addEventListener('change', () => {
 $('toggle-archive-traverse').addEventListener('change', refreshMinimapOverlays);
 void loadGeology();
 void loadArchiveTraverse();
+void loadOrthoMosaics();
 
 const { keys } = bindControls({
   mapEl: mapWrap,
@@ -869,9 +1062,19 @@ function frame(now) {
   if (canvas2d.width !== pixelWidth || canvas2d.height !== pixelHeight) {
     canvas2d.width = pixelWidth; canvas2d.height = pixelHeight;
   }
+  const routeEndpoints = { start: minimapEndpoints.start, goal: minimapEndpoints.end };
   if (activeView === '2d') {
     ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-    render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [], archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null });
+    render(ctx2d, w, h, {
+      camera,
+      snapshot,
+      terrain,
+      orthoOverlay,
+      geologySegments: geologyLayerVisible ? geologySegmentsLocal : [],
+      archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null,
+      plannedRoute: activeRoute?.status === 'ok' ? activeRoute.path : null,
+      routeEndpoints: routeEndpoints.start || routeEndpoints.goal ? { start: routeEndpoints.start, goal: routeEndpoints.goal } : null,
+    });
   } else if (renderer3d && terrainMesh) {
     try {
       renderer3d.resize(w, h, dpr);
@@ -949,7 +1152,16 @@ function frame(now) {
       viewStatus.textContent = `3D görünüm durdu: ${error.message}. 2D harita kullanılabilir.`;
       viewStatus.hidden = false;
       ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
-      render(ctx2d, w, h, { camera, snapshot, terrain, geologySegments: geologyLayerVisible ? geologySegmentsLocal : [], archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null });
+      render(ctx2d, w, h, {
+        camera,
+        snapshot,
+        terrain,
+        orthoOverlay,
+        geologySegments: geologyLayerVisible ? geologySegmentsLocal : [],
+        archiveTraverse: $('toggle-archive-traverse').checked ? archiveTraverse : null,
+        plannedRoute: activeRoute?.status === 'ok' ? activeRoute.path : null,
+        routeEndpoints: routeEndpoints.start || routeEndpoints.goal ? { start: routeEndpoints.start, goal: routeEndpoints.goal } : null,
+      });
     }
   }
   hudAcc += dt; if (hudAcc > 0.08) { hudAcc = 0; updateHudFromSnapshot(snapshot); }
@@ -980,6 +1192,11 @@ if (debugEnabled) {
       cameraFovYRad: camera3d.fovYRad,
       movement: lastSnapshot?.astronaut?.movement ?? null,
       renderer: renderer3d?.getDiagnostics?.() ?? null,
+      orthoOverlay: orthoOverlay ? {
+        mode: orthoOverlay.mode,
+        fineAvailable: Boolean(orthoOverlay.fine?.image),
+        coarseAvailable: Boolean(orthoOverlay.coarse?.image),
+      } : null,
       snapshot: lastSnapshot ? {
         elevationStatus: lastSnapshot.astronaut.elevationStatus,
         zM: lastSnapshot.astronaut.zM,

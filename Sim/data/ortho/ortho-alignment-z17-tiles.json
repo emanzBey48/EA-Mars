@@ -1,0 +1,859 @@
+{
+  "schema": "marswalk.ortho-alignment.v1",
+  "product": {
+    "kind": "HiRISE orthomosaic (WMTS tiles from NASA Mars Trek). Not the DTM hillshade; not from JP2.",
+    "layerId": "JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd",
+    "tileMatrixSet": "default028mm",
+    "crs": "urn:ogc:def:crs:EPSG::104905",
+    "zoom": 17,
+    "resourceUrlTemplate": "https://trek.nasa.gov/tiles/Mars/EQ/JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd/1.0.0//{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png"
+  },
+  "tileMatrix": {
+    "topLeftCornerDeg": {
+      "lon": -180,
+      "lat": 90
+    },
+    "tilePx": [
+      256,
+      256
+    ],
+    "matrixSize": [
+      262144,
+      131072
+    ],
+    "degPerPx": 0.000005364418029785156,
+    "pathOrder": "ortho-tiles/{zoom}/{row}/{col}.png (row = TileRow, north = 0)",
+    "extentAssumption": "matrix spans the globe (-180..180, 90..-90); ScaleDenominator is Earth-based and NOT used"
+  },
+  "registration": {
+    "convention": "PIXEL_IS_AREA (WMTS): pixel (i,j) spans [lon0+i*d, lon0+(i+1)*d]; its centre is +0.5 px. Integer global coordinates are pixel EDGES.",
+    "pixelCenterOffsetPx": 0.5,
+    "glTexelNote": "UV edges u=0/1 map to the outer mosaic pixel edges; GL texel centres (i+0.5)/W are consistent with this convention.",
+    "halfPixelRegistrationOfSourceRasterVerified": false,
+    "alignmentVsDtmVisuallyVerified": false,
+    "statusTr": "Hizalama DTM ile gorsel olarak DOGRULANMADI; sadece karo aritmetigi (WMTS) ile turetildi. Kaynak raster yari-piksel kaydi kanitlanmadi."
+  },
+  "groundSampleDistance": {
+    "atLatDeg": 18.435745239257812,
+    "northSouthM": 0.3179742561040854,
+    "eastWestProjectedM": 0.3179742561040854,
+    "eastWestGroundM": 0.3016554682612524,
+    "nominalClaim": "25 cm",
+    "meetsNominal25cm": false,
+    "note": "Metres per pixel from degree grid and R=3396190 m; zoom 17 is the finest tile level available."
+  },
+  "window": {
+    "name": "tiles",
+    "source": "union of tiles present at chosen zoom",
+    "requestedBboxDeg": {
+      "west": 77.44674682617188,
+      "east": 77.45498657226562,
+      "north": 18.441925048828125,
+      "south": 18.4295654296875,
+      "source": "union of tiles present at chosen zoom"
+    },
+    "marginM": 0,
+    "pixelBoundsGlobal": {
+      "x0": 47991552,
+      "y0": 13339392,
+      "x1": 47993088,
+      "y1": 13341696
+    },
+    "sizePx": [
+      1536,
+      2304
+    ],
+    "actualBboxDeg": {
+      "west": 77.44674682617188,
+      "east": 77.45498657226562,
+      "north": 18.441925048828125,
+      "south": 18.4295654296875
+    },
+    "localBoundsM": {
+      "xMin": -157.38818201608956,
+      "xMax": 331.0202753599733,
+      "yMin": -563.3325178576633,
+      "yMax": 169.28016820619814
+    },
+    "sizeM": {
+      "width": 488.40845737606287,
+      "height": 732.6126860638615
+    },
+    "localFrame": "Sim local plane: x east, y north, metres, origin = Sol 120 waypoint, equirectangular latTs0=0 lon0=0 R=3396190 (geo.js)"
+  },
+  "uvMapping": {
+    "uScale": 0.0020474665925574336,
+    "uOffset": 0.32224704474129207,
+    "vScale": -0.0013649777283720563,
+    "vOffset": 0.23106365945653592,
+    "vOrigin": "top-row"
+  },
+  "meshWindow": {
+    "source": "data/dtm_subset.json coverage.localBoundsM",
+    "localBoundsM": {
+      "xMin": -500.8804674297571,
+      "xMax": 634.1195325702429,
+      "yMin": -1175.2488485651556,
+      "yMax": 500.75115143484436
+    },
+    "uvOfMeshCorners": {
+      "northWest": {
+        "u": -0.7032889791856874,
+        "v": -0.4524505097086895
+      },
+      "southEast": {
+        "u": 1.6205856033669996,
+        "v": 1.8352521630428769
+      }
+    },
+    "mosaicCoversFractionOfMeshWindow": 0.18809954047006425,
+    "note": "UV outside [0,1] has no ortho imagery: keep DTM hillshade there (never stretch / clamp-extend the edge)."
+  },
+  "otherWindowCoverage": {
+    "corridor": {
+      "tilesNeeded": 54,
+      "tilesMissing": 0,
+      "complete": true,
+      "missingSample": []
+    },
+    "route": {
+      "tilesNeeded": 27,
+      "tilesMissing": 6,
+      "complete": false,
+      "missingSample": [
+        {
+          "row": 52116,
+          "col": 187468
+        },
+        {
+          "row": 52116,
+          "col": 187469
+        },
+        {
+          "row": 52116,
+          "col": 187470
+        },
+        {
+          "row": 52117,
+          "col": 187468
+        },
+        {
+          "row": 52117,
+          "col": 187469
+        },
+        {
+          "row": 52117,
+          "col": 187470
+        }
+      ]
+    },
+    "dtm": {
+      "tilesNeeded": 330,
+      "tilesMissing": 276,
+      "complete": false,
+      "missingSample": [
+        {
+          "row": 52102,
+          "col": 187462
+        },
+        {
+          "row": 52102,
+          "col": 187463
+        },
+        {
+          "row": 52102,
+          "col": 187464
+        },
+        {
+          "row": 52102,
+          "col": 187465
+        },
+        {
+          "row": 52102,
+          "col": 187466
+        },
+        {
+          "row": 52102,
+          "col": 187467
+        }
+      ]
+    },
+    "tiles": {
+      "tilesNeeded": 54,
+      "tilesMissing": 0,
+      "complete": true,
+      "missingSample": []
+    }
+  },
+  "mosaic": {
+    "file": "ortho-mosaic-z17-tiles.png",
+    "bytes": 2806199,
+    "sha256": "b8ab7a5197b2c406a08fdd2ece2ec513ec2ffb83cd7d2c15ac4d1490ed9c8bbe",
+    "widthPx": 1536,
+    "heightPx": 2304,
+    "channels": 2,
+    "bitDepth": 8,
+    "layout": "gray+alpha",
+    "transparentPixels": 0
+  },
+  "tiles": [
+    {
+      "zoom": 17,
+      "row": 52107,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 40672,
+      "sha256": "8d7981985591ff61fe5d0a96476da8ccb8b7aa05256e5c079929c62e8de94e7a",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52107,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 36327,
+      "sha256": "933063d0505251a677f6ce50904e0b24c790c6dd5cf13badd6c4989e6307ed9b",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52107,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 33407,
+      "sha256": "8e104eb7d4937d6684fb4834cab363ba29ee3d53ecc6b693597c65dfd58a59cc",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52107,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 36725,
+      "sha256": "423e4fbc22327c035d19676545f72bc321bfed5c20e09e74cd5dea2f5917b492",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52107,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 40581,
+      "sha256": "32005cd05bdc20957729057a5e52d318f7039c3f9433ec54d995fb1e21ff98f3",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52107,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 40944,
+      "sha256": "cf1c0afc6a85a353387e21a2793aa3e76ff293fdd43c23076761cad74042e1d0",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52108,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 38707,
+      "sha256": "82db063aeb16770c93ea081031136dc5b49ac109dea7d324d9653a07908fcc8c",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52108,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 35966,
+      "sha256": "5014a3c94cdaeb7a9604f210db7054450d22bd3308b27c1fa74fa5e4a43f053f",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52108,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 32944,
+      "sha256": "dabf25c0850f9c4de973bc0b16cc3280bea0d72d0c6e7b5d8fab75c2c7c75586",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52108,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 35871,
+      "sha256": "29cc732033403985d5dc6a9b7b67e6bcbf67caa8f7aded0a8627d25b928adfef",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52108,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 37025,
+      "sha256": "572cc5bffad8562533b0e01e3fb15b248567190c924e4240d6f1e4db2633992e",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52108,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 41783,
+      "sha256": "b97899feb4e519177a0077d359b653ef4a1cab1c7152f684f9f1d4ec0adfabe8",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52109,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 38493,
+      "sha256": "4d5d4292e2fee3b330aa51e75f1d29be026f6e2adafeb881341489a0f761c997",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52109,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 36518,
+      "sha256": "9cec382ed45a2b94dd5d947cd2d93cec224db7423472691944220df410601a8f",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52109,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 33998,
+      "sha256": "8c8ddaac4510a57f79a5326b3e8898685b1950049b818bb21f250821c9de71ce",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52109,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 37619,
+      "sha256": "5cd03b306c38e28f32206179ae5dee601c026f7f61c833b81fd6683425c13082",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52109,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 40434,
+      "sha256": "fa57f4502ab28471ec73062c733ac3b84f66fa318d383de3d07e7725b9694552",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52109,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 39000,
+      "sha256": "41e9114ac6fb12a1a734c2b6415b2a3c7c772b5c14ae37fc05037da9ee13f2d8",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52110,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 38705,
+      "sha256": "a7d7e699dd8a332da2ab288ee59f449e228a59b0d0766d0f23f3d65652cb0a13",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52110,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 38392,
+      "sha256": "62ad2044dc1dd881fe91ac181a207ddc18e54863bd47b4501333c013827054b0",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52110,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 36944,
+      "sha256": "1826bbd5f319f1b159c946c426a5403eed124d0e1768e08e4db88a1a71b07c33",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52110,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 37264,
+      "sha256": "40d66271bb24dd2cc747f473192a5889268ac9c429f9c58be735229a25447956",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52110,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 37069,
+      "sha256": "7625d91bcd5ac7129e1551fdb19f88f47badc8497da40518fe2f310f9c73a9a7",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52110,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 40694,
+      "sha256": "d5e91dea36b831593f40ca8597711b89d5f7cdbbe94df550a8e59111ff0ce741",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52111,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 39904,
+      "sha256": "5ce471bfef2f9414713f18780ff8e4095d64841c571a1c6a4a1dab93c611d8d5",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52111,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 39564,
+      "sha256": "9cd432a6ff83607e8308a59e254e8f0386f4a08bc21d83e250c60223665a223d",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52111,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 33880,
+      "sha256": "c8c8a4961e866ac97f541e0dc2aec8161b145f752b37b6a0375f50ef38646ae1",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52111,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 36797,
+      "sha256": "1f95d0180e81d73425616a3b58bb54b557ce66811edee9b97154aa413f535983",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52111,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 37974,
+      "sha256": "faa66f50adb8e936a6db3ac4795248357d3b5e86e6b92b26165725bde4f6a23c",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52111,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 36201,
+      "sha256": "80d30d76bae438f156161291ca75bcf8117b7e5b73f2143d8107a9018f607ff3",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52112,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 40590,
+      "sha256": "b79da044a6c0f2279353c224beb896074618b841ae54e6ecca43d8594e28829e",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52112,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 37837,
+      "sha256": "3025287f26bbdc5fef976432a4f189665427f85c19a22b6d38a40492f1b5704f",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52112,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 34958,
+      "sha256": "a75d627fa506fa06593d70565c7e38fd41482f84ffdfdb1e0966122b33fc0b89",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52112,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 36551,
+      "sha256": "9a88ca126b2d335e321f324c31df4882988cc2a7b4159c49a69b6b9840e93220",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52112,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 35206,
+      "sha256": "2005dbfc0572e580064b20c066996afef526818899fc6b0e9f561ab6f8279fed",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52112,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 33232,
+      "sha256": "3d1a77f058a71e97b2d8631973284dba0ff59a3f80fbfe0c99cfbf980422d31c",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52113,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 39794,
+      "sha256": "9b452f30be54b4f856364e77bc2016c050b22b8c5f49445c578d5f134c50b04a",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52113,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 37214,
+      "sha256": "c6a60ffdfe81313847325d5882c568755b475ce3918e13bcac59ea3f4f9a68f5",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52113,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 32176,
+      "sha256": "9b1869d772586bb71d0e1371aea2ac2966c310ddb6870992664ee4f8bee8af35",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52113,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 36162,
+      "sha256": "ae3f295944732549b8430d1f8f7a9dd073983278d1f96057df4f9c07e7e051d1",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52113,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 38134,
+      "sha256": "bb368c3e8afab56dc309f546c58a8395f03a7edbdb2b16f2291634edfedd23fa",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52113,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 35777,
+      "sha256": "dcbf82c1acd69865136b603f9d78c39353fda72bf55366ba982468016fe0c56d",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52114,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 32977,
+      "sha256": "d8c70cb121692c94d1aa6bc8c518e0073f4bee5c17170beef4fd12c59bad24c3",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52114,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 32304,
+      "sha256": "cbb0a76f7e390ae36ae11bdc27ebb2afa563dc0bc9f0d579fb0a622874f262c1",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52114,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 32337,
+      "sha256": "ced1176e4e49355c983df7f9862ce77bce46a4e8f66507dcac49e177604b47fa",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52114,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 34707,
+      "sha256": "40cb39817eacd1a4058aa3591e9705752387e7839997502d7b9ddb4c2b90ae89",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52114,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 36995,
+      "sha256": "89ace2e6e8f94bc152ee10712d9bed660899287c9245d45fbf5a4da0ca925732",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52114,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 37672,
+      "sha256": "29afa219b1e09af93359fb5620f45e07ce7d8b385cd7de3346f8bcfa26ee5f26",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52115,
+      "col": 187467,
+      "status": "ok",
+      "bytes": 33807,
+      "sha256": "e3fdb18173278ae2d13efb90e570dc59af13540c738d78c53107d767f23a5a48",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52115,
+      "col": 187468,
+      "status": "ok",
+      "bytes": 31365,
+      "sha256": "1618fd2d774280caad07d4fbfbbaa6693dfb0b7de17c1dce2c1dd6f645911b2c",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52115,
+      "col": 187469,
+      "status": "ok",
+      "bytes": 30611,
+      "sha256": "79d8ccd152b14a7e7fb68d2d661246a7bd4cf2b76ac215e8d18362174fa229a7",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52115,
+      "col": 187470,
+      "status": "ok",
+      "bytes": 33360,
+      "sha256": "71caabb6163e07ed896619ac2c3ff1186f81f5bf53290d4db014122c09cac4d1",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52115,
+      "col": 187471,
+      "status": "ok",
+      "bytes": 39131,
+      "sha256": "b1761e2d0142129b7459fb91ecd972d7f598b135b41e01beb20b8fe9bca0f267",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 17,
+      "row": 52115,
+      "col": 187472,
+      "status": "ok",
+      "bytes": 38041,
+      "sha256": "4b5e696cc2347b76fae0868355a0aca55aa8ca849054f9101205c4cbce369665",
+      "colorType": 4,
+      "bitDepth": 8
+    }
+  ],
+  "missingTiles": [],
+  "integrity": {
+    "note": "manifest.json carries no per-tile sha256; sha256 below are computed here and can be pinned.",
+    "inventory": {
+      "totalTilesFound": 91,
+      "manifestTotalTiles": 91,
+      "levels": [
+        {
+          "zoom": 13,
+          "gridTiles": 4,
+          "tilesFound": 4,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 231890,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 5.088,
+          "resolutionComputedM": 5.087588097665367,
+          "resolutionMatches": true
+        },
+        {
+          "zoom": 14,
+          "gridTiles": 4,
+          "tilesFound": 4,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 238971,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 2.544,
+          "resolutionComputedM": 2.5437940488326833,
+          "resolutionMatches": true
+        },
+        {
+          "zoom": 15,
+          "gridTiles": 9,
+          "tilesFound": 9,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 516419,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 1.272,
+          "resolutionComputedM": 1.2718970244163417,
+          "resolutionMatches": true
+        },
+        {
+          "zoom": 16,
+          "gridTiles": 20,
+          "tilesFound": 20,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 981816,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 0.636,
+          "resolutionComputedM": 0.6359485122081708,
+          "resolutionMatches": true
+        },
+        {
+          "zoom": 17,
+          "gridTiles": 54,
+          "tilesFound": 54,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 1981340,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 0.318,
+          "resolutionComputedM": 0.3179742561040854,
+          "resolutionMatches": true
+        }
+      ]
+    },
+    "metadataFiles": [
+      {
+        "file": "hirise_ortho_25cm_fgdc.html",
+        "manifestSha256": "dc19e73f42de53dabfb4273af060105b59ced5547e136d8eb78dcf0ca064ef67",
+        "manifestSize": 5641,
+        "diskSize": 5801,
+        "diskSha256": "3a9900fb5cc8418f0d5bc36eab3181af00444ec61ba5fc3f46bb5b6bd649143a",
+        "matches": false,
+        "lfNormalisedSha256": "dc19e73f42de53dabfb4273af060105b59ced5547e136d8eb78dcf0ca064ef67",
+        "lfNormalisedMatches": true
+      },
+      {
+        "file": "hirise_ortho_25cm_WMTSCapabilities.xml",
+        "manifestSha256": "6a67af4f3e79ed8bf5e625b60d4b9250533f38a8f61e98758410ff8ad9213693",
+        "manifestSize": 10037,
+        "diskSize": 10147,
+        "diskSha256": "f4770a7f4d6cdb7aca6e07d531838271d7de41deb71e5ef7f5ddb0315b1e2512",
+        "matches": false,
+        "lfNormalisedSha256": "6a67af4f3e79ed8bf5e625b60d4b9250533f38a8f61e98758410ff8ad9213693",
+        "lfNormalisedMatches": true
+      }
+    ],
+    "sourceFileSha256": {
+      "hirise_ortho_25cm_WMTSCapabilities.xml": "f4770a7f4d6cdb7aca6e07d531838271d7de41deb71e5ef7f5ddb0315b1e2512",
+      "hirise_ortho_25cm_fgdc.html": "3a9900fb5cc8418f0d5bc36eab3181af00444ec61ba5fc3f46bb5b6bd649143a"
+    }
+  },
+  "attribution": {
+    "fgdcTitle": "MRO HiRISE, Jezero Mosaic, Controlled",
+    "fgdcAbstractVerbatim": "The Mars 2020 rover will explore Jezero crater, Mars to investigate an ancient delta for evidence of past microbial life and to better understand the geologic history of the region. The landing system onboard Mars 2020 will use technology developed at the Jet Propulsion Laboratory (JPL) called Terrain Relative Navigation (TRN), which will enable the spacecraft to autonomously avoid hazards (e.g., rock fields, crater rims) that exceed the safety requirements of the landing system. This capability allows small-scale hazards to be present in the landing ellipse, providing greater flexibility in selecting a landing location. In support of TRN, the USGS Astrogeology Science Center has generated and delivered a High-Resolution Imaging Science Experiment (HiRISE) digital terrain model (DTM) mosaic and orthomosaic that is the basemap onto which surface hazards were mapped. The hazard map will be onboard the spacecraft and used by TRN to help identify the final, hazard-free landing location.",
+    "fgdcDcRights": "",
+    "fgdcUseConstraints": "",
+    "fgdcAccessConstraints": "",
+    "fgdcOriginator": "",
+    "licenseStatus": "NOT_STATED_IN_PROVIDED_FGDC",
+    "creditAsFoundInManifest": "USGS/NASA MRO HiRISE Controlled Orthomosaic (25cm resolution) over Jezero crater TRN basemap; generated by the USGS Astrogeology Science Center (per FGDC abstract); served by NASA JPL Mars Trek",
+    "note": "FGDC rights/constraints fields are empty. config.js MAP_FRAME.attribution/CC0 text belongs to the DTM product; 21B must confirm ortho licence before claiming it."
+  },
+  "caveats": [
+    "Alignment with the DTM is NOT visually verified.",
+    "Half-pixel registration of the source orthomosaic is not proven by any provided metadata.",
+    "This is orthoimagery, not DTM hillshade; do not label the hillshade \"ortho\".",
+    "Tile alpha < 255 / alpha 0 means no data; no imagery was synthesised."
+  ]
+}

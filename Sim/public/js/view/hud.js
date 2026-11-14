@@ -74,9 +74,9 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     const regBanner = layers.selectionReport
       ? `<div class="layer muted small"><b>SurfaceProvider Kayıt/Seçim:</b> Aktif sağlayıcı <code>${esc(layers.selectionReport.activeId)}</code> (${esc(layers.selectionReport.validation?.status ?? '—')}). ${esc(layers.selectionReport.competitionDataStatus)}</div>`
       : '';
-    $('layers').innerHTML = regBanner + [layers.dtm.descriptor, layers.ortho?.descriptor].filter(Boolean).map(layerCard).join('');
+    $('layers').innerHTML = regBanner + [layers.dtm.descriptor, layers.ortho?.descriptor, layers.orthoMosaic?.descriptor].filter(Boolean).map(layerCard).join('');
     const notes = [];
-    if (!layers.ortho?.available) notes.push('Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor / geçersiz bildirildi).');
+    if (!layers.ortho?.available) notes.push('Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor / yerel JP2 dosyası); DTM gölgeli kabartması ortogörüntü değildir. Mars Trek WMTS HiRISE ortomozaik karoları (z17/z14) ayrı katman olarak sunulmaktadır.');
     if (!layers.dtm.available) notes.push(`DTM kullanılamıyor: ${layers.dtm.descriptor.access.reason}`);
     const legend = $('legend');
     if (terrain) {
@@ -85,9 +85,9 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       legend.innerHTML = `<b>Zemin: DTM’den türetilmiş gölgeli kabartma + kot renklendirmesi</b> (ortogörüntü değil; görsel amaçlı)` +
         `<div class="bar" style="background:linear-gradient(90deg,${grad})"></div>` +
         `<div class="row"><span>${terrain.zMin.toFixed(1)} m</span><span>${esc(activeDatum)}</span><span>${terrain.zMax.toFixed(1)} m</span></div>` +
-        `<div><span class="swatch"></span>${routeOriginNote}</div><div><span class="swatch corr"></span>senaryo koridoru (±${currentCorridorM} m, güvenlik sınırı değil) · <span class="swatch nd"></span>no-data</div>`;
+        `<div><span class="swatch"></span>${routeOriginNote} · <span class="swatch" style="background:#63e6be"></span>planlanan rota (planlama göstergesi)</div><div><span class="swatch corr"></span>senaryo koridoru (±${currentCorridorM} m, güvenlik sınırı değil) · <span class="swatch nd"></span>no-data</div>`;
     } else {
-      legend.innerHTML = `<b>Zemin yok</b> — raster verisi kullanılamıyor; yalnız metre ızgarası.<div><span class="swatch"></span>${routeOriginNote}</div><div><span class="swatch corr"></span>senaryo koridoru (güvenlik sınırı değil)</div>`;
+      legend.innerHTML = `<b>Zemin yok</b> — raster verisi kullanılamıyor; yalnız metre ızgarası.<div><span class="swatch"></span>${routeOriginNote} · <span class="swatch" style="background:#63e6be"></span>planlanan rota (planlama göstergesi)</div><div><span class="swatch corr"></span>senaryo koridoru (güvenlik sınırı değil)</div>`;
     }
     const rb = $('raster-banner'); rb.hidden = notes.length === 0; rb.textContent = notes.join(' ');
     $('v-calc-note').textContent = layers.dtm.available
@@ -114,19 +114,33 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     const geologyStatus = $('geology-status');
     let geologyText;
     if (geologyLayerStatus === 'loading') geologyText = 'Jeoloji katmanı yükleniyor…';
-    else if (geology?.status === 'ok' && geology.unitCode) geologyText = `Haritalanmış birim: ${geology.unitCode} — ${geology.unitName}${geology.onBoundary ? ' (harita sınırında)' : ''}. İndikatiftir.`;
+    else if (geology?.status === 'ok' && geology.unitCode) {
+      const scaleTag = geology.mapScale ? ` (${geology.mapScale}${geology.sourceMapId ? ` · ${geology.sourceMapId}` : ''})` : '';
+      geologyText = `Haritalanmış birim: ${geology.unitCode} — ${geology.unitName}${scaleTag}${geology.onBoundary ? ' (harita sınırında)' : ''}. İndikatiftir.`;
+    }
     else if (geology?.status === 'outside_coverage') geologyText = 'Bu konum jeoloji verisinin kapsamı dışında.';
     else if (geology?.status === 'ambiguous') {
       const codes = [...new Set(geology.candidates.map((candidate) => candidate.unitCode))];
       geologyText = `Birden fazla haritalanmış birim adayı var (${codes.join(', ')}). Birim atanmadı.`;
     } else geologyText = 'Jeoloji katmanı kullanılamıyor.';
     if (Number.isFinite(geologyContactDistanceM)) {
-      const { min, max } = geology.positionalUncertaintyM;
-      geologyText += ` En yakın haritalanmış kontağa düzlemde yaklaşık ${Math.round(geologyContactDistanceM)} m (konum belirsizliği ~${min}–${max} m).`;
+      const { min, max } = geology.positionalUncertaintyM ?? {};
+      const uncText = Number.isFinite(min) && Number.isFinite(max) ? ` (konum belirsizliği ~${min}–${max} m)` : '';
+      geologyText += ` En yakın haritalanmış kontağa düzlemde yaklaşık ${Math.round(geologyContactDistanceM)} m${uncText}.`;
+    }
+    if (geology?.conflict?.note) {
+      geologyText += ` ${geology.conflict.note}`;
+    }
+    if (Array.isArray(geology?.fallbackChain) && geology.fallbackChain.length > 0) {
+      const chainSummary = geology.fallbackChain
+        .map((item) => `${item.sourceMapId} (${item.mapScale ?? 'ölçek yok'}: ${item.unitCode ?? item.status})`)
+        .join(', ');
+      geologyText += ` Karşılaştırılan diğer haritalar: ${chainSummary}.`;
     }
     if (geologyStatus.textContent !== geologyText) geologyStatus.textContent = geologyText;
     geologyStatus.dataset.status = geologyLayerStatus === 'ready' ? geology.status : (geologyLayerStatus ?? 'unavailable');
     const provenanceText = [
+      geology?.sourceMapId ? `Kaynak harita: ${geology.sourceMapId}${geology.mapScale ? ` (${geology.mapScale})` : ''}` : null,
       geology?.citation,
       geology?.doi ? `DOI ${geology.doi}` : null,
       geology?.license === 'not_stated' ? 'Lisans kaynakta belirtilmemiş.' : null,

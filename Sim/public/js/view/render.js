@@ -87,7 +87,16 @@ export function buildTerrainImage(layer) {
  * the prepared visual `terrain` asset. Never receives live `sim`, `layer`, or `adapter` instances,
  * and performs no raster sampling or route/deviation math.
  */
-export function render(ctx, w, h, { camera, snapshot, terrain, geologySegments = [], archiveTraverse = null }) {
+export function render(ctx, w, h, {
+  camera,
+  snapshot,
+  terrain,
+  orthoOverlay = null,
+  geologySegments = [],
+  archiveTraverse = null,
+  plannedRoute = null,
+  routeEndpoints = null,
+}) {
   ctx.save();
   ctx.fillStyle = '#121216'; ctx.fillRect(0, 0, w, h);
   const T = (x, y) => camera.toScreen(x, y, w, h);
@@ -100,6 +109,25 @@ export function render(ctx, w, h, { camera, snapshot, terrain, geologySegments =
     ctx.drawImage(terrain.canvas, p.sx, p.sy, terrain.bounds.widthM * z, terrain.bounds.heightM * z);
   } else {
     drawGrid(ctx, w, h, camera);
+  }
+
+  // HiRISE WMTS Orthomosaic overlay (Stage 39B)
+  if (orthoOverlay && orthoOverlay.mode !== 'hillshade') {
+    const isHybrid = orthoOverlay.mode === 'hybrid';
+    ctx.save();
+    ctx.globalAlpha = isHybrid ? 0.62 : 0.88;
+    if (isHybrid) {
+      ctx.globalCompositeOperation = 'multiply';
+    }
+    for (const tier of [orthoOverlay.coarse, orthoOverlay.fine]) {
+      const image = tier?.image;
+      const b = tier?.renderBoundsM || tier?.layer?.renderBoundsM;
+      if (image && b && Number.isFinite(b.nwXM) && Number.isFinite(b.nwYM) && b.widthM > 0 && b.heightM > 0) {
+        const p = T(b.nwXM, b.nwYM);
+        ctx.drawImage(image, p.sx, p.sy, b.widthM * z, b.heightM * z);
+      }
+    }
+    ctx.restore();
   }
 
   // Only source unit boundaries are drawn; bbox clip edges are filtered upstream.
@@ -163,6 +191,9 @@ export function render(ctx, w, h, { camera, snapshot, terrain, geologySegments =
     label(ctx, `${wp.label} (tarihsel waypoint)`, p.sx + 12, p.sy - 12, '#fff', 'rgba(0,0,0,0.65)', 12);
   });
 
+  // Planned route & start/goal markers (distinct cyan/aquamarine layer above mission corridor)
+  drawPlannedRoute(ctx, camera, w, h, plannedRoute, routeEndpoints);
+
   // Player trail
   if (trail.length > 1) {
     ctx.beginPath(); trail.forEach((q, i) => { const p = T(q.xM, q.yM); i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy); });
@@ -222,4 +253,66 @@ function label(ctx, text, x, y, fg, bg, size) {
   const tw = ctx.measureText(text).width;
   ctx.fillStyle = bg; ctx.fillRect(x - 4, y - size, tw + 8, size + 6);
   ctx.fillStyle = fg; ctx.fillText(text, x, y);
+}
+
+/**
+ * Draws the user-planned route and S/G endpoints on the main 2D map canvas.
+ * Uses a double-layered cyan/aquamarine stroke (`#63e6be` / `rgba(99, 230, 190, 0.92)`) so it
+ * remains visually distinct from the yellow mission corridor (`#ffd34d`) and purple archive traverse (`#ceabff`).
+ */
+export function drawPlannedRoute(ctx, camera, w, h, plannedRoute, routeEndpoints = null) {
+  const hasRoute = Array.isArray(plannedRoute) && plannedRoute.length >= 2;
+  const startPt = routeEndpoints?.start ?? (hasRoute ? plannedRoute[0] : null);
+  const goalPt = routeEndpoints?.goal ?? routeEndpoints?.end ?? (hasRoute ? plannedRoute[plannedRoute.length - 1] : null);
+  if (!hasRoute && !startPt && !goalPt) return;
+
+  ctx.save();
+  if (hasRoute) {
+    const screenPts = [];
+    for (const pt of plannedRoute) {
+      const xM = pt?.xM ?? pt?.x;
+      const yM = pt?.yM ?? pt?.y;
+      if (!Number.isFinite(xM) || !Number.isFinite(yM)) continue;
+      screenPts.push(camera.toScreen(xM, yM, w, h));
+    }
+    if (screenPts.length >= 2) {
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      // Dark halo underlay for contrast over bright hillshade slopes
+      ctx.beginPath();
+      screenPts.forEach((p, i) => (i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy)));
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(8, 28, 34, 0.82)';
+      ctx.lineWidth = 5;
+      ctx.stroke();
+
+      // Primary cyan/aquamarine dashed planned route stroke
+      ctx.beginPath();
+      screenPts.forEach((p, i) => (i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy)));
+      ctx.setLineDash([8, 4]);
+      ctx.strokeStyle = 'rgba(99, 230, 190, 0.92)';
+      ctx.lineWidth = 2.75;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  const drawEndpoint = (pt, tag, fill) => {
+    const xM = pt?.xM ?? pt?.x;
+    const yM = pt?.yM ?? pt?.y;
+    if (!Number.isFinite(xM) || !Number.isFinite(yM)) return;
+    const p = camera.toScreen(xM, yM, w, h);
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, 6, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#111';
+    ctx.stroke();
+    label(ctx, tag, p.sx + 9, p.sy - 6, fill, 'rgba(0,0,0,0.75)', 11);
+  };
+
+  if (startPt) drawEndpoint(startPt, 'S', '#63e6be');
+  if (goalPt) drawEndpoint(goalPt, 'G', '#ffb04a');
+  ctx.restore();
 }

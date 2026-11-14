@@ -128,8 +128,18 @@ if (compression !== 1) throw new Error(`Sıkıştırma ${compression} desteklenm
 if (rasterKey !== 1) throw new Error(`GeoKey GTRasterTypeGeoKey PixelIsArea (=1) olmalı; gelen ${rasterKey ?? 'yok'}`);
 if (modelType !== 1 || coordTransform !== 17) throw new Error(`GeoKey projeksiyon tanımı Equirectangular olmalı (model=1, transform=17); gelen ${modelType}/${coordTransform}`);
 if (!Number.isFinite(semiMajor) || semiMajor !== 3396190) throw new Error(`GeoKey semi-major radius eksik/uyumsuz: ${semiMajor}`);
-const standardParallelDeg = scalarKey(3078), centralMeridianDeg = scalarKey(3080) ?? scalarKey(3088);
-if (standardParallelDeg !== 0 || centralMeridianDeg !== 0) throw new Error(`GeoKey standard parallel/central meridian eksik veya beklenmeyen (${standardParallelDeg}/${centralMeridianDeg})`);
+const standardParallelDeg = scalarKey(3078);
+const naturalOriginLongitudeDeg = scalarKey(3080);
+const projectionCenterLongitudeDeg = scalarKey(3088);
+const longitudeParams = [naturalOriginLongitudeDeg, projectionCenterLongitudeDeg].filter((value) => value !== undefined);
+if (
+  standardParallelDeg !== 0 || longitudeParams.length === 0 ||
+  longitudeParams.some((value) => !Number.isFinite(value) || value !== 0) ||
+  (naturalOriginLongitudeDeg !== undefined && projectionCenterLongitudeDeg !== undefined && naturalOriginLongitudeDeg !== projectionCenterLongitudeDeg)
+) {
+  throw new Error(`GeoKey standard parallel/longitude parameters conflict with the official 0° frame (${standardParallelDeg}/${naturalOriginLongitudeDeg}/${projectionCenterLongitudeDeg})`);
+}
+const centralMeridianDeg = projectionCenterLongitudeDeg ?? naturalOriginLongitudeDeg;
 if (pixelScale[0] !== 1 || pixelScale[1] !== 1 || pixelScale[2] !== 0 || tiepoint[0] !== 0 || tiepoint[1] !== 0 || tiepoint[2] !== 0) throw new Error('PixelScale/Tiepoint eksik veya beklenmeyen axis/origin içeriyor');
 if (pixelScale[0] !== officialPdsGrid.mapScaleM || semiMajor / 1000 !== officialPdsGrid.radiusKm) throw new Error('TIFF pixel scale or radius differs from official PDS3 grid metadata');
 const tiffGrid = {

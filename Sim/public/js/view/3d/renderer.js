@@ -599,6 +599,12 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         } else {
           objectOffset = [player.xM, player.yM, (player.bodyWorldZM - referenceElevationM) * verticalScale];
         }
+        // The view-model terms are additive presentation motion for the upper body only.
+        // Keep the world rig and the first-person legs anchored to the unmodified pose.
+        const upperBodyPose = firstPerson ? {
+          rootOffset: rigPose.rootOffset.map((value, i) => value + rigPose.viewModel.offset[i]),
+          rootRotationRad: rigPose.rootRotationRad.map((value, i) => value + rigPose.viewModel.rotationRad[i]),
+        } : rigPose;
         const partIds = firstPerson ? FIRST_PERSON_RIG_PARTS : Object.keys(ASTRONAUT_RIG.parts);
         gl.uniform1i(locations.renderPass, 2);
         gl.uniform3fv(locations.objectOffset, objectOffset);
@@ -616,12 +622,12 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           gl.uniform3fv(locations.partCenter, part.center);
           gl.uniform3fv(locations.partOffset, partPose.offset);
           gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
-          gl.uniform3fv(locations.rootOffset, rigPose.rootOffset);
-          gl.uniform3fv(locations.rootRotationRad, rigPose.rootRotationRad);
+          gl.uniform3fv(locations.rootOffset, upperBodyPose.rootOffset);
+          gl.uniform3fv(locations.rootRotationRad, upperBodyPose.rootRotationRad);
           gl.vertexAttrib3fv(locations.color, part.colorRgb);
           gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
           rigPartsDrawn.push(id);
-          const worldCenter = rigPartWorldCenter(part, partPose, rigPose, objectOffset, headingRad, rigVerticalScale);
+          const worldCenter = rigPartWorldCenter(part, partPose, upperBodyPose, objectOffset, headingRad, rigVerticalScale);
           if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
         }
         if (firstPerson) {

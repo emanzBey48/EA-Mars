@@ -204,9 +204,18 @@ export class MarswalkSim {
 
   /** Reconciles body motion with a fresh sample injected by the composition root. */
   resolveSurfaceContact(surface = {}) {
-    // The composition root still supplies a fresh sample on paused frames.
-    if (this.phase === PHASE.PAUSED) return false;
-    if (surface.status === 'ok' && Number.isFinite(surface.value)) {
+    const hasKnownSurface = surface.status === 'ok' && Number.isFinite(surface.value);
+    // Paused first-entry frames may establish the one-time world-Z origin needed to construct the 3D view.
+    // Once anchored, paused contact remains frozen; unknown samples never seed an origin.
+    if (this.phase === PHASE.PAUSED) {
+      if (this.bodyWorldZReferenceM !== null || !hasKnownSurface) return false;
+      this.bodyWorldZReferenceM = surface.value;
+      this.heightAboveReferenceM = 0;
+      this.grounded = true;
+      this.airborne = false;
+      return true;
+    }
+    if (hasKnownSurface) {
       if (this.bodyWorldZReferenceM === null) {
         this.bodyWorldZReferenceM = surface.value;
         this.heightAboveReferenceM = 0;

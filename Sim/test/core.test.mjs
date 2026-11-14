@@ -485,6 +485,46 @@ test('first-person sim: unknown initial terrain never seeds world Z, ground cont
   assert.equal(sim.heightAboveReferenceM, 0);
 });
 
+test('first-person sim: paused valid first contact anchors once without advancing paused state', () => {
+  const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  sim.phase = PHASE.PAUSED; // startup flow pauses before selecting the 3D view
+  sim.simTimeS = 3.5;
+  sim.horizontalVelocityXMps = 0.4;
+  sim.horizontalVelocityYMps = -0.2;
+  sim.verticalSpeedMps = 0.3;
+  const velocities = [sim.horizontalVelocityXMps, sim.horizontalVelocityYMps, sim.verticalSpeedMps];
+  const known = { status: STATUS.OK, value: -2500 };
+
+  assert.equal(sim.resolveSurfaceContact(known), true);
+  assert.equal(sim.bodyWorldZReferenceM, -2500);
+  assert.equal(sim.bodyWorldZM, -2500);
+  assert.equal(sim.heightAboveReferenceM, 0);
+  assert.equal(sim.grounded, true);
+  assert.equal(sim.airborne, false);
+  assert.equal(sim.phase, PHASE.PAUSED);
+  assert.equal(sim.simTimeS, 3.5);
+  assert.deepEqual([sim.horizontalVelocityXMps, sim.horizontalVelocityYMps, sim.verticalSpeedMps], velocities);
+
+  // A paused body with an established origin cannot be re-anchored or have its retained pose reconciled.
+  sim.heightAboveReferenceM = 0.6;
+  sim.grounded = false;
+  sim.airborne = true;
+  const before = { reference: sim.bodyWorldZReferenceM, height: sim.heightAboveReferenceM, velocity: sim.verticalSpeedMps };
+  assert.equal(sim.resolveSurfaceContact({ status: STATUS.OK, value: -2501 }), false);
+  assert.equal(sim.bodyWorldZReferenceM, before.reference);
+  assert.equal(sim.heightAboveReferenceM, before.height);
+  assert.equal(sim.verticalSpeedMps, before.velocity);
+  assert.equal(sim.bodyWorldZM, -2499.4);
+
+  const unknown = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  unknown.phase = PHASE.PAUSED;
+  assert.equal(unknown.resolveSurfaceContact({ status: STATUS.NO_DATA, value: null }), false);
+  assert.equal(unknown.bodyWorldZM, null);
+  assert.equal(unknown.bodyWorldZReferenceM, null);
+  assert.equal(unknown.grounded, false);
+  assert.equal(unknown.airborne, false);
+});
+
 test('first-person sim: unknown contact does not start gravity, while a prior jump remains airborne', () => {
   const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
   const known = { status: STATUS.OK, value: -2500 };

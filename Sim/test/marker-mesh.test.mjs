@@ -111,6 +111,12 @@ test('marker-mesh: carries scientific and scenario metadata (Sol 120/164 coords,
   assert.ok(metadata.corridorNote.includes('senaryo varsayımı'));
   assert.equal(metadata.corridorHalfWidthM, 15);
   assert.equal(metadata.beaconCount, 2, 'both Sol 120 and Sol 164 beacons should be built');
+  assert.deepEqual(metadata.beaconDrawRanges.map(({ id, localXM, localYM }) => ({ id, localXM, localYM })), [
+    { id: 'sol120-wb1', localXM: 0, localYM: 0 },
+    { id: 'sol164-roubion', localXM: 133.4, localYM: -673.1 },
+  ]);
+  assert.ok(metadata.beaconDrawRanges.every((range) => range.indexCount > 0 && range.indexCount % 3 === 0));
+  assert.ok(metadata.beaconDrawRanges[0].indexStart + metadata.beaconDrawRanges[0].indexCount <= metadata.beaconDrawRanges[1].indexStart);
   assert.ok(metadata.guideCount > 0, 'ground chevrons should be generated along segment');
   assert.ok(metadata.corridorMarkerCount > 0, 'corridor boundary posts should be generated');
   assert.equal(metadata.omittedCount, 0, 'no points omitted when all elevations are ok');

@@ -402,6 +402,7 @@ export function buildMarkerMeshes({
   let corridorMarkerCount = 0;
   let omittedCount = 0;
   const waypointMetadata = [];
+  const beaconDrawRanges = [];
 
   // 1. Waypoint Beacons (Sol 120 / WB1, Sol 164 / Roubion)
   for (const wp of waypoints) {
@@ -433,6 +434,7 @@ export function buildMarkerMeshes({
 
     const groundDisplayZ = (elev.value - referenceElevationM) * verticalScale;
     const { baseRadius, baseHeight, mastRadius, mastHeight, gemRadius, gemHeight, colors } = theme;
+    const indexStart = builder.indices.length;
 
     // Base podium (flanged step)
     builder.addPrism({
@@ -470,6 +472,13 @@ export function buildMarkerMeshes({
       colorBottom: colors.gemBottom,
     });
 
+    beaconDrawRanges.push({
+      id: wp.id || 'unnamed-waypoint',
+      localXM: x,
+      localYM: y,
+      indexStart,
+      indexCount: builder.indices.length - indexStart,
+    });
     beaconCount++;
   }
 
@@ -607,6 +616,7 @@ export function buildMarkerMeshes({
     omittedCount,
     corridorHalfWidthM: halfWidth,
     waypoints: waypointMetadata,
+    beaconDrawRanges,
   };
 
   return builder.build(metadata, displayConfig);

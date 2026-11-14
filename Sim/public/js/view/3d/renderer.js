@@ -218,6 +218,48 @@ function assertMarkerMeshAsset(mesh) {
   }
   const vertexCount = mesh.positions.length / 3;
   for (const index of mesh.indices) if (index >= vertexCount) throw new RangeError('markerMesh.indices contains an out-of-range vertex');
+  const beaconRanges = mesh.metadata.beaconDrawRanges;
+  if (beaconRanges !== undefined) {
+    if (!Array.isArray(beaconRanges)) throw new TypeError('markerMesh.metadata.beaconDrawRanges must be an array');
+    let previousEnd = 0;
+    for (const range of beaconRanges) {
+      const end = range?.indexStart + range?.indexCount;
+      if (typeof range?.id !== 'string' || !Number.isFinite(range.localXM) || !Number.isFinite(range.localYM) ||
+          !Number.isSafeInteger(range.indexStart) || !Number.isSafeInteger(range.indexCount) || range.indexStart < previousEnd ||
+          range.indexCount <= 0 || range.indexCount % 3 !== 0 || end > mesh.indices.length) {
+        throw new RangeError('markerMesh.metadata.beaconDrawRanges contains an invalid or overlapping beacon range');
+      }
+      previousEnd = end;
+    }
+  }
+}
+
+// Presentation-only clearance so the first-person camera does not render the beacon mast it starts inside.
+export const FIRST_PERSON_BEACON_HIDE_RADIUS_M = 2.5;
+
+/** Pure marker draw-plan helper; beacon ranges are index counts, camera position is local-world XY. */
+export function getMarkerDrawPlan(markerMesh, camera) {
+  const indexCount = markerMesh?.indices?.length ?? 0;
+  if (indexCount <= 0) return { drawRanges: [], hiddenBeaconIds: [] };
+  const fullRange = [{ indexStart: 0, indexCount }];
+  if (camera?.mode !== 'first-person' || !Number.isFinite(camera.xM) || !Number.isFinite(camera.yM)) {
+    return { drawRanges: fullRange, hiddenBeaconIds: [] };
+  }
+
+  const hidden = (markerMesh.metadata?.beaconDrawRanges ?? []).filter((beacon) =>
+    Number.isFinite(beacon.localXM) && Number.isFinite(beacon.localYM) &&
+    Math.hypot(camera.xM - beacon.localXM, camera.yM - beacon.localYM) <= FIRST_PERSON_BEACON_HIDE_RADIUS_M,
+  ).sort((a, b) => a.indexStart - b.indexStart);
+  if (hidden.length === 0) return { drawRanges: fullRange, hiddenBeaconIds: [] };
+
+  const drawRanges = [];
+  let cursor = 0;
+  for (const beacon of hidden) {
+    if (beacon.indexStart > cursor) drawRanges.push({ indexStart: cursor, indexCount: beacon.indexStart - cursor });
+    cursor = Math.max(cursor, beacon.indexStart + beacon.indexCount);
+  }
+  if (cursor < indexCount) drawRanges.push({ indexStart: cursor, indexCount: indexCount - cursor });
+  return { drawRanges, hiddenBeaconIds: hidden.map((beacon) => beacon.id) };
 }
 
 function createAstronautBuffers(gl, locations) {
@@ -467,7 +509,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null }) {
       const frameStartedAt = collectDiagnostics ? performance.now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -531,6 +573,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
       // Pass 1: 3D Waypoint Beacons and Route Guides (if supplied)
       let markersDrawn = false;
+      let markerDrawPlan = { drawRanges: [], hiddenBeaconIds: [] };
+      let markerIndexCountDrawn = 0;
       if (markerMesh) {
         uploadMarkerMesh(markerMesh);
       }
@@ -547,9 +591,18 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
         gl.uniform3f(locations.baseColor, 1, 1, 1);
         gl.bindVertexArray(uploadedMarkerMesh.vao);
-        gl.drawElements(gl.TRIANGLES, uploadedMarkerMesh.indexCount, gl.UNSIGNED_INT, 0);
+        markerDrawPlan = getMarkerDrawPlan(uploadedMarkerMesh.source, camera);
+        for (const range of markerDrawPlan.drawRanges) {
+          gl.drawElements(
+            gl.TRIANGLES,
+            range.indexCount,
+            gl.UNSIGNED_INT,
+            range.indexStart * Uint32Array.BYTES_PER_ELEMENT,
+          );
+          markerIndexCountDrawn += range.indexCount;
+        }
         gl.bindVertexArray(null);
-        markersDrawn = true;
+        markersDrawn = markerIndexCountDrawn > 0;
       }
 
       function drawSurfaceLines(positions, red, green, blue, baseGreen = 1, baseBlue = 1) {
@@ -572,6 +625,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       }
       drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24);
       drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1);
+      drawSurfaceLines(plannedRouteLinePositions, 0.08, 0.88, 1, 0.92, 1);
 
       const { astronaut: player } = snapshot;
       const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
@@ -687,8 +741,11 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         lastFrameDiagnostics = {
           frameRenderMs: performance.now() - frameStartedAt,
           terrainTriangles: uploadedMesh.indexCount / 3,
+          plannedRouteLineVertexCount: plannedRouteLinePositions instanceof Float32Array ? plannedRouteLinePositions.length / 3 : 0,
           markersDrawn,
           markerTriangles: uploadedMarkerMesh ? uploadedMarkerMesh.indexCount / 3 : 0,
+          markerIndexCountDrawn,
+          hiddenBeaconIds: markerDrawPlan.hiddenBeaconIds,
           avatarDrawn,
           worldRigDrawn: avatarDrawn,
           firstPersonViewModelDrawn,

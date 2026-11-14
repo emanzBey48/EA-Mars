@@ -104,8 +104,10 @@ try {
   }
   const first3dWallMs = Date.now() - threeDStart;
   const canvas3dState = await evaluate(`(() => { const c=document.getElementById('map-3d'); const r=c.getBoundingClientRect(); return {hidden:c.hidden,w:r.width,h:r.height}; })()`);
-  check('6a 2D→3D geçişi terrain mesh ile açılıyor', diag3d?.activeView === '3d' && diag3d.terrainMeshReady && !canvas3dState.hidden && canvas3dState.w > 400,
-    `active=${diag3d?.activeView}, mesh=${diag3d?.terrainMeshReady}, meshError=${diag3d?.terrainMeshError}, rendererError=${diag3d?.rendererError}, hücre=${diag3d?.terrainMeshCellCount}, CPU build=${diag3d?.terrainMeshBuildMs?.toFixed(1)} ms, ilk geçiş=${first3dWallMs} ms`);
+  check('6a 2D→3D geçişi açılıyor ve başlangıç beacon direği yakınken gizleniyor',
+    diag3d?.activeView === '3d' && diag3d.terrainMeshReady && !canvas3dState.hidden && canvas3dState.w > 400 &&
+      diag3d.renderer?.hiddenBeaconIds?.includes('sol120-wb1'),
+    `active=${diag3d?.activeView}, mesh=${diag3d?.terrainMeshReady}, hidden=${diag3d?.renderer?.hiddenBeaconIds?.join(',')}, meshError=${diag3d?.terrainMeshError}, rendererError=${diag3d?.rendererError}, hücre=${diag3d?.terrainMeshCellCount}, CPU build=${diag3d?.terrainMeshBuildMs?.toFixed(1)} ms, ilk geçiş=${first3dWallMs} ms`);
   const fpPose = await evaluate(`(() => { const m=window.marswalk,c=m.camera3d,s=m.getSnapshot(); const d=m.getDiagnostics();
     return {mode:c.mode,eyeHeightM:c.eyeHeightM,eyeZ:c.zDisplay,bodyZ:s.astronaut.bodyWorldZM,
       avatarDrawn:d.renderer?.avatarDrawn,worldRigDrawn:d.renderer?.worldRigDrawn,viewModelDrawn:d.renderer?.firstPersonViewModelDrawn,triangles:d.renderer?.terrainTriangles,
@@ -135,13 +137,18 @@ try {
   await sleep(100); await keyEvt('keyUp', 'KeyW', 'w'); await sleep(100);
   const fpAfter = await evaluate(`(() => { const m=window.marswalk,s=m.getSnapshot(),d=m.getDiagnostics(); return {x:m.sim.pos.x,y:m.sim.pos.y,
     yaw:m.camera3d.yawRad,mode:d.cameraMode,grounded:s.astronaut.movement.grounded,status:s.astronaut.elevationStatus,
-    cameraX:m.camera3d.xM,cameraY:m.camera3d.yM}; })()`);
+    cameraX:m.camera3d.xM,cameraY:m.camera3d.yM,hiddenBeaconIds:d.renderer?.hiddenBeaconIds,markerIndexCountDrawn:d.renderer?.markerIndexCountDrawn,
+    beaconDistanceM:Math.hypot(m.camera3d.xM-m.waypoints[0].local.x,m.camera3d.yM-m.waypoints[0].local.y)}; })()`);
   const fpDeltaX = fpAfter.x - fpBefore.x, fpDeltaY = fpAfter.y - fpBefore.y;
   const fpAlong = fpDeltaX * Math.cos(fpBefore.yaw) + fpDeltaY * Math.sin(fpBefore.yaw);
   check('6h Birinci şahıs WASD kamera yönünde hareket ediyor ve geçerli DTM temasını koruyor',
     fpAfter.mode === 'first-person' && fpAlong > 0.5 && fpAfter.grounded && fpAfter.status === 'ok' &&
-      Math.abs(fpAfter.cameraX - fpAfter.x) < 1e-6 && Math.abs(fpAfter.cameraY - fpAfter.y) < 1e-6,
-    `kamera yönündeki ilerleme=${fpAlong.toFixed(2)} m, grounded=${fpAfter.grounded}, sample=${fpAfter.status}`);
+      Math.abs(fpAfter.cameraX - fpAfter.x) < 1e-6 && Math.abs(fpAfter.cameraY - fpAfter.y) < 1e-6 &&
+      Array.isArray(fpAfter.hiddenBeaconIds) && !fpAfter.hiddenBeaconIds.includes('sol120-wb1') && fpAfter.markerIndexCountDrawn > 0,
+    `kamera yönündeki ilerleme=${fpAlong.toFixed(2)} m, beacon uzaklığı=${fpAfter.beaconDistanceM.toFixed(2)} m, grounded=${fpAfter.grounded}, sample=${fpAfter.status}, gizli beacon=${fpAfter.hiddenBeaconIds?.join(',') || 'yok'}`);
+  await evaluate(`(() => { const m=window.marswalk,b=m.waypoints[0].local; m.camera3d.yawRad=Math.atan2(b.y-m.camera3d.yM,b.x-m.camera3d.xM); m.sim.headingRad=m.camera3d.yawRad; })()`);
+  await sleep(150);
+  await shot('06-near-beacon-cleared.png');
   await press('KeyP', 'p');
   const pauseRigA = await evaluate(`(() => { const d=window.marswalk.getDiagnostics(); return {time:d.movement.timeS,pose:d.renderer?.rigPose,gait:d.renderer?.rigGaitPhaseRad}; })()`);
   await sleep(400);

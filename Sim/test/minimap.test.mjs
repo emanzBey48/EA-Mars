@@ -42,11 +42,12 @@ function fakeTerrain(paint = () => VALID_RGB) {
 /** Records every fillText call; all other 2D context calls are no-ops. */
 function fakeCtx() {
   const texts = [];
-  const target = { measureText: () => ({ width: 10 }), texts };
+  const target = { measureText: () => ({ width: 10 }), texts, fillCalls: 0, fillStyles: [] };
   const ctx = new Proxy(target, {
     get(t, prop) {
       if (prop in t) return t[prop];
       if (prop === 'fillText') return (text) => { texts.push(text); };
+      if (prop === 'fill') return () => { t.fillCalls++; t.fillStyles.push(t.fillStyle); };
       return () => undefined;
     },
     set(t, prop, value) { t[prop] = value; return true; },
@@ -161,5 +162,22 @@ test('minimap selection: a rejected click after a valid one does not overwrite t
     mini.setSelectionMode('start');
     clickWorld(mini, canvas, 0.5, -0.5); // no-data
     assert.equal(picks.length, 1, 'no second selection callback for a rejected point');
+  } finally { restore(); }
+});
+
+test('minimap renders ground-sampled footprint quads and clears them with an empty trail', () => {
+  const { mini, ctx, restore } = setupMinimap({ terrain: fakeTerrain() });
+  try {
+    const before = ctx.fillStyles.length;
+    const trail = {
+      count: 1,
+      quads: new Float32Array([-0.2, -0.2, -1, 0.2, -0.2, -1, 0.2, 0.2, -1, -0.2, 0.2, -1]),
+      instances: new Float32Array([0, 0, -1, 0, 1, 0.8, 1, 0, 0, 1]),
+    };
+    mini.setOverlays({ footprintTrail: trail });
+    assert.ok(ctx.fillStyles.slice(before).includes('#34251e'), 'footprint uses the trail fill color');
+    const afterDraw = ctx.fillStyles.length;
+    mini.setOverlays({ footprintTrail: { count: 0, quads: new Float32Array(), instances: new Float32Array() } });
+    assert.ok(!ctx.fillStyles.slice(afterDraw).includes('#34251e'), 'empty reset trail draws no footprint');
   } finally { restore(); }
 });

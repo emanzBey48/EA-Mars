@@ -41,6 +41,7 @@ export function createMinimap({
     overlays: {
       geologySegments: [],
       archiveTraverse: null,
+      footprintTrail: null,
       geologyVisible: false,
       archiveVisible: false,
       orthoOverlay: null,
@@ -298,7 +299,6 @@ export function createMinimap({
       }
       ctx.restore();
     }
-
     if (state.planning.heatmapVisible && state.planning.heatmap) {
       const { canvas: image, bounds: heatBounds } = state.planning.heatmap;
       if (image && validBounds(heatBounds)) {
@@ -316,6 +316,39 @@ export function createMinimap({
         i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
       });
       ctx.stroke(); ctx.restore();
+    }
+    if (state.overlays.footprintTrail?.count > 0) {
+      const trail = state.overlays.footprintTrail;
+      const quads = trail.quads, instances = trail.instances;
+      if (quads instanceof Float32Array && instances instanceof Float32Array) {
+        ctx.save();
+        ctx.fillStyle = '#34251e';
+        for (let i = 0; i < trail.count; i++) {
+          const offset = i * 12;
+          const alpha = Math.max(0, Math.min(1, instances[i * 10 + 5]));
+          if (alpha <= 0) continue;
+          ctx.globalAlpha = 0.75 * alpha;
+          ctx.beginPath();
+          const p0 = worldToScreen(quads[offset], quads[offset + 1]);
+          const p1 = worldToScreen(quads[offset + 3], quads[offset + 4]);
+          const p3 = worldToScreen(quads[offset + 9], quads[offset + 10]);
+          const projectedWidth = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+          const projectedHeight = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+          if (Math.min(projectedWidth, projectedHeight) < 2.5) {
+            const p = worldToScreen(instances[i * 10], instances[i * 10 + 1]);
+            ctx.arc(p.x, p.y, 1.6, 0, Math.PI * 2);
+            ctx.fill();
+            continue;
+          }
+          for (let corner = 0; corner < 4; corner++) {
+            const p = worldToScreen(quads[offset + corner * 3], quads[offset + corner * 3 + 1]);
+            if (corner === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
     }
 
     if (!state.terrain?.canvas) {
@@ -517,6 +550,7 @@ export function createMinimap({
       state.overlays = {
         geologySegments: nextOverlays.geologySegments ?? state.overlays.geologySegments ?? [],
         archiveTraverse: nextOverlays.archiveTraverse ?? state.overlays.archiveTraverse ?? null,
+        footprintTrail: nextOverlays.footprintTrail !== undefined ? nextOverlays.footprintTrail : state.overlays.footprintTrail,
         geologyVisible: nextOverlays.geologyVisible !== undefined ? Boolean(nextOverlays.geologyVisible) : state.overlays.geologyVisible,
         archiveVisible: nextOverlays.archiveVisible !== undefined ? Boolean(nextOverlays.archiveVisible) : state.overlays.archiveVisible,
         orthoOverlay: nextOverlays.orthoOverlay !== undefined ? nextOverlays.orthoOverlay : state.overlays.orthoOverlay,

@@ -96,6 +96,7 @@ export function render(ctx, w, h, {
   archiveTraverse = null,
   plannedRoute = null,
   routeEndpoints = null,
+  footprintTrail = null,
 }) {
   ctx.save();
   ctx.fillStyle = '#121216'; ctx.fillRect(0, 0, w, h);
@@ -199,6 +200,37 @@ export function render(ctx, w, h, {
     ctx.beginPath(); trail.forEach((q, i) => { const p = T(q.xM, q.yM); i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy); });
     const pp = T(astronaut.xM, astronaut.yM); ctx.lineTo(pp.sx, pp.sy);
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+
+  // Presentation-only footfalls: each quad was sampled against the active DTM provider upstream.
+  if (footprintTrail?.count > 0 && footprintTrail.quads instanceof Float32Array && footprintTrail.instances instanceof Float32Array) {
+    ctx.save();
+    ctx.fillStyle = '#34251e';
+    for (let i = 0; i < footprintTrail.count; i++) {
+      const offset = i * 12;
+      const alpha = Math.max(0, Math.min(1, footprintTrail.instances[i * 10 + 5]));
+      if (alpha <= 0) continue;
+      ctx.globalAlpha = 0.68 * alpha;
+      const p0 = T(footprintTrail.quads[offset], footprintTrail.quads[offset + 1]);
+      const p1 = T(footprintTrail.quads[offset + 3], footprintTrail.quads[offset + 4]);
+      const p3 = T(footprintTrail.quads[offset + 9], footprintTrail.quads[offset + 10]);
+      const projectedWidth = Math.hypot(p1.sx - p0.sx, p1.sy - p0.sy);
+      const projectedHeight = Math.hypot(p3.sx - p0.sx, p3.sy - p0.sy);
+      ctx.beginPath();
+      if (Math.min(projectedWidth, projectedHeight) < 2.5) {
+        const p = T(footprintTrail.instances[i * 10], footprintTrail.instances[i * 10 + 1]);
+        ctx.arc(p.sx, p.sy, 1.7, 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
+      for (let corner = 0; corner < 4; corner++) {
+        const p = T(footprintTrail.quads[offset + corner * 3], footprintTrail.quads[offset + corner * 3 + 1]);
+        if (corner === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // Deviation segment (uses precomputed closestPoint and deviationM from snapshot)

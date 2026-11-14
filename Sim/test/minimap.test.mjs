@@ -61,6 +61,7 @@ function fakeCanvas() {
   const canvas = {
     width: 0,
     height: 0,
+    style: { cursor: '' }, // minimap.js sets canvas.style.cursor (drag/hover feedback, destroy())
     getContext: (kind) => (kind === '2d' ? ctx : null),
     getBoundingClientRect: () => ({ left: 0, top: 0, width: CANVAS_PX, height: CANVAS_PX }),
     addEventListener(type, fn) { listeners.set(type, fn); },

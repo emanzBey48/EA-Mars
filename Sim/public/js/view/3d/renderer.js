@@ -233,8 +233,8 @@ function createAstronautBuffers(gl, locations) {
   return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: indices.length };
 }
 
-const FIRST_PERSON_RIG_FORWARD_M = 1.65;
-const FIRST_PERSON_RIG_ROOT_BELOW_EYE_M = 1.24;
+const FIRST_PERSON_RIG_FORWARD_M = 1.25;
+const FIRST_PERSON_RIG_ROOT_BELOW_EYE_M = 1.48;
 
 function rotateEuler([x, y, z], [rx, ry, rz]) {
   const cx = Math.cos(rx), sx = Math.sin(rx);
@@ -542,15 +542,16 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         const headingRad = (firstPerson && Number.isFinite(camera.yawRad)
           ? camera.yawRad
           : (Number.isFinite(player.headingRad) ? player.headingRad : 0)) + ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad;
+        const rigVerticalScale = firstPerson ? 1 : verticalScale;
         let objectOffset;
         if (firstPerson) {
-          // Presentation-only view model: forward and slightly above the body-world anchor so
-          // arms/torso enter the lower frame. It is not a second physical/world body position.
+          // Presentation-only view model: forward and anchored at true 1:1 suit scale below eye level so
+          // arms/gloves/chestPack sit naturally in the lower frame without vertical exaggeration distortion.
           const forwardX = Math.cos(camera.yawRad), forwardY = Math.sin(camera.yawRad);
           objectOffset = [
             camera.xM + forwardX * FIRST_PERSON_RIG_FORWARD_M,
             camera.yM + forwardY * FIRST_PERSON_RIG_FORWARD_M,
-            camera.zDisplay - FIRST_PERSON_RIG_ROOT_BELOW_EYE_M * verticalScale,
+            camera.zDisplay - FIRST_PERSON_RIG_ROOT_BELOW_EYE_M * rigVerticalScale,
           ];
         } else {
           objectOffset = [player.xM, player.yM, (player.bodyWorldZM - referenceElevationM) * verticalScale];
@@ -559,7 +560,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.uniform1i(locations.renderPass, 2);
         gl.uniform3fv(locations.objectOffset, objectOffset);
         gl.uniform1f(locations.headingRad, headingRad);
-        gl.uniform1f(locations.verticalScale, verticalScale);
+        gl.uniform1f(locations.verticalScale, rigVerticalScale);
         gl.uniform3f(locations.baseColor, 1, 1, 1);
         gl.bindVertexArray(astronaut.vao);
         gl.disableVertexAttribArray(locations.color);
@@ -576,7 +577,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           gl.vertexAttrib3fv(locations.color, part.colorRgb);
           gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
           rigPartsDrawn.push(id);
-          const worldCenter = rigPartWorldCenter(part, partPose, rigPose, objectOffset, headingRad, verticalScale);
+          const worldCenter = rigPartWorldCenter(part, partPose, rigPose, objectOffset, headingRad, rigVerticalScale);
           if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
         }
         if (firstPerson) gl.enable(gl.DEPTH_TEST);

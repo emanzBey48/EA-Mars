@@ -21,10 +21,11 @@ export class EquirectangularProjection {
     this.ky = radiusM * DEG; // metres per degree of latitude
   }
   forward(latDeg, lonDeg) {
-    return { X: (lonDeg - this.centerLonDeg) * this.kx, Y: (latDeg - this.centerLatDeg) * this.ky };
+    // centerLatDeg is the standard parallel (lat_ts) scaling kx; latitude of origin is the Equator (0 deg).
+    return { X: (lonDeg - this.centerLonDeg) * this.kx, Y: latDeg * this.ky };
   }
   inverse(X, Y) {
-    return { latDeg: this.centerLatDeg + Y / this.ky, lonDeg: this.centerLonDeg + X / this.kx };
+    return { latDeg: Y / this.ky, lonDeg: this.centerLonDeg + X / this.kx };
   }
   describe() {
     return `Equirectangular, küre R=${(this.radiusM / 1000).toFixed(6)} km, merkez meridyen ${this.centerLonDeg}°E, ` +

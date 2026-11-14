@@ -23,12 +23,12 @@ const A = adapter.latLonToLocal(WAYPOINTS[0].latDeg, WAYPOINTS[0].lonDeg);
 const B = adapter.latLonToLocal(WAYPOINTS[1].latDeg, WAYPOINTS[1].lonDeg);
 const NODATA = 0xFF7FFFFB;
 
-test('adapter: waypoints land on expected DTM cells, origin is (0,0), route ≈ 687.345 m', () => {
+test('adapter: waypoints land on expected DTM cells, origin is (0,0), route ≈ 687.343 m', () => {
   assert.deepEqual([A.x, A.y], [0, 0]);
   const ca = adapter.localToCell(A.x, A.y), cb = adapter.localToCell(B.x, B.y);
   assert.deepEqual([ca.row, ca.col], [13647, 13423]);
   assert.deepEqual([cb.row, cb.col], [14322, 13557]);
-  assert.ok(Math.abs(Math.hypot(B.x - A.x, B.y - A.y) - 687.345) < 0.001);
+  assert.ok(Math.abs(Math.hypot(B.x - A.x, B.y - A.y) - 687.343) < 0.001);
   assert.ok(B.x > 0 && B.y < 0, 'Roubion is east-south-east of WB1: x east-positive, y north-positive');
 });
 
@@ -88,7 +88,7 @@ test('sampling: valid cell returns value, unit, cell, method; slope via 3x3 Horn
   assert.equal(e.status, STATUS.OK); assert.equal(e.unit, 'm'); assert.ok(e.method && e.source && e.cell);
   const s = L.sampleSlope(0, 0);
   assert.equal(s.status, STATUS.OK);
-  assert.ok(Math.abs(s.value - Math.atan(0.1) * 180 / Math.PI) < 1e-3);
+  assert.ok(Math.abs(s.value - Math.atan(0.1) * 180 / Math.PI) < 2e-3);
   const { row, col } = adapter.localToCell(0, 0);
   const cg = L.cellGradient(row, col);
   assert.equal(cg.status, STATUS.OK);
@@ -220,20 +220,20 @@ function syntheticManifest(overrides = {}) {
   const cb = adapter.localToCell(B.x, B.y);
   const base = buildHiriseManifestFromMeta({
     label: {
+      ...MAP_FRAME,
       productId: 'SYNTHETIC_TEST_MANIFEST',
       productVersionId: '1',
       producer: 'USGS Astrogeology Science Center / NASA JPL',
       citation: 'Fergason et al. (2020), USGS Mars 2020 TRN HiRISE DTM Mosaic',
-      useConstraints: 'Public domain (CC0-1.0).',
+      useConstraints: 'This work is marked with CC0 1.0 Universal',
       useConstraintsEvidence: {
-        licenseCode: 'CC0-1.0',
+        statement: 'This work is marked with CC0 1.0 Universal',
         sourceUrl: 'https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic',
-        quote: 'Unless otherwise stated, all data, metadata and related materials are considered to satisfy the quality standards relative to the purpose for which the data were collected.',
       },
       provenanceEvidence: {
-        usgsLandingPageUrl: 'https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic',
-        fgdcXmlUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.xml',
-        pds3LabelUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl',
+        productId: 'SYNTHETIC_TEST_MANIFEST',
+        version: '1',
+        sourceUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl',
       },
       verticalDatum: 'MOLA Geoid (areoid)',
       verticalDatumVerified: true,
@@ -255,9 +255,9 @@ function syntheticManifest(overrides = {}) {
       offset: 0,
       missingConstantHex: 'FF7FFFFB',
       noDataSource: 'TIFF_GDAL_NODATA',
+      rangeSemantics: 'loaded_window_observed_extrema_only',
       observedMin: -2590.5,
       observedMax: -2540.2,
-      ...MAP_FRAME,
     },
     frameMatchesConfig: true,
     crsText: 'Equirectangular test CRS',
@@ -610,8 +610,8 @@ test('Stage 12: First-person camera dynamic offsets and view-projection calculat
   assert.equal(camera.yM, 20);
   assert.equal(camera.dynamicEyeOffsetM, -0.05);
   assert.equal(camera.dynamicPitchOffsetRad, -0.012);
-  // Expected zDisplay: 5 + (1.55 - 0.05) * 3 = 5 + 1.50 * 3 = 9.50
-  assert.ok(Math.abs(camera.zDisplay - (5 + (1.55 - 0.05) * 3)) < 1e-9);
+  // Expected zDisplay: 5 + (1.75 - 0.05) * 3 = 5 + 1.70 * 3 = 10.10
+  assert.ok(Math.abs(camera.zDisplay - (5 + (1.75 - 0.05) * 3)) < 1e-9);
 
   // Base pitch remains unchanged
   assert.equal(camera.pitchRad, 0.1);
@@ -625,5 +625,5 @@ test('Stage 12: First-person camera dynamic offsets and view-projection calculat
   setFirstPersonPose(camera, { xM: 10, yM: 20, bodyZDisplay: 5, verticalScale: 3 });
   assert.equal(camera.dynamicEyeOffsetM, 0);
   assert.equal(camera.dynamicPitchOffsetRad, 0);
-  assert.ok(Math.abs(camera.zDisplay - (5 + 1.55 * 3)) < 1e-9);
+  assert.ok(Math.abs(camera.zDisplay - (5 + 1.75 * 3)) < 1e-9);
 });

@@ -679,3 +679,94 @@ test('Stage 14+: Chained boot-to-leg ankle kinematics and helmet/visor horizon s
   );
   assert.ok(Math.abs(walkPose.parts.visor.offset[1]) > 0, 'Visor orbits neck pivot with helmet');
 });
+
+// --- gaitDistanceM: distance-based gait phase (continuous across speed changes) ---
+
+const WALK_DIST = (timeS, speed, gaitDistanceM) => ({
+  ...WALK_AT(timeS, speed),
+  ...(gaitDistanceM === undefined ? {} : { gaitDistanceM }),
+});
+
+function maxFullPoseJump(a, b) {
+  const world = maxPoseJump(a, b);
+  const vm = maxViewModelJump(a, b);
+  return Math.max(world.rot, world.off, vm.rot, vm.off);
+}
+
+test('Stage 14+: gaitDistanceM validation', () => {
+  for (const bad of [Number.NaN, -1, Infinity, '3', null]) {
+    assert.throws(() => poseAstronautRig(WALK_DIST(1, 1, bad)), TypeError, `gaitDistanceM=${String(bad)}`);
+  }
+  for (const ok of [0, 12.5]) {
+    assert.doesNotThrow(() => poseAstronautRig(WALK_DIST(1, 1, ok)), `gaitDistanceM=${ok}`);
+  }
+  assert.doesNotThrow(() => poseAstronautRig(WALK_AT(1, 1)), 'field stays optional');
+});
+
+test('Stage 14+: distance-based phase equals time-based phase at constant speed from t=0', () => {
+  const stride = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
+  for (const [speed, timeS] of [[0.3, 1.7], [1.0, 12.3], [1.2, 250.5], [2.4, 999.9]]) {
+    const timed = poseAstronautRig(WALK_AT(timeS, speed));
+    const dist = poseAstronautRig(WALK_DIST(timeS, speed, speed * timeS));
+    assert.ok(Math.abs(timed.gaitPhaseRad - dist.gaitPhaseRad) < 1e-9, `phase at v=${speed}, t=${timeS}`);
+    assert.equal(dist.gaitFrequencyHz, speed / stride, 'cadence still speed / stride');
+    assert.equal(dist.viewModel.stepPhaseRad, dist.gaitPhaseRad, 'viewModel inherits the phase');
+    assert.ok(maxFullPoseJump(timed, dist) < 1e-8, 'whole pose agrees');
+  }
+});
+
+test('Stage 14+: gait phase stays continuous across a speed change when distance is supplied', () => {
+  const dist = 123.4;
+  const a = poseAstronautRig(WALK_DIST(100, 1.0, dist));
+  const b = poseAstronautRig(WALK_DIST(100, 1.01, dist));
+  assert.equal(a.gaitPhaseRad, b.gaitPhaseRad, 'same distance gives the same phase');
+  // Measured max component difference 3.6e-3 (tolerance ~2.7x). The remainder is not a phase jump: it
+  // comes from speed-scaled amplitudes (speedNorm, ease) changing by 1% at the same phase.
+  assert.ok(maxFullPoseJump(a, b) < 0.01, `with distance: ${maxFullPoseJump(a, b)}`);
+
+  // Without the field the same 1% speed change shifts the phase by 2*pi*dv*t/stride (a visible jump);
+  // measured 0.36 rad at t=100 s. This documents why the field exists.
+  const c = poseAstronautRig(WALK_DIST(100, 1.0));
+  const d = poseAstronautRig(WALK_DIST(100, 1.01));
+  assert.ok(maxFullPoseJump(c, d) > 0.1, `without distance: ${maxFullPoseJump(c, d)}`);
+});
+
+test('Stage 14+: speed ramp (landing-recovery style) has smooth gait with distance, jumpy without', () => {
+  const dt = 1 / 60;
+  const steps = 600;
+  const maxLegStep = (useDistance) => {
+    let distance = 0;
+    let timeS = 50;
+    let prev = null;
+    let worst = 0;
+    for (let i = 0; i <= steps; i += 1) {
+      const frac = i / steps;
+      const speed = 1.2 - 0.6 * (1 - Math.abs(2 * frac - 1)); // 1.2 -> 0.6 -> 1.2 m/s
+      const pitch = poseAstronautRig(WALK_DIST(timeS, speed, useDistance ? distance : undefined)).parts.leftLeg.rotationRad[0];
+      if (prev !== null) worst = Math.max(worst, Math.abs(pitch - prev));
+      prev = pitch;
+      distance += speed * dt;
+      timeS += dt;
+    }
+    return worst;
+  };
+  // Measured 0.044 rad/step with distance (the genuine stride motion at 1.2 m/s; bound ~2x) and
+  // 0.30 rad/step without.
+  const withDistance = maxLegStep(true);
+  const without = maxLegStep(false);
+  assert.ok(withDistance < 0.09, `with distance: ${withDistance}`);
+  assert.ok(without > 0.2, `without distance: ${without}`);
+  assert.ok(without > 3 * withDistance, 'distance phase is clearly smoother');
+});
+
+test('Stage 14+: gaitDistanceM keeps output deterministic and frozen', () => {
+  const state = WALK_DIST(37.25, 1.1, 41.0);
+  const a = poseAstronautRig(state);
+  const b = poseAstronautRig({ ...state });
+  assert.deepStrictEqual(a, b);
+  assert.ok(Object.isFrozen(a) && Object.isFrozen(a.parts.leftLeg) && Object.isFrozen(a.viewModel));
+  assert.ok(a.gaitPhaseRad >= 0 && a.gaitPhaseRad < 2 * Math.PI);
+  // Distance only drives the walk phase: other poses ignore it.
+  const idle = { timeS: 3, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, phase: 'idle' };
+  assert.deepStrictEqual(poseAstronautRig({ ...idle, gaitDistanceM: 99 }), poseAstronautRig(idle));
+});

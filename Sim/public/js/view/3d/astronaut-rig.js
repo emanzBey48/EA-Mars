@@ -91,9 +91,13 @@ const VM_RECOVERY_DIP_PITCH_RAD = 0.01;
  * to that template part's neutral `center`; its rotation is applied about that resulting center.
  * A renderer may then apply the whole-rig world transform (including heading) separately.
  *
+ * Optional `gaitDistanceM` (finite, >= 0) is the cumulative horizontal distance travelled, in metres. When
+ * given, the walk gait phase is `2π · gaitDistanceM / presentationStrideLengthM`, so it stays continuous
+ * while speed changes; when omitted, the phase is `2π · (speed / stride) · timeS` as before.
+ *
  * @param {{timeS:number, horizontalSpeedMps:number, verticalSpeedMps:number,
  *   grounded:boolean, airborne?:boolean, landingRecovery?:boolean, landingRecoveryFrac?:number,
- *   groundContactStatus?:string, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
+ *   groundContactStatus?:string, gaitDistanceM?:number, phase:'idle'|'walk'|'stop'|'airborne'|'paused'|'ready'|'running'|'arrived'}} state
  * `viewModel` is an additive, presentation-only first-person overlay (local model units/radians) for the
  * lower-frame torso/arms: `offset` and `rotationRad` are small breath and step/landing terms, and
  * `breathPhaseRad` / `stepPhaseRad` expose the phases they use. It does not alter any other field.
@@ -131,7 +135,13 @@ export function poseAstronautRig(state) {
   }
 
   const gaitFrequencyHz = pose === 'walk' ? speed / PRESENTATION_STRIDE_LENGTH_M : 0;
-  const gaitPhaseRad = pose === 'walk' ? positiveModulo(TAU * gaitFrequencyHz * timeS, TAU) : 0;
+  // Accumulated distance keeps the phase continuous when speed changes; time-based phase is the fallback.
+  let gaitPhaseRad = 0;
+  if (pose === 'walk') {
+    gaitPhaseRad = state.gaitDistanceM !== undefined
+      ? positiveModulo(TAU * state.gaitDistanceM / PRESENTATION_STRIDE_LENGTH_M, TAU)
+      : positiveModulo(TAU * gaitFrequencyHz * timeS, TAU);
+  }
   const cycle = Math.sin(gaitPhaseRad);
   const breath = Math.sin(TAU * BREATH_HZ * timeS);
   const parts = {};
@@ -511,8 +521,9 @@ function assertMotionState(state) {
       !Number.isFinite(state.verticalSpeedMps) || typeof state.grounded !== 'boolean' ||
       (state.airborne !== undefined && typeof state.airborne !== 'boolean') ||
       (state.landingRecovery !== undefined && typeof state.landingRecovery !== 'boolean') ||
-      (state.landingRecoveryFrac !== undefined && (!Number.isFinite(state.landingRecoveryFrac) || state.landingRecoveryFrac < 0))) {
-    throw new TypeError('state requires finite timeS, non-negative horizontalSpeedMps, finite verticalSpeedMps, and boolean grounded');
+      (state.landingRecoveryFrac !== undefined && (!Number.isFinite(state.landingRecoveryFrac) || state.landingRecoveryFrac < 0)) ||
+      (state.gaitDistanceM !== undefined && (!Number.isFinite(state.gaitDistanceM) || state.gaitDistanceM < 0))) {
+    throw new TypeError('state requires finite timeS, non-negative horizontalSpeedMps, finite verticalSpeedMps, boolean grounded, and (if given) finite non-negative gaitDistanceM');
   }
   if (!VALID_PHASES.includes(state.phase)) throw new TypeError(`state.phase must be one of: ${VALID_PHASES.join(', ')}`);
 }

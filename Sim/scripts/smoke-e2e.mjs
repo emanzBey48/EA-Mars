@@ -223,7 +223,7 @@ try {
   await sleep(200); await shot('03-out-of-bounds.png');
   check('4c Kapsam dışı konum ve bilinmeyen kot açıkça ayrılıyor', oob.e.includes('Yükseklik bilinmiyor') && oob.e.includes('Kapsam dışı') && oob.s.startsWith('Kapsam dışı'), oob.e.slice(0, 90));
   // No-data: the loaded window contains no no-data cells, so inject the product MISSING_CONSTANT into one in-memory cell (test only).
-  const nd = await evaluate(`(() => { const m = window.marswalk, L = m.layers.dtm; m.sim.setPosition(0, -100); const c = m.adapter.localToCell(0, -100);
+  const nd = await evaluate(`(() => { const m = window.marswalk, L = m.layers.dtm; m.sim.setPosition(0, -100); const c = (L.adapter ?? m.adapter).localToCell(0, -100);
     const i0 = (c.row - L.rowOffset) * L.cols + (c.col - L.colOffset); const keep = [L.bits[i0], L.bits[i0 + 1]];
     L.bits[i0] = L.noDataBits; m.updateHud(); const centre = { e: document.getElementById('v-elev').textContent, s: document.getElementById('v-slope').textContent };
     L.bits[i0] = keep[0]; L.bits[i0 + 1] = L.noDataBits; m.updateHud(); const neigh = { e: document.getElementById('v-elev').textContent, s: document.getElementById('v-slope').textContent };

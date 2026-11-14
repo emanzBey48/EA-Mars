@@ -79,16 +79,17 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     const legend = $('legend');
     if (terrain) {
       const grad = terrain.ramp.map(([t, c]) => `rgb(${c.join(',')}) ${t * 100}%`).join(',');
+      const activeDatum = layers.dtm.descriptor.verticalDatum ?? 'Düşey datum doğrulanmadı';
       legend.innerHTML = `<b>Zemin: DTM’den türetilmiş gölgeli kabartma + kot renklendirmesi</b> (ortogörüntü değil; görsel amaçlı)` +
         `<div class="bar" style="background:linear-gradient(90deg,${grad})"></div>` +
-        `<div class="row"><span>${terrain.zMin.toFixed(1)} m</span><span>MOLA areoid / DeltaGeoid</span><span>${terrain.zMax.toFixed(1)} m</span></div>` +
+        `<div class="row"><span>${terrain.zMin.toFixed(1)} m</span><span>${esc(activeDatum)}</span><span>${terrain.zMax.toFixed(1)} m</span></div>` +
         `<div><span class="swatch"></span>${routeOriginNote}</div><div><span class="swatch corr"></span>senaryo koridoru (±${currentCorridorM} m, güvenlik sınırı değil) · <span class="swatch nd"></span>no-data</div>`;
     } else {
       legend.innerHTML = `<b>Zemin yok</b> — raster verisi kullanılamıyor; yalnız metre ızgarası.<div><span class="swatch"></span>${routeOriginNote}</div><div><span class="swatch corr"></span>senaryo koridoru (güvenlik sınırı değil)</div>`;
     }
     const rb = $('raster-banner'); rb.hidden = notes.length === 0; rb.textContent = notes.join(' ');
     $('v-calc-note').textContent = layers.dtm.available
-      ? `Kaynak: ${layers.dtm.descriptor.product}. Kot: en yakın DTM hücresi (MOLA areoid / DeltaGeoid datumu, m). Eğim: aynı hücrede 3×3 Horn, hücre ${layers.dtm.cellSizeM.toFixed(2)} m; 9 hücrenin hepsi geçerli değilse eğim üretilmez.`
+      ? `Kaynak: ${layers.dtm.descriptor.product}. Kot: en yakın DTM hücresi (${layers.dtm.descriptor.verticalDatum ?? 'düşey datum doğrulanmadı'}, m). Eğim: aynı hücrede 3×3 Horn, hücre ${layers.dtm.cellSizeM.toFixed(2)} m; 9 hücrenin hepsi geçerli değilse eğim üretilmez.`
       : 'DTM katmanı yüklenmediği için kot ve eğim hesaplanmıyor.';
   }
 
@@ -109,7 +110,8 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
 
     const e = surface.elevation;
     const s = surface.slope;
-    const ef = fmtSample(e, 2, 'm (MOLA areoid / DeltaGeoid)');
+    const datumText = e.verticalDatum ?? astronaut.zDatum ?? 'düşey datum doğrulanmadı';
+    const ef = fmtSample(e, 2, `m (${datumText})`);
     if (!ef.ok) ef.text = `Yükseklik bilinmiyor — ${ef.text}`;
     const sf = fmtSample(s, 1, '°');
     $('v-elev').innerHTML = `<span class="${ef.ok ? 'status-ok' : 'status-bad'}">${esc(ef.text)}</span>` +

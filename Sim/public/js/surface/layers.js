@@ -197,15 +197,17 @@ export function dtmBaseDescriptor() {
  * Loads the prepared DTM window (data/dtm_subset.json + .f32) produced by scripts/extract-dtm.mjs.
  * Never throws: on any failure returns an UnavailableLayer carrying the reason.
  */
-export async function loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl = fetch }) {
+export async function loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl = fetch, preparedMeta = null }) {
   const base = dtmBaseDescriptor();
-  let meta;
-  try {
-    const res = await fetchImpl(`${baseUrl}/dtm_subset.json`);
-    if (!res.ok) return new UnavailableLayer(base, `DTM meta verisi bulunamadı (HTTP ${res.status}). Önce "npm run prepare-data" çalıştırın.`);
-    meta = await res.json();
-  } catch (e) {
-    return new UnavailableLayer(base, `DTM meta verisi okunamadı: ${e.message}`);
+  let meta = preparedMeta;
+  if (meta == null) {
+    try {
+      const res = await fetchImpl(`${baseUrl}/dtm_subset.json`);
+      if (!res.ok) return new UnavailableLayer(base, `DTM meta verisi bulunamadı (HTTP ${res.status}). Önce "npm run prepare-data" çalıştırın.`);
+      meta = await res.json();
+    } catch (e) {
+      return new UnavailableLayer(base, `DTM meta verisi okunamadı: ${e.message}`);
+    }
   }
   const label = meta.label;
   const mismatch = sameFrame(label, expectedFrame);

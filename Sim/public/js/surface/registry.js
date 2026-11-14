@@ -131,9 +131,18 @@ export const SUPPORTED_FORMATS = Object.freeze([
 ]);
 
 const REL_TOL = 1e-6;
+const OFFICIAL_PDS_GRID = Object.freeze({
+  sourceUrl: 'https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl',
+  lineProjectionOffset: 1106617.5,
+  sampleProjectionOffset: -4577366.5,
+  mapScaleM: 1,
+  radiusKm: 3396.19,
+});
+const TRUSTED_LEGACY_ENTRIES = new WeakSet();
 const isNonEmptyStr = (v) => typeof v === 'string' && v.trim().length > 0;
 const isPosNum = (v) => typeof v === 'number' && Number.isFinite(v) && v > 0;
 const isFinNum = (v) => typeof v === 'number' && Number.isFinite(v);
+const closeMetres = (a, b) => isFinNum(a) && isFinNum(b) && Math.abs(a - b) <= 1e-6;
 
 function approxEq(a, b, tol = REL_TOL) {
   return isFinNum(a) && isFinNum(b) && Math.abs(a - b) <= tol * Math.max(1, Math.abs(b));
@@ -297,6 +306,41 @@ export function validateLayerManifest(manifest, expectedFrame) {
     }
   }
 
+  // Compare the TIFF PixelIsArea affine with the independently published PDS3 grid.
+  // Persisted residuals are reporting data, never a substitute for this calculation.
+  const comparison = manifest.quality?.transformComparison;
+  const g = manifest.grid;
+  const pds = comparison?.pdsGrid;
+  const tiff = comparison?.tiffGrid;
+  const officialGridMatches = comparison?.sourceUrl === OFFICIAL_PDS_GRID.sourceUrl &&
+    pds?.sourceUrl === OFFICIAL_PDS_GRID.sourceUrl &&
+    ['lineProjectionOffset', 'sampleProjectionOffset', 'mapScaleM', 'radiusKm']
+      .every((key) => closeMetres(pds?.[key], OFFICIAL_PDS_GRID[key]));
+  if (!officialGridMatches || !g || !isFinNum(g.upperLeftX) || !isFinNum(g.upperLeftY) || !isPosNum(g.mapScaleM)) {
+    record('registration', VALIDATION_STATUS.NEEDS_REVIEW, 'Resmî PDS3 grid veya TIFF affine köşe koordinatları eksik/uyumsuz.');
+  } else {
+    const tiffLineOffset = g.upperLeftY - g.mapScaleM / 2;
+    const tiffSampleOffset = -(g.upperLeftX + g.mapScaleM / 2);
+    const corners = [[1, 1], [1, g.samples], [g.lines, 1], [g.lines, g.samples]];
+    const maxResidualM = Math.max(...corners.map(([line, sample]) => {
+      const xTiff = g.upperLeftX + (sample - 0.5) * g.mapScaleM;
+      const yTiff = g.upperLeftY - (line - 0.5) * g.mapScaleM;
+      const xPds = (sample - 1 - OFFICIAL_PDS_GRID.sampleProjectionOffset) * OFFICIAL_PDS_GRID.mapScaleM;
+      const yPds = (OFFICIAL_PDS_GRID.lineProjectionOffset - line + 1) * OFFICIAL_PDS_GRID.mapScaleM;
+      return Math.hypot(xTiff - xPds, yTiff - yPds);
+    }));
+    const toleranceM = Math.SQRT1_2 * g.mapScaleM;
+    if (!closeMetres(tiff?.lineProjectionOffset, tiffLineOffset) ||
+        !closeMetres(tiff?.sampleProjectionOffset, tiffSampleOffset) ||
+        !closeMetres(g.lineProjectionOffset, tiffLineOffset) ||
+        !closeMetres(g.sampleProjectionOffset, tiffSampleOffset) ||
+        !isFinNum(maxResidualM) || maxResidualM > toleranceM) {
+      record('registration', VALIDATION_STATUS.NEEDS_REVIEW, `TIFF/PDS3 köşe dönüşümü uyuşmuyor (max residual ${maxResidualM} m).`);
+    } else {
+      record('registration', VALIDATION_STATUS.SUPPORTED, `TIFF/PDS3 dört köşe max residual ${maxResidualM.toFixed(3)} m / ${toleranceM.toFixed(3)} m.`);
+    }
+  }
+
   // 5. Grid dimensions, numerical coverage, resolution, row/col orientation & pixel registration
   const grid = manifest.grid;
   if (!grid || typeof grid !== 'object') {
@@ -333,20 +377,40 @@ export function validateLayerManifest(manifest, expectedFrame) {
     record('coverage', VALIDATION_STATUS.INVALID, 'Kapsama alanı açıklaması (coverage.description) eksik.');
   } else if (cov.localBoundsM && isFinNum(cov.localBoundsM.xMin) && isFinNum(cov.localBoundsM.xMax) && isFinNum(cov.localBoundsM.yMin) && isFinNum(cov.localBoundsM.yMax)) {
     const { xMin, xMax, yMin, yMax } = cov.localBoundsM;
+    const window = manifest.grid?.loadedWindow;
+    const windowValid = Number.isInteger(window?.row0) && Number.isInteger(window?.col0) &&
+      Number.isInteger(window?.rows) && Number.isInteger(window?.cols) &&
+      window.row0 >= 0 && window.col0 >= 0 && window.rows > 0 && window.cols > 0 &&
+      window.row0 + window.rows <= manifest.grid?.lines && window.col0 + window.cols <= manifest.grid?.samples;
     if (xMin >= xMax || yMin >= yMax) {
       record('coverage', VALIDATION_STATUS.INVALID, 'Sayısal localBoundsM sınırları geçersiz (xMin >= xMax veya yMin >= yMax).');
-    } else if (xMin > 0 || xMax < 0 || yMin > 0 || yMax < 0) {
-      // Local origin (0, 0) is the start waypoint Sol 120
-      record('coverage', VALIDATION_STATUS.INVALID, `Yerel başlangıç noktası (0, 0) kapsama sınırları dışında [x: ${xMin}..${xMax}, y: ${yMin}..${yMax}].`);
+    } else if (!windowValid || !manifest.crs || !isPosNum(manifest.crs.radiusKm) ||
+      !isFinNum(manifest.crs.centerLatDeg) || !isFinNum(manifest.crs.centerLonDeg) ||
+      !isPosNum(manifest.grid.mapScaleM) || !isFinNum(manifest.grid.lineProjectionOffset) ||
+      !isFinNum(manifest.grid.sampleProjectionOffset)) {
+      record('coverage', VALIDATION_STATUS.NEEDS_REVIEW, 'Yüklenen raster penceresinin sayısal boyutu/çerçevesi doğrulanmadı.');
     } else {
-      record('coverage', VALIDATION_STATUS.SUPPORTED, `Sayısal sınırlar demo başlangıç noktasını kapsıyor [x: ${xMin.toFixed(1)}..${xMax.toFixed(1)}, y: ${yMin.toFixed(1)}..${yMax.toFixed(1)}] m`);
+      const sourceAdapter = adapterFromLabel({ ...manifest.crs, ...manifest.grid }, WAYPOINTS[0]);
+      const nw = sourceAdapter.pixelToLocal(window.row0 - 0.5, window.col0 - 0.5);
+      const se = sourceAdapter.pixelToLocal(window.row0 + window.rows - 0.5, window.col0 + window.cols - 0.5);
+      const boundsMatch = closeMetres(xMin, nw.x) && closeMetres(xMax, se.x) &&
+        closeMetres(yMin, se.y) && closeMetres(yMax, nw.y);
+      const endpointsCovered = WAYPOINTS.every((w) => {
+        const { x, y } = sourceAdapter.latLonToLocal(w.latDeg, w.lonDeg);
+        return x >= nw.x && x <= se.x && y >= se.y && y <= nw.y;
+      });
+      if (!boundsMatch || !endpointsCovered) {
+        record('coverage', VALIDATION_STATUS.NEEDS_REVIEW, 'Bildirilen kapsama sınırları raster penceresinin affine sınırlarıyla veya rota uçlarıyla uyuşmuyor.');
+      } else {
+        record('coverage', VALIDATION_STATUS.SUPPORTED, `Affine penceresi ve iki rota ucu doğrulandı [x: ${xMin.toFixed(1)}..${xMax.toFixed(1)}, y: ${yMin.toFixed(1)}..${yMax.toFixed(1)}] m`);
+      }
     }
   } else if (cov.latLonBounds && isFinNum(cov.latLonBounds.north) && isFinNum(cov.latLonBounds.south) && isFinNum(cov.latLonBounds.west) && isFinNum(cov.latLonBounds.east)) {
     const { north, south, west, east } = cov.latLonBounds;
     if (south >= north || west >= east) {
       record('coverage', VALIDATION_STATUS.INVALID, 'Sayısal latLonBounds sınırları geçersiz.');
     } else {
-      record('coverage', VALIDATION_STATUS.SUPPORTED, `Sayısal sınırlar: ${south.toFixed(4)}°..${north.toFixed(4)}°K, ${west.toFixed(4)}°..${east.toFixed(4)}°D`);
+      record('coverage', VALIDATION_STATUS.NEEDS_REVIEW, `Enlem/boylam sınırları ${south.toFixed(4)}°..${north.toFixed(4)}°K, ${west.toFixed(4)}°..${east.toFixed(4)}°D; yüklenen pencere affine sınırları gerekli.`);
     }
   } else {
     record('coverage', VALIDATION_STATUS.NEEDS_REVIEW, 'Sayısal kapsama sınırları (localBoundsM veya latLonBounds) bulunamadı; insan incelemesi gerekir.');
@@ -378,6 +442,19 @@ export function validateLayerManifest(manifest, expectedFrame) {
     record('access', VALIDATION_STATUS.UNAVAILABLE, access?.reason ?? 'Veri kaynağına erişilemiyor.');
   } else {
     record('access', VALIDATION_STATUS.SUPPORTED, 'Yerel veri penceresi erişilebilir.');
+  }
+
+  const route = manifest.quality?.routeCheck;
+  const routeLengthM = Math.hypot(
+    (WAYPOINTS[1].lonDeg - WAYPOINTS[0].lonDeg) * expectedFrame.radiusKm * 1000 * Math.cos(expectedFrame.centerLatDeg * Math.PI / 180) * Math.PI / 180,
+    (WAYPOINTS[1].latDeg - WAYPOINTS[0].latDeg) * expectedFrame.radiusKm * 1000 * Math.PI / 180,
+  );
+  if (!route || !isFinNum(routeLengthM) || !isFinNum(route.lengthM) || Math.abs(route.lengthM - routeLengthM) > 0.001 ||
+      !Number.isInteger(route.samples) || route.samples < 2 || route.nonOkElevationSamples !== 0 ||
+      manifest.quality?.windowStats?.noData !== 0 || manifest.quality?.windowStats?.invalid !== 0) {
+    record('route', VALIDATION_STATUS.NEEDS_REVIEW, 'Hazırlanan pencerede rota kapsamı/geçerli hücre sayımı doğrulanmadı.');
+  } else {
+    record('route', VALIDATION_STATUS.SUPPORTED, `${route.samples} rota örneği bildirildi; yükleyici rota penceresindeki tüm hücreleri raster üzerinden yeniden sayar.`);
   }
 
   if (manifest.humanReviewRequired === true) {
@@ -453,6 +530,8 @@ export function buildHiriseManifestFromMeta(meta) {
       mapScaleM: label.mapScaleM,
       lineProjectionOffset: label.lineProjectionOffset,
       sampleProjectionOffset: label.sampleProjectionOffset,
+      upperLeftX: label.upperLeftX,
+      upperLeftY: label.upperLeftY,
       rowDirection: 'SOUTH',
       colDirection: 'EAST',
       pixelRegistration: label.pixelRegistration ?? (label.rasterType === 'PixelIsArea' ? 'PIXEL_IS_AREA' : 'CENTER_PDS_1BASED'),
@@ -482,6 +561,7 @@ export function buildHiriseManifestFromMeta(meta) {
       transformControls: meta.transformControls ?? null,
       transformToleranceM: meta.transformToleranceM ?? null,
       transformComparison: meta.transformComparison ?? null,
+      routeCheck: meta.routeCheck ?? null,
     },
     access: { status: STATUS.OK, reason: null },
     humanReviewRequired: label.verticalDatumVerified !== true,
@@ -606,9 +686,13 @@ export class SurfaceProviderRegistry {
       return { id, provider: new UnavailableLayer(desc, desc.access.reason), validation };
     }
     try {
-      const expectedFrame = entry.expectedFrame ?? this.expectedFrame;
-      const loaded = await entry.load({ expectedFrame, adapter: this.adapter, ...options });
-      const validation = loaded.validation ?? validateLayerManifest(loaded.manifest, expectedFrame);
+      const trustedLegacy = TRUSTED_LEGACY_ENTRIES.has(entry);
+      const expectedFrame = trustedLegacy ? LEGACY_HIRISE_FRAME : this.expectedFrame;
+      const loaded = await entry.load({ ...options, expectedFrame, adapter: this.adapter });
+      // The legacy fixture has its own PDS3 validator. All other manifests must pass
+      // the registry validator even if a loader supplies a claimed validation result.
+      const validation = trustedLegacy && loaded.validation
+        ? loaded.validation : validateLayerManifest(loaded.manifest, expectedFrame);
       const descriptor = manifestToDescriptor(loaded.manifest, validation);
       if (!validation.samplingAllowed) {
         return {
@@ -725,8 +809,26 @@ export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl =
       return {
         manifest,
         createLayer: async (validatedDescriptor) => {
-          const layer = await loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl });
+          const layer = await loadDtmLayer({ baseUrl, adapter, expectedFrame, fetchImpl, preparedMeta: meta });
           if (layer.available) {
+            // The prepared rectangular window contains the whole straight demo route.
+            // Scan every loaded cell, including cells between the extractor's route samples.
+            let valid = 0, noData = 0, invalid = 0;
+            let observedMin = Infinity, observedMax = -Infinity;
+            for (let i = 0; i < layer.values.length; i++) {
+              if (layer.bits[i] === layer.noDataBits) { noData++; continue; }
+              const value = layer.values[i];
+              if (!Number.isFinite(value)) { invalid++; continue; }
+              valid++;
+              if (value < observedMin) observedMin = value;
+              if (value > observedMax) observedMax = value;
+            }
+            const stats = meta.windowStats;
+            if (valid !== stats?.valid || noData !== stats?.noData || invalid !== stats?.invalid ||
+                noData !== 0 || invalid !== 0 || observedMin !== stats?.min || observedMax !== stats?.max ||
+                observedMin !== meta.label?.observedMin || observedMax !== meta.label?.observedMax) {
+              return new UnavailableLayer(validatedDescriptor, 'DTM pencere rasterı manifestteki tam hücre sayımı/extrema ile uyuşmuyor; USGS örneklemesi kapalı.');
+            }
             layer.descriptor = {
               ...layer.descriptor,
               ...validatedDescriptor,
@@ -744,7 +846,7 @@ export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl =
     },
   });
 
-  registry.register({
+  const legacyEntry = {
     id: 'hirise-legacy-jezero-dtm',
     title: 'HiRISE PDS3 Jezero DTM legacy fallback',
     expectedFrame: LEGACY_HIRISE_FRAME,
@@ -765,6 +867,7 @@ export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl =
               adapter: bridge.adapter,
               expectedFrame: LEGACY_HIRISE_FRAME,
               fetchImpl,
+              preparedMeta: meta,
             });
             if (layer.available) {
               layer.descriptor = {
@@ -790,7 +893,9 @@ export function createDefaultSurfaceRegistry({ expectedFrame, adapter, baseUrl =
         };
       }
     },
-  });
+  };
+  TRUSTED_LEGACY_ENTRIES.add(legacyEntry);
+  registry.register(legacyEntry);
 
   return registry;
 }

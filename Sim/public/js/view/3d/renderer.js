@@ -246,7 +246,12 @@ function createAstronautBuffers(gl, locations) {
   return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: indices.length };
 }
 
-const FIRST_PERSON_RIG_ROOT_BELOW_EYE_M = 1.48;
+// Presentation-frame placement only; camera eye height and physical lower-body anchor remain 1.48 m.
+const FIRST_PERSON_VIEW_MODEL_ROOT_BELOW_EYE_M = 1.05;
+// Keep the presentation-only upper-body model in front of the near plane. Placing its cuboids
+// around the eye anchor makes them straddle the camera and cover the central view at all pitches.
+const FIRST_PERSON_VIEW_MODEL_FORWARD_M = 0.85;
+const FIRST_PERSON_VIEW_MODEL_SCALE = 0.65;
 
 function rotateEuler([x, y, z], [rx, ry, rz]) {
   const cx = Math.cos(rx), sx = Math.sin(rx);
@@ -590,11 +595,13 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         const rigVerticalScale = firstPerson ? 1 : verticalScale;
         let objectOffset;
         if (firstPerson) {
-          // Keep the rig root at the eye anchor's X/Y; the torso and arms remain a lower-frame view model.
+          // This is a camera-relative visual overlay, not a second physical body position. A forward
+          // offset keeps the suit cuboids out of the near plane while their eye-relative Z leaves them
+          // in the lower frame. The world rig and look-down legs retain their physical anchors.
           objectOffset = [
-            camera.xM,
-            camera.yM,
-            camera.zDisplay - FIRST_PERSON_RIG_ROOT_BELOW_EYE_M * rigVerticalScale,
+            camera.xM + Math.cos(camera.yawRad) * FIRST_PERSON_VIEW_MODEL_FORWARD_M,
+            camera.yM + Math.sin(camera.yawRad) * FIRST_PERSON_VIEW_MODEL_FORWARD_M,
+            camera.zDisplay - FIRST_PERSON_VIEW_MODEL_ROOT_BELOW_EYE_M * rigVerticalScale,
           ];
         } else {
           objectOffset = [player.xM, player.yM, (player.bodyWorldZM - referenceElevationM) * verticalScale];
@@ -618,16 +625,28 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         for (const id of partIds) {
           const part = ASTRONAUT_RIG.parts[id];
           const partPose = rigPose.parts[id];
-          gl.uniform3fv(locations.partSize, part.size);
-          gl.uniform3fv(locations.partCenter, part.center);
-          gl.uniform3fv(locations.partOffset, partPose.offset);
+          const presentationScale = firstPerson ? FIRST_PERSON_VIEW_MODEL_SCALE : 1;
+          const presentedPart = firstPerson ? {
+            ...part,
+            size: part.size.map((value) => value * presentationScale),
+            center: part.center.map((value) => value * presentationScale),
+          } : part;
+          const presentedPartPose = firstPerson ? {
+            ...partPose, offset: partPose.offset.map((value) => value * presentationScale),
+          } : partPose;
+          const presentedRootPose = firstPerson ? {
+            ...upperBodyPose, rootOffset: upperBodyPose.rootOffset.map((value) => value * presentationScale),
+          } : upperBodyPose;
+          gl.uniform3fv(locations.partSize, presentedPart.size);
+          gl.uniform3fv(locations.partCenter, presentedPart.center);
+          gl.uniform3fv(locations.partOffset, presentedPartPose.offset);
           gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
-          gl.uniform3fv(locations.rootOffset, upperBodyPose.rootOffset);
-          gl.uniform3fv(locations.rootRotationRad, upperBodyPose.rootRotationRad);
+          gl.uniform3fv(locations.rootOffset, presentedRootPose.rootOffset);
+          gl.uniform3fv(locations.rootRotationRad, presentedRootPose.rootRotationRad);
           gl.vertexAttrib3fv(locations.color, part.colorRgb);
           gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
           rigPartsDrawn.push(id);
-          const worldCenter = rigPartWorldCenter(part, partPose, upperBodyPose, objectOffset, headingRad, rigVerticalScale);
+          const worldCenter = rigPartWorldCenter(presentedPart, presentedPartPose, presentedRootPose, objectOffset, headingRad, rigVerticalScale);
           if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
         }
         if (firstPerson) {

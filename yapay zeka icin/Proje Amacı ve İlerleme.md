@@ -6,7 +6,7 @@
 
 ## Güncel birleştirme durumu — 14 Kasım 2026
 
-`origin/codex/alparslan-integration-followups` dalı `c2f3008` merge commit'iyle bu çalışma dalına alındı. Alparslan'ın 19B jeoloji snapshot/HUD/kontak entegrasyonu, 20B arşiv sürüş izi katmanı ve 22B rover fotoğraf galerisi/tahmini kamera yönü kaynakta mevcut. 21B ortomozaik bindirmesi yapılmadı; DTM ile hizalama kanıtı olmadan açılmamalı. Merge dalı yeni ham `Sim/data/` dosyası getirmedi; Mars Trek, SIM 3464 ve Perseverance paketleri önceki `805f739` veri commit'inde zaten depodaydı. Bu turda kaynak kodu ve Git geçmişi statik incelendi; test, smoke veya tarayıcı çalıştırılmadı. Stage 15–18 görsel kabul ve 19–22 ürün/runtime kabulü açık.
+`origin/codex/alparslan-integration-followups` dalı `c2f3008`, `origin/codex/camera-eye-alignment` dalı `c10e885` merge commit'leriyle bu çalışma dalına alındı. 19B jeoloji snapshot/HUD/kontak, 20B arşiv sürüş izi, 22B rover fotoğraf galerisi/tahmini kamera yönü ve first-person kamera yüksekliğinin kask merkezine 1,48 m hizalanması kaynakta mevcut. 21B ortomozaik bindirmesi yapılmadı; DTM ile hizalama kanıtı olmadan açılmamalı. Bu dallar yeni ham `Sim/data/` dosyası getirmedi; Mars Trek, SIM 3464 ve Perseverance paketleri önceki `805f739` veri commit'inde zaten depodaydı. Bu turda kaynak kodu ve Git geçmişi statik incelendi; test, smoke veya tarayıcı çalıştırılmadı. Stage 15–18 görsel kabul ve 19–22 ürün/runtime kabulü açık.
 
 ## USGS DTM durum kaydı — 14 Kasım 2026
 

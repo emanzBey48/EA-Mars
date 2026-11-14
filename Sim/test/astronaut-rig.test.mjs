@@ -6,6 +6,10 @@ import {
   FIRST_PERSON_LOWER_BODY_PARTS,
   poseAstronautRig,
   chainedLimbPart,
+  blendRigPoses,
+  strideLengthForSpeedM,
+  froudeNumber,
+  walkRunTransitionSpeedMps,
 } from '../public/js/view/3d/astronaut-rig.js';
 
 const STATUS = Object.freeze({ OK: 'ok', NO_DATA: 'no_data', OUT_OF_BOUNDS: 'out_of_bounds', UNAVAILABLE: 'unavailable' });
@@ -967,4 +971,137 @@ test('Stage 16: unknown contact stays neutral, including lower body and viewMode
     }
     assert.deepEqual([...pose.viewModel.offset], [0, 0, 0]);
   }
+});
+
+// ---- Visual-realism stage B: appearance metadata, rigid/chained attachments, blends, Mars gait scaling ----
+
+// Template point p of part `id` in the rendered world frame: R(rot) * (p - center) + center + offset.
+const worldPoint = (id, pose, p) => {
+  const part = ASTRONAUT_RIG.parts[id];
+  const pp = pose.parts[id];
+  const r = rotateEulerRef(subV(p, part.center), pp.rotationRad);
+  return addV(addV(r, part.center), pp.offset);
+};
+
+const STAGE_B_STATES = (() => {
+  const out = [];
+  for (const speed of [0, 0.3, 0.8, 1.4, 2.4]) {
+    for (const timeS of [0.37, 2.9]) out.push(STAGE16_WALK(timeS, speed, { gaitDistanceM: speed * timeS }));
+    out.push(LAND_AT(0.6, { timeS: 1.1, horizontalSpeedMps: speed }));
+  }
+  for (const vz of [-2.4, -1.5, -0.4, 0, 0.4, 1.5, 2.4]) out.push(AIR_AT(1.7, vz));
+  out.push({ timeS: 3, horizontalSpeedMps: 0, verticalSpeedMps: 0, grounded: true, phase: 'stop' });
+  return out;
+})();
+
+test('Stage B: appearance metadata is in range and every part has a material and side', () => {
+  const sides = new Set(['physicalLeft', 'physicalRight', 'center']);
+  for (const [id, part] of Object.entries(ASTRONAUT_RIG.parts)) {
+    assert.ok(part.colorRgb.every((c) => c >= 0 && c <= 1), `${id} colorRgb in [0,1]`);
+    assert.ok(part.material.albedoLinear.every((c) => c >= 0 && c <= 1), `${id} albedoLinear in [0,1]`);
+    assert.ok(part.material.roughness >= 0 && part.material.roughness <= 1, `${id} roughness`);
+    assert.ok(part.material.metallic >= 0 && part.material.metallic <= 1, `${id} metallic`);
+    assert.ok(sides.has(part.side), `${id} side`);
+  }
+  // Suit outer layer is warm off-white, not pure white (avoids clipping) and not orange.
+  const torso = ASTRONAUT_RIG.parts.torso.colorRgb;
+  assert.ok(torso.every((c) => c > 0.75 && c < 0.95), 'torso is off-white');
+  assert.ok(torso[2] <= torso[0] + 0.02, 'torso is not blue-tinted');
+  assert.ok(ASTRONAUT_RIG.parts.visor.material.metallic >= 0.5, 'visor is a reflective (metallic) gold');
+});
+
+test('Stage B: first-person list excludes helmet, visor and PLSS hardware (camera stays clear)', () => {
+  for (const id of ['helmet', 'visor', 'backpack', 'plssAntenna', 'plssPanel', 'neckRing', 'waistRing', 'leftSole', 'rightSole']) {
+    assert.ok(!FIRST_PERSON_RIG_PARTS.includes(id), `${id} must not be in the first-person list`);
+  }
+  for (const id of ['leftGlove', 'rightGlove', 'leftWristRing', 'rightWristRing']) {
+    assert.ok(FIRST_PERSON_RIG_PARTS.includes(id), `${id} is visible in first person`);
+  }
+});
+
+test('Stage B: rigid followers coincide with their parent frame and chained children keep their pivot', () => {
+  const rigid = { visor: 'helmet', leftWristRing: 'leftArm', rightWristRing: 'rightArm', leftAnkleRing: 'leftLeg', rightAnkleRing: 'rightLeg', leftSole: 'leftBoot', rightSole: 'rightBoot' };
+  const chained = { leftGlove: 'leftArm', rightGlove: 'rightArm', leftBoot: 'leftLeg', rightBoot: 'rightLeg' };
+  let maxRigid = 0;
+  let maxChain = 0;
+  for (const state of STAGE_B_STATES) {
+    const pose = poseAstronautRig(state);
+    for (const [child, parent] of Object.entries(rigid)) {
+      for (const p of [ASTRONAUT_RIG.parts[child].center, ASTRONAUT_RIG.parts[child].pivot]) {
+        maxRigid = Math.max(maxRigid, distV(worldPoint(child, pose, p), worldPoint(parent, pose, p)));
+      }
+    }
+    for (const [child, parent] of Object.entries(chained)) {
+      const cp = ASTRONAUT_RIG.parts[child].pivot;
+      const pp = ASTRONAUT_RIG.parts[parent].pivot;
+      const expected = addV(pp, rotateEulerRef(subV(cp, pp), pose.parts[parent].rotationRad));
+      maxChain = Math.max(maxChain, distV(worldPoint(child, pose, cp), expected));
+    }
+  }
+  assert.ok(maxRigid < 1e-9, `rigid follower error ${maxRigid}`);
+  assert.ok(maxChain < 1e-9, `chained pivot error ${maxChain}`);
+});
+
+test('Stage B: blendRigPoses endpoints, determinism, continuity and attachments at intermediate t', () => {
+  const a = poseAstronautRig(STAGE16_WALK(2.2, 1.2, { gaitDistanceM: 2.6 }));
+  const b = poseAstronautRig(AIR_AT(1.7, 1.5));
+  const at0 = blendRigPoses(a, b, 0);
+  const at1 = blendRigPoses(a, b, 1);
+  assert.deepEqual(maxPoseJump(at0, a), { rot: 0, off: 0 });
+  assert.deepEqual(maxPoseJump(at1, b), { rot: 0, off: 0 });
+  assert.deepEqual(blendRigPoses(a, b, 0.37), blendRigPoses(a, b, 0.37));
+  assert.deepEqual(blendRigPoses(a, b, 2), at1, 't is clamped to [0,1]');
+  assert.throws(() => blendRigPoses(a, null, 0.5), TypeError);
+  assert.throws(() => blendRigPoses(a, b, Number.NaN), TypeError);
+
+  // Sampled blend: largest joint change between consecutive 1/200 steps is small (no snap), and the
+  // rigid/chained attachments stay exact at every intermediate t.
+  let maxStep = 0;
+  let prev = at0;
+  let maxAttach = 0;
+  for (let k = 1; k <= 200; k += 1) {
+    const cur = blendRigPoses(a, b, k / 200);
+    const jump = maxPoseJump(prev, cur);
+    maxStep = Math.max(maxStep, jump.rot, jump.off);
+    prev = cur;
+    if (k % 20 === 0) {
+      for (const [child, parent] of [['leftBoot', 'leftLeg'], ['rightGlove', 'rightArm'], ['leftAnkleRing', 'leftLeg'], ['visor', 'helmet']]) {
+        const pp = ASTRONAUT_RIG.parts[parent].pivot;
+        const cp = ASTRONAUT_RIG.parts[child].pivot;
+        if (child === 'visor' || child.endsWith('AnkleRing')) {
+          maxAttach = Math.max(maxAttach, distV(worldPoint(child, cur, cp), worldPoint(parent, cur, cp)));
+        } else {
+          const expected = addV(pp, rotateEulerRef(subV(cp, pp), cur.parts[parent].rotationRad));
+          maxAttach = Math.max(maxAttach, distV(worldPoint(child, cur, cp), expected));
+        }
+      }
+    }
+  }
+  assert.ok(maxStep < 0.1, `per-step blend change ${maxStep}`);
+  assert.ok(maxAttach < 1e-9, `blend attachment error ${maxAttach}`);
+});
+
+test('Stage B: Froude scaling puts the walk-run transition well below Earth values (model, not measured)', () => {
+  const meta = ASTRONAUT_RIG.metadata.gaitModel;
+  assert.equal(meta.marsGravityMps2, 3.71);
+  const vMars = walkRunTransitionSpeedMps();
+  const vEarth = walkRunTransitionSpeedMps({ gravityMps2: 9.80665 });
+  assert.ok(Math.abs(vMars - Math.sqrt(0.5 * 3.71 * 0.9)) < 1e-12);
+  assert.ok(vMars < vEarth);
+  assert.ok(Math.abs(vMars / vEarth - Math.sqrt(3.71 / 9.80665)) < 1e-12, 'ratio is sqrt(g_Mars/g_Earth)');
+  assert.ok(Math.abs(froudeNumber(vMars) - 0.5) < 1e-12);
+});
+
+test('Stage B: presentation stride is preserved and strideLengthForSpeedM is finite and monotone', () => {
+  assert.equal(ASTRONAUT_RIG.metadata.presentationStrideLengthM, 6);
+  assert.ok(Math.abs(strideLengthForSpeedM(1.2) - 6) < 1e-12, 'reference walk speed returns the legacy 6 m stride');
+  let prev = -Infinity;
+  for (let v = 0; v <= 3; v += 0.01) {
+    const s = strideLengthForSpeedM(v);
+    assert.ok(Number.isFinite(s) && s > 0, `finite at ${v}`);
+    assert.ok(s >= prev - 1e-12, `monotone at ${v}`);
+    prev = s;
+  }
+  assert.throws(() => strideLengthForSpeedM(-1), TypeError);
+  assert.throws(() => strideLengthForSpeedM(Number.NaN), TypeError);
 });

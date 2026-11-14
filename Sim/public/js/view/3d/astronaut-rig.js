@@ -347,11 +347,16 @@ export function blendRigPoses(a, b, t) {
   const w = Math.max(0, Math.min(1, t));
   if (w === 0) return copyPoseFields(a);
   if (w === 1) return copyPoseFields(b);
-  const core = blendCores(poseToCore(a), poseToCore(b), w);
+  const core = blendCores(a, b, w);
   return deepFreeze({
     rootOffset: core.rootOffset, rootRotationRad: core.rootRotationRad, parts: completeParts(core.parts),
   });
 }
+
+// Hinged joints (offset is a pure function of the rotation about the pivot) and chained children
+// (glove on arm, boot on leg). Chained children are blended in their parent-local frame, not in world Euler.
+const HINGE_IDS = Object.freeze(['helmet', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg']);
+const CHAIN_PARENT = Object.freeze({ leftGlove: 'leftArm', rightGlove: 'rightArm', leftBoot: 'leftLeg', rightBoot: 'rightLeg' });
 
 function isPoseLike(p) {
   return p && typeof p === 'object' && Array.isArray(p.rootOffset) && Array.isArray(p.rootRotationRad) && p.parts && typeof p.parts === 'object';
@@ -366,34 +371,38 @@ function copyPoseFields(p) {
   return deepFreeze({ rootOffset: [...p.rootOffset], rootRotationRad: [...p.rootRotationRad], parts });
 }
 
-function poseToCore(p) {
-  const parts = {};
-  for (const id of PART_IDS) {
-    if (RIGID_FOLLOWERS[id]) continue;
-    const src = p.parts[id] ?? fixedPart();
-    parts[id] = { offset: [...src.offset], rotationRad: [...src.rotationRad] };
-  }
-  return { rootOffset: [...p.rootOffset], rootRotationRad: [...p.rootRotationRad], parts };
-}
-
 function lerp3(a, b, w) {
   return [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w];
 }
 
-// Blends two cores. Missing parts count as fixed (zero) poses. Followers are never blended directly.
+// Blends two poses/cores (anything with rootOffset, rootRotationRad and parts[id].rotationRad). Missing parts
+// count as zero rotation (a missing chained child counts as zero local rotation, i.e. it rides its parent).
+// Hinge and chain-local rotations are interpolated, then every offset is re-derived from the blended
+// rotations, so pivots and chained attachments are exact for every t, not only at the endpoints.
+// Followers are not returned here; completeParts derives them from the blended parents.
 function blendCores(a, b, w) {
+  const rotOf = (p, id) => (p.parts[id] ? [...p.parts[id].rotationRad] : [0, 0, 0]);
+  const localOf = (p, id) => (p.parts[id] ? localRotationOf(rotOf(p, CHAIN_PARENT[id]), rotOf(p, id)) : [0, 0, 0]);
   const parts = {};
-  const ids = new Set([...Object.keys(a.parts), ...Object.keys(b.parts)]);
-  for (const id of ids) {
-    const pa = a.parts[id] ?? fixedPart();
-    const pb = b.parts[id] ?? fixedPart();
-    parts[id] = { offset: lerp3(pa.offset, pb.offset, w), rotationRad: lerp3(pa.rotationRad, pb.rotationRad, w) };
+  for (const id of HINGE_IDS) {
+    parts[id] = hingedPart3D(id, lerp3(rotOf(a, id), rotOf(b, id), w));
+  }
+  for (const id of Object.keys(CHAIN_PARENT)) {
+    const parentRot = parts[CHAIN_PARENT[id]].rotationRad;
+    parts[id] = chainedLimbPart(id, CHAIN_PARENT[id], parentRot, lerp3(localOf(a, id), localOf(b, id), w));
   }
   return {
     rootOffset: lerp3(a.rootOffset, b.rootOffset, w),
     rootRotationRad: lerp3(a.rootRotationRad, b.rootRotationRad, w),
     parts,
   };
+}
+
+// Child rotation relative to its parent: R_local = R_parent^T * R_child, as Euler angles in the rig convention.
+function localRotationOf(parentRot, childRot) {
+  const rp = eulerToMatrix(parentRot);
+  const rpT = [0, 1, 2].map((i) => [0, 1, 2].map((j) => rp[j][i]));
+  return matrixToEuler(multiply3x3(rpT, eulerToMatrix(childRot)));
 }
 
 // Weight of the grounded gait pose toward 'running' (lope); 0 below Fr ~0.35, 1 above ~0.65.

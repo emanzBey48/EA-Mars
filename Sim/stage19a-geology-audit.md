@@ -55,3 +55,8 @@ Düzeltme: proje yerel düzlemi (`adapterFromLabel(MAP_FRAME, WAYPOINTS[0])`) il
 3. HUD caveat metni: `GEOLOGY_CAVEATS` (1:75.000, ~100–200 m ofset, mineraloji/güvenlik iddiası yok) + `provenance.attribution`; lisans "belirtilmemiş" diye gösterilmeli.
 4. Sınır çizimi: `geologicBoundarySegments` + `...ToLocal`; `clipEdge` olanları çizme; paylaşılan kontaklar iki kez gelir (yarı saydam çizgi için tekilleştir). 3D için yüzey yüksekliği örneklemesi renderer tarafında.
 5. Kapsam: yalnız koridor bbox'ı; dışı `outside_coverage` döner, HUD "haritalanmamış/kapsam dışı" demeli.
+
+## 19B kodu içeri alındı — statik uyum notu (14 Kasım 2026)
+- `origin/codex/stage19b-geology-runtime` dalı (`eb74b6f`, `2d7c27b`; Stage 18 `b385af2` dahil) Efe dalına birleştirildi. `server.mjs` `/data/` isteklerini `Sim/data/` kökünden sunuyor; runtime yükleme yolu kaynakla uyumlu.
+- **Açık sözleşme farkı (Alparslan):** Stage 19B `main.js` ham `lookupGeologicUnitLocal` sonucunu snapshot'a veriyor; `simulation/sim.js` yalnızca `status`, `unitCode`, `unitName`, `onBoundary` alanlarını kopyalıyor. Stage 19A'nın 12 anahtarlı `GEOLOGY_SNAPSHOT_CONTRACT` / `toGeologySnapshot` fonksiyonları runtime'da kullanılmıyor. Böylece `candidates`, belirsizlik aralığı, ölçek, atıf, DOI, lisans ve caveat snapshot sözleşmesinde yer almıyor (HUD bir kısmını sabit metinle gösteriyor). `createGeologicContactField` / `nearestGeologicContactM` da henüz kullanılmıyor.
+- **Durum:** entegrasyon kodu kaynakta mevcut; bu turda test, smoke veya tarayıcı çalıştırılmadı. Yukarıdaki sözleşme farkı Alparslan'ın runtime/snapshot sahipliğinde kapatılmalı; görsel ve bilimsel kabul açık.

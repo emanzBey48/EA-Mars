@@ -109,6 +109,55 @@ const minimapPlanButton = $('minimap-plan-route');
 const minimapRouteSummary = $('minimap-route-summary');
 const minimapCellExplanation = $('minimap-cell-explanation');
 const orthoStatus = $('ortho-status');
+const btnDemoMode = $('btn-demo-mode');
+const btnHeaderDemo = $('btn-header-demo');
+const presentationHud = $('presentation-hud');
+const btnClosePresentation = $('btn-close-presentation');
+const btnDemoTour = $('btn-demo-tour');
+const btnDemoToggleView = $('btn-demo-toggle-view');
+const btnDemoRestart = $('btn-demo-restart');
+const presGuideBanner = $('pres-guide-banner');
+
+let presentationModeActive = false;
+let pendingDemoTour = false;
+
+function setPresentationMode(active) {
+  presentationModeActive = Boolean(active);
+  document.body.classList.toggle('presentation-mode', presentationModeActive);
+  if (presentationHud) presentationHud.hidden = !presentationModeActive;
+  if (btnDemoMode) btnDemoMode.setAttribute('aria-pressed', String(presentationModeActive));
+  if (btnHeaderDemo) btnHeaderDemo.setAttribute('aria-pressed', String(presentationModeActive));
+  updateHud();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, mapWrap.clientWidth), h = Math.max(1, mapWrap.clientHeight);
+  if (activeView === '3d' && renderer3d) {
+    renderer3d.resize(w, h, dpr);
+  }
+}
+
+async function startDemoTour() {
+  setPresentationMode(true);
+  if (currentVerticalScale !== 1) {
+    rebuildTerrainMeshForScale(1);
+  }
+  const startPt = { xM: waypoints[0].local.x, yM: waypoints[0].local.y };
+  const endPt = { xM: waypoints[1].local.x, yM: waypoints[1].local.y };
+  showSelectedPoint('start', startPt);
+  showSelectedPoint('end', endPt);
+  if (routeWorkerReady) {
+    planMinimapRoute();
+  } else {
+    pendingDemoTour = true;
+  }
+  if (presGuideBanner) {
+    presGuideBanner.textContent = 'Sol 120 (WB1) → Sol 164 (Roubion) A* rotası hesaplanıyor. 1× gerçek dikey ölçekte HiRISE ortomozaik üzerinde turkuaz kılavuz şeridi izleyerek WASD ile ilerleyin!';
+  }
+  if (renderer3d && layers.dtm.available && !terrainMeshError && !forceWebgl2Failure) {
+    await selectView('3d');
+  } else {
+    await selectView('2d');
+  }
+}
 
 function getFirstPersonNote(scale = currentVerticalScale) {
   const scaleText = scale === 1
@@ -221,6 +270,10 @@ function handleRouteWorkerMessage({ data }) {
     minimapStatus.textContent = routeHeatmap
       ? 'Yürünebilirlik ısı haritası hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
       : 'Rota planlama alanı hazır; ısı haritası verisi Worker yanıtında bulunamadı.';
+    if (pendingDemoTour && minimapEndpoints.start && minimapEndpoints.end) {
+      pendingDemoTour = false;
+      planMinimapRoute();
+    }
     updateRouteButton();
     return;
   }
@@ -251,6 +304,9 @@ function handleRouteWorkerMessage({ data }) {
     minimapStatus.textContent = activeRoute?.status === 'ok'
       ? `Rota planlandı. ${activeRoute.mode === 'eva_walkability' ? 'EVA yürünebilirlik' : 'Bölgesel ön planlama'}. Planlama göstergesi — güvenli rota sertifikası değildir.`
       : activeRoute?.reason || `Rota üretilemedi (${activeRoute?.status || 'bilinmiyor'}).`;
+    if (presentationModeActive && presGuideBanner && activeRoute?.status === 'ok') {
+      presGuideBanner.textContent = 'Sol 120 → Sol 164 A* EVA rotası hazır! 1× gerçek dikey ölçekte HiRISE ortomozaik üzerinde turkuaz şeridi takip ederek yürüyüşe başlayın. Hedefe varıldığında başarı rozeti belirecektir.';
+    }
   } else if (data.type === 'cell-result' && pending.kind === 'explain') {
     renderCellExplanation(data.result);
   }
@@ -1071,6 +1127,24 @@ if (selectVerticalScale) {
   });
 }
 
+btnDemoMode?.addEventListener('click', () => setPresentationMode(!presentationModeActive));
+btnHeaderDemo?.addEventListener('click', () => setPresentationMode(!presentationModeActive));
+btnClosePresentation?.addEventListener('click', () => setPresentationMode(false));
+btnDemoTour?.addEventListener('click', () => void startDemoTour());
+btnDemoToggleView?.addEventListener('click', () => void selectView(activeView === '3d' ? '2d' : '3d'));
+btnDemoRestart?.addEventListener('click', () => {
+  sim.restart();
+  hasEntered3dOnce = false;
+  camera3d.yawRad = targetYawRad;
+  updateHud();
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.pointerLockElement && presentationModeActive) {
+    setPresentationMode(false);
+  }
+});
+
 updateViewControls();
 
 hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalScale);
@@ -1104,7 +1178,9 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalSca
   updateScaleUi();
   updateHud();
 
-  if (startIn3dRequested && layers.dtm.available && renderer3d && !forceWebgl2Failure) {
+  if (urlParams.get('demo') === '1' || urlParams.get('presentation') === '1') {
+    await startDemoTour();
+  } else if (startIn3dRequested && layers.dtm.available && renderer3d && !forceWebgl2Failure) {
     await selectView('3d');
   }
 })();
@@ -1249,9 +1325,13 @@ if (debugEnabled) {
     sim, camera, camera3d, adapter, registry, layers, waypoints, keys, updateHud,
     rebuildTerrainMeshForScale,
     setVerticalScale: (scale) => rebuildTerrainMeshForScale(Number(scale)),
+    setPresentationMode,
+    startDemoTour,
+    isPresentationMode: () => presentationModeActive,
     getSnapshot: () => lastSnapshot,
     getDiagnostics: () => ({
       activeView,
+      presentationMode: presentationModeActive,
       verticalScale: currentVerticalScale,
       rendererAvailable: Boolean(renderer3d),
       rendererError: renderer3dError?.message ?? null,

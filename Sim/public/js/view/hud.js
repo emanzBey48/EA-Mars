@@ -81,6 +81,12 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       ? 'Dikey ölçek: 1× Gerçek Mars Kotu (bilimsel 1:1 · DTM kot farkı birebir korunur)'
       : `Dikey ölçek: ${verticalScale}× Görsel Abartı (sunum parametresidir; gerçek arazi eğimi daha düzdür)`;
     container.innerHTML = `<div class="${badgeClass}">${esc(text)}</div>`;
+    const presScale = $('pres-scale');
+    if (presScale) {
+      presScale.textContent = isReal
+        ? '1× Gerçek Kot (1:1 Bilimsel)'
+        : `${verticalScale}× Görsel Abartı (Sunum Parametresi)`;
+    }
   }
 
   function renderLayerPanel(layers, terrain, currentCorridorM = corridorHalfWidthM, verticalScale = activeVerticalScale) {
@@ -205,6 +211,39 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
         slope.textContent = 'Yüzey eğimi bilinmiyor.';
         slope.className = 'status-bad';
       }
+    }
+
+    const presPos = $('pres-pos');
+    if (presPos) {
+      presPos.textContent = `x=${astronaut.xM.toFixed(1)} m, y=${astronaut.yM.toFixed(1)} m`;
+    }
+    const presProg = $('pres-progress');
+    if (presProg) {
+      presProg.textContent = `${route.progressM.toFixed(0)}/${route.routeLengthM.toFixed(0)} m (%${(route.progressFrac * 100).toFixed(0)}) · hedefe ${route.distToEndM.toFixed(0)} m`;
+    }
+    const presElev = $('pres-elev');
+    if (presElev) {
+      presElev.textContent = ef.ok ? ef.text : 'Bilinmiyor';
+      presElev.className = ef.ok ? 'pres-val status-ok' : 'pres-val status-bad';
+    }
+    const presSlope = $('pres-slope');
+    if (presSlope) {
+      presSlope.textContent = sf.ok ? sf.text : 'Bilinmiyor';
+      presSlope.className = sf.ok ? 'pres-val status-ok' : 'pres-val status-bad';
+    }
+    const presWalk = $('pres-walkability');
+    if (presWalk) {
+      if (planned?.walkability?.available) {
+        presWalk.textContent = `${planned.walkability.score}/100 (senaryo puanı)`;
+        presWalk.className = 'pres-val status-ok';
+      } else {
+        presWalk.textContent = plannedRouteGuidance?.active ? 'A* Rotası Aktif' : 'Serbest Keşif (A* Planlanmadı)';
+        presWalk.className = 'pres-val';
+      }
+    }
+    const presClock = $('pres-clock');
+    if (presClock) {
+      presClock.textContent = `${formatClock(simTimeS)} (T+0)`;
     }
   }
 

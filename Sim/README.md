@@ -19,6 +19,31 @@ npm run smoke          # isteğe bağlı: yerel Edge/Chrome ile başsız uçtan 
 `prepare-data` çalıştırılmamışsa uygulama yine açılır ve hareket çalışır; DTM’ye bağlı göstergeler
 “Kullanılamıyor” durumunu gösterir. Çalışma anında internet veya PLACES dosyası gerekmez.
 
+### Jüri ve Demo Modu (60–90 Saniyelik Örnek Senaryo)
+
+Jüriye ve kullanıcılara 60–90 saniyede etkileyici, temiz ve odaklanmış bir sunum yapmak için:
+```bash
+npm start
+# Tarayıcıda aç: http://127.0.0.1:8080/?demo=1
+```
+Bu komutla uygulama doğrudan **Sunum Modu**'nda açılır:
+- Sol 120 (WB1) → Sol 164 (Roubion) A* EVA yürünebilirlik rotası otomatik hesaplanır ve gösterilir.
+- 1× gerçek dikey ölçekte (1:1 bilimsel kot farkı) HiRISE ortomozaik dokusu üzerinde 3D birinci şahıs görünüme geçilir.
+- Ekranın sol üstünde en kritik telemetriyi (Konum, İlerleme, Kot, Eğim, Yürünebilirlik Göstergesi, Saat) içeren şık yarı-şeffaf sunum kapsülü gösterilir.
+- Turkuaz kılavuz şerit izlenerek Sol 164'e varıldığında `#arrived-banner` başarı rozeti şık bir biçimde belirir.
+- Sunum modundan çıkmak için `Esc` tuşuna basabilir veya `✕ Kapat` butonuna tıklayabilirsiniz.
+
+## Sunulan Temel Özellikler
+
+1. **HiRISE 1 m DTM Arazi Tabanı:** USGS Mars 2020 TRN 1 m kot modeli ve Horn 3×3 gradyanıyla türetilen anlık eğim.
+2. **HiRISE 25 cm Kontrollü Ortomozaik:** WMTS z17 (0.318 m/px) ve z14 (2.544 m/px) albedo dokuları; Hibrit / Orto / Hillshade kaplama modları.
+3. **A* EVA Yürünebilirlik Planlayıcısı:** Çok kriterli maliyet fonksiyonuyla (eğim, pürüzlülük, veri geçerliliği) insansı EVA rotası ve minimap ısı haritası. (Planlama göstergesi — güvenli rota sertifikası değildir.)
+4. **1× Gerçek Bilimsel Dikey Ölçek:** Varsayılan 1:1 kot farkı, dinamik ölçek seçici (1×, 2×, 3×) ve astronot rig oranlarının 1:1 kilitlenmesi.
+5. **USGS SIM 3464 Jeoloji Haritası:** 1:75.000 ölçekli formasyon sınırları, haritalanmış kontağa olan anlık mesafe ve belirsizlik bildirimleri.
+6. **Mars Yüzey Yerçekimi Zıplama Balistiği:** 3.71 m/s² yerçekimi altında ~1.3 s uçuş, havada momentum korunumu, inişte yumuşak kamera esnemesi (landing dip).
+7. **Perseverance Ham Fotoğraf Arşivi:** Sol 120 ve Sol 164 duraklarında Navcam/Hazcam/Mastcam-Z fotoğraflarıyla birinci şahıs ufuk yönelimi.
+8. **Sağlam 2D Fallback:** WebGL2 desteği bulunmadığında veya kullanıcı 2D'yi seçtiğinde tüm katmanlar ve rota planlaması 2D Canvas üzerinde kesintisiz çalışır.
+
 ## Kontroller
 
 - **2D:** WASD / ok tuşları hareket eder; P veya Space duraklatır/devam ettirir.

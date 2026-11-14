@@ -36,7 +36,9 @@ test('astronaut rig: immutable template, coordinate metadata and geometry', () =
 
   // Stage 14: New detailed EVA parts
   assert.ok(ASTRONAUT_RIG.parts.chestPack, 'Chest pack (DCM) exists');
-  assert.deepEqual(ASTRONAUT_RIG.parts.chestPack.colorRgb, [0.85, 0.88, 0.92]);
+  // Visual-realism stage B: the control module is now a mid-grey unit on a white suit (was light blue-grey
+  // [0.85, 0.88, 0.92], which vanished against the new off-white torso).
+  assert.deepEqual(ASTRONAUT_RIG.parts.chestPack.colorRgb, [0.58, 0.60, 0.63]);
   assert.ok(ASTRONAUT_RIG.parts.plssAntenna, 'PLSS antenna exists');
   assert.deepEqual(ASTRONAUT_RIG.parts.plssAntenna.colorRgb, [0.75, 0.78, 0.82]);
   assert.ok(ASTRONAUT_RIG.parts.leftGlove, 'Left EVA glove exists');
@@ -45,9 +47,11 @@ test('astronaut rig: immutable template, coordinate metadata and geometry', () =
   assert.deepEqual(ASTRONAUT_RIG.parts.rightGlove.colorRgb, [0.20, 0.22, 0.25]);
 
   // First-person rig parts contract
+  // Visual-realism stage B: the two metallic wrist rings were appended (drawn after the gloves) so the
+  // sleeve/glove coupling is visible in the first-person view-model; the first six entries are unchanged.
   assert.deepEqual(
     FIRST_PERSON_RIG_PARTS,
-    ['torso', 'chestPack', 'leftArm', 'rightArm', 'leftGlove', 'rightGlove']
+    ['torso', 'chestPack', 'leftArm', 'rightArm', 'leftGlove', 'rightGlove', 'leftWristRing', 'rightWristRing']
   );
   assert.deepEqual(ASTRONAUT_RIG.metadata.firstPersonParts, FIRST_PERSON_RIG_PARTS);
 });
@@ -150,8 +154,10 @@ test('Stage 13: Mars low-gravity airborne 3-stage kinematics (Ascent, Apex Balan
     phase: 'running',
   };
 
-  // 1. Ascent (verticalSpeedMps > 0.5): Mars jump launch
-  const ascent = poseAstronautRig({ ...baseAirborne, verticalSpeedMps: 2.0 });
+  // 1. Ascent (verticalSpeedMps > 0.5): Mars jump launch. Exemplar vz = 1.2 (was 2.0): above 1.0 m/s the
+  // pose is deliberately blended with the grounded gait pose for a continuous take-off (stage B), so the
+  // pure ascent pose is checked just below the blend window.
+  const ascent = poseAstronautRig({ ...baseAirborne, verticalSpeedMps: 1.2 });
   assert.equal(ascent.pose, 'airborne');
   // Arms forward and upward (negative pitch in local coords)
   assert.ok(ascent.parts.leftArm.rotationRad[0] < -0.4, 'Ascent arms raised forward/upward');
@@ -175,13 +181,14 @@ test('Stage 13: Mars low-gravity airborne 3-stage kinematics (Ascent, Apex Balan
   assert.ok(Math.abs(apex.rootRotationRad[0]) < 0.02, 'Apex torso level');
 
   // 3. Descent (verticalSpeedMps < -0.5): Mars gravity pull-down before touchdown
-  const descent = poseAstronautRig({ ...baseAirborne, verticalSpeedMps: -2.0 });
+  // Exemplar vz = -1.2 (was -2.0): below -1.0 m/s the pose blends into the touchdown-absorb pose (stage B).
+  const descent = poseAstronautRig({ ...baseAirborne, verticalSpeedMps: -1.2 });
   assert.equal(descent.pose, 'airborne');
   // Feet/legs reaching forward and down to prepare for surface contact (negative pitch)
   assert.ok(descent.parts.leftLeg.rotationRad[0] < -0.15, 'Descent legs reaching forward for touchdown');
   assert.ok(descent.parts.rightLeg.rotationRad[0] < -0.15);
-  // Boots in dorsiflexion
-  assert.ok(descent.parts.leftBoot.rotationRad[0] < -0.08, 'Descent boots in dorsiflexion');
+  // Boots in dorsiflexion (peak -0.071 here; it was -0.14 at -2.0 before the touchdown blend existed)
+  assert.ok(descent.parts.leftBoot.rotationRad[0] < -0.06, 'Descent boots in dorsiflexion');
   // Torso slight rearward brace tilt
   assert.ok(descent.rootRotationRad[0] < 0, 'Torso bracing slightly rearward');
 
@@ -288,7 +295,8 @@ test('Stage 14: EVA Glove synchronization and grip angle across all animation re
   assert.ok(walkPose.parts.rightGlove.rotationRad[1] < 0);
 
   // Jump Ascent regime: gloves follow arms reaching forward/upward
-  const ascent = poseAstronautRig({ timeS: 2.0, horizontalSpeedMps: 0.5, verticalSpeedMps: 2.0, grounded: false, airborne: true, phase: 'running' });
+  // (exemplar vz 1.2 / -1.2 instead of +-2.0: the take-off/touchdown blend windows start at +-1.0 m/s)
+  const ascent = poseAstronautRig({ timeS: 2.0, horizontalSpeedMps: 0.5, verticalSpeedMps: 1.2, grounded: false, airborne: true, phase: 'running' });
   assert.ok(ascent.parts.leftGlove.rotationRad[0] < -0.4, 'Ascent gloves reaching upward with arms');
   assert.ok(ascent.parts.rightGlove.rotationRad[0] < -0.4);
 
@@ -298,7 +306,7 @@ test('Stage 14: EVA Glove synchronization and grip angle across all animation re
   assert.ok(apex.parts.rightGlove.rotationRad[1] < -0.15, 'Apex right glove flared wide');
 
   // Jump Descent regime: gloves brace forward/downward
-  const descent = poseAstronautRig({ timeS: 3.0, horizontalSpeedMps: 0.5, verticalSpeedMps: -2.0, grounded: false, airborne: true, phase: 'running' });
+  const descent = poseAstronautRig({ timeS: 3.0, horizontalSpeedMps: 0.5, verticalSpeedMps: -1.2, grounded: false, airborne: true, phase: 'running' });
   assert.ok(descent.parts.leftGlove.rotationRad[0] < -0.3, 'Descent gloves positioned to brace');
 
   // Landing impact regime: wrists flex to absorb touchdown shock
@@ -888,10 +896,11 @@ test('Stage 16: speed-change, idle/walk, landing and pause transitions stay cont
 });
 
 test('Stage 16: first-person lower-body export is frozen, additive and chained in every pose', () => {
-  assert.deepEqual([...FIRST_PERSON_LOWER_BODY_PARTS], ['leftLeg', 'rightLeg', 'leftBoot', 'rightBoot']);
+  // Visual-realism stage B: ankle rings appended after the original four lower-body parts.
+  assert.deepEqual([...FIRST_PERSON_LOWER_BODY_PARTS], ['leftLeg', 'rightLeg', 'leftBoot', 'rightBoot', 'leftAnkleRing', 'rightAnkleRing']);
   assert.ok(Object.isFrozen(FIRST_PERSON_LOWER_BODY_PARTS));
-  // Existing first-person list is unchanged and disjoint from the lower body.
-  assert.deepEqual([...FIRST_PERSON_RIG_PARTS], ['torso', 'chestPack', 'leftArm', 'rightArm', 'leftGlove', 'rightGlove']);
+  // First-person list: original six entries unchanged (wrist rings appended), disjoint from the lower body.
+  assert.deepEqual([...FIRST_PERSON_RIG_PARTS].slice(0, 6), ['torso', 'chestPack', 'leftArm', 'rightArm', 'leftGlove', 'rightGlove']);
   assert.ok(FIRST_PERSON_LOWER_BODY_PARTS.every((id) => !FIRST_PERSON_RIG_PARTS.includes(id)));
   const hint = ASTRONAUT_RIG.metadata.firstPersonLowerBody;
   assert.deepEqual([...ASTRONAUT_RIG.metadata.firstPersonLowerBodyParts], [...FIRST_PERSON_LOWER_BODY_PARTS]);

@@ -2,9 +2,21 @@
 // runs locally/offline, and already passes typed-array render assets between layers. WebGL2 can
 // upload those arrays directly and supports 32-bit element indices without adding a package or CDN.
 // This keeps deployment simple; the tradeoff is that shaders and GPU resource lifecycle live here.
+//
+// Lighting (Stage Visual A): every pass (sky, terrain, guides/lines, astronaut rig) shades in LINEAR light
+// with the shared Mars sky/sun model from sky-model.js, is tone mapped (ACES fitted curve) and sRGB
+// encoded exactly once at the end of the fragment shader. Terrain surface appearance comes from
+// terrain-shading.js; the sun shadow map from shadow-map.js. All of this is presentation only: it never
+// changes elevation, slope, no-data cells, routes or mesh geometry.
 
 import { firstPersonLookDownFraction, getCameraPosition, getViewProjectionMatrix } from './camera.js';
 import { ASTRONAUT_RIG, FIRST_PERSON_LOWER_BODY_PARTS, FIRST_PERSON_RIG_PARTS, poseAstronautRig } from './astronaut-rig.js';
+import { MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, SKY_PARAMS, luminance, marsSunIrradiance } from './sky-model.js';
+import { TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS } from './terrain-shading.js';
+import {
+  SHADOW_QUALITY_NAMES, SHADOW_RECEIVER_GLSL, chooseShadowRadiusM, computeShadowLightSpace,
+  resolveShadowQuality, shadowFocusXY,
+} from './shadow-map.js';
 
 const VERTEX_SHADER = `#version 300 es
 in vec3 aPosition;
@@ -51,8 +63,12 @@ void main() {
   gl_Position = uViewProjection * vec4(worldPosition, 1.0);
 }`;
 
+// Render passes: 0 terrain, 1 guides/lines (emissive), 2 astronaut rig, 3 sky dome, 4 shadow depth only.
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
+precision highp int;
+precision highp sampler2D;
+precision highp sampler2DShadow;
 in vec3 vNormal;
 in vec3 vWorldPos;
 in vec3 vColor;
@@ -60,6 +76,7 @@ uniform vec3 uBaseColor;
 uniform vec3 uLightDirection;
 uniform vec3 uCameraEye;
 uniform vec2 uElevBounds;
+uniform vec4 uTerrainBounds;
 uniform float uTerrainExaggeration;
 uniform int uRenderPass;
 uniform float uAlpha;
@@ -70,130 +87,123 @@ uniform vec4 uOrthoUvCoarse;
 uniform int uOrthoMode;
 uniform int uHasOrthoFine;
 uniform int uHasOrthoCoarse;
+uniform mat4 uLightVP;
+uniform sampler2DShadow uShadowMap;
+uniform vec4 uShadowParams;
+uniform vec3 uShadowLightDir;
+uniform int uShadowMode;
+uniform float uReceiveShadow;
 out vec4 outColor;
+${MARS_LIGHTING_GLSL}
+${TERRAIN_SHADING_GLSL}
+${SHADOW_RECEIVER_GLSL}
+
+// Output transform shared by every pass, plus a +-0.5 LSB blue-noise-free dither against gradient banding.
+vec4 finishColor(vec3 linearColor, float alpha) {
+  float dither = (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
+  return vec4(encodeOutput(linearColor) + dither, alpha);
+}
 
 void main() {
-  vec3 lightDir = normalize(uLightDirection);
+  if (uRenderPass == 4) { outColor = vec4(0.0); return; }
+  vec3 sunDir = normalize(uLightDirection);
   vec3 toCamera = uCameraEye - vWorldPos;
   float dist = length(toCamera);
   vec3 viewDir = dist > 1e-4 ? toCamera / dist : vec3(0.0, 0.0, 1.0);
-  vec3 horizonColor = vec3(0.78, 0.51, 0.36);
+  vec3 rayV = vWorldPos - uCameraEye;
 
   if (uRenderPass == 3) {
-    // Martian butterscotch dust sky dome & solar scattering
-    vec3 rayDir = normalize(vWorldPos - uCameraEye);
-    float z = clamp(rayDir.z, -0.25, 1.0);
-    vec3 groundHaze = vec3(0.54, 0.32, 0.22);
-    vec3 midSky = vec3(0.46, 0.27, 0.21);
-    vec3 zenithSky = vec3(0.15, 0.10, 0.14);
-    vec3 sky;
-    if (z < 0.0) {
-      sky = mix(horizonColor, groundHaze, clamp(-z * 4.0, 0.0, 1.0));
-    } else {
-      float h = pow(z, 0.52);
-      sky = mix(horizonColor, midSky, clamp(h * 1.65, 0.0, 1.0));
-      sky = mix(sky, zenithSky, smoothstep(0.28, 0.95, h));
-    }
-    float sunCos = max(dot(rayDir, lightDir), 0.0);
-    float daylight = smoothstep(0.0, 0.08, lightDir.z);
-    float glow = 0.07 * pow(sunCos, 16.0) + 0.10 * pow(sunCos, 120.0);
-    // A representative 0.175° angular radius as seen from Mars.
-    float sunDistance = length(rayDir - lightDir);
-    float edge = max(fwidth(sunDistance), 0.0001);
-    float disc = 1.0 - smoothstep(0.00305 - edge, 0.00305 + edge, sunDistance);
-    sky += daylight * (vec3(1.0, 0.83, 0.66) * glow + vec3(0.65, 0.58, 0.46) * disc);
-    outColor = vec4(sky, 1.0);
+    // Procedural Mars sky dome: butterscotch gradient, forward-scattering halo, ~21' sun disc.
+    vec3 rayDir = normalize(rayV);
+    vec3 sky = marsSkyRadiance(rayDir, sunDir);
+    float angEdge = max(fwidth(length(rayDir - sunDir)), 0.0001);
+    sky += marsSunDiscRadiance(rayDir, sunDir, angEdge);
+    outColor = finishColor(sky, 1.0);
     return;
   }
 
   vec3 normal = normalize(vNormal);
-  // Use the same horizon fade for direct sunlight on every scene pass.
-  float daylight = smoothstep(0.0, 0.08, lightDir.z);
-  float ndotl = max(dot(normal, lightDir), 0.0) * daylight;
-  float hemi = 0.5 + 0.5 * normal.z;
-  vec3 ambient = mix(vec3(0.24, 0.14, 0.11), vec3(0.42, 0.29, 0.23), hemi);
-  vec3 halfVec = normalize(lightDir + viewDir);
-  float ndoth = max(dot(normal, halfVec), 0.0);
 
   if (uRenderPass == 0) {
-    // Jezero Crater terrain: hypsometric regolith + steep bedrock + sedimentary strata + dust fog
+    // Terrain normals contain the visual vertical exaggeration; restore the physical normal for lighting/slope.
+    vec3 nPhys = normalize(vec3(normal.xy, normal.z * uTerrainExaggeration));
+    float tanSlope = sqrt(max(1.0 - nPhys.z * nPhys.z, 0.0)) / max(nPhys.z, 0.05);
+    float slopeW = terrainSlopeWeight(tanSlope);
+
     float span = max(1.0, uElevBounds.y - uElevBounds.x);
     float elevFrac = clamp((vWorldPos.z - uElevBounds.x) / span, 0.0, 1.0);
-    vec3 basinOchre = vec3(0.62, 0.35, 0.22);
-    vec3 deltaRust = vec3(0.79, 0.45, 0.27);
-    vec3 ridgeSand = vec3(0.90, 0.58, 0.36);
-    vec3 regolith = elevFrac < 0.5
-      ? mix(basinOchre, deltaRust, elevFrac * 2.0)
-      : mix(deltaRust, ridgeSand, (elevFrac - 0.5) * 2.0);
-    float slope = clamp((1.0 - normal.z) * 3.2, 0.0, 1.0);
-    vec3 bedrock = vec3(0.38, 0.24, 0.19);
-    regolith = mix(regolith, bedrock, smoothstep(0.18, 0.85, slope) * 0.65);
-    float strata = 0.975 + 0.025 * sin(vWorldPos.z * 2.4);
-    regolith *= strata;
+    vec3 palette = mix(terrainPalette(elevFrac), TERRAIN_BEDROCK, slopeW * ${TERRAIN_SHADING_PARAMS.slopeBedrockMix.toFixed(4)});
 
-    // HiRISE WMTS Orthomosaic overlay (Stage 39B)
+    // HiRISE WMTS grayscale ortho: luminance from the ortho texel, chroma from the palette (soft footprint).
+    float wf = 0.0, gF = 1.0, wc = 0.0, gC = 1.0;
     if (uOrthoMode > 0) {
-      vec2 uvFine = vec2(vWorldPos.x * uOrthoUvFine.x + uOrthoUvFine.y, vWorldPos.y * uOrthoUvFine.z + uOrthoUvFine.w);
-      vec2 uvCoarse = vec2(vWorldPos.x * uOrthoUvCoarse.x + uOrthoUvCoarse.y, vWorldPos.y * uOrthoUvCoarse.z + uOrthoUvCoarse.w);
-      bool inFine = uvFine.x >= 0.0 && uvFine.x <= 1.0 && uvFine.y >= 0.0 && uvFine.y <= 1.0;
-      bool inCoarse = uvCoarse.x >= 0.0 && uvCoarse.x <= 1.0 && uvCoarse.y >= 0.0 && uvCoarse.y <= 1.0;
-      vec4 orthoTexel = vec4(0.0);
-      bool hasSample = false;
-
-      if (uHasOrthoFine == 1 && inFine) {
-        vec4 fTex = texture(uOrthoTexFine, uvFine);
-        if (fTex.a > 0.5) {
-          orthoTexel = fTex;
-          hasSample = true;
-        }
+      if (uHasOrthoFine == 1) {
+        vec2 uvF = vec2(vWorldPos.x * uOrthoUvFine.x + uOrthoUvFine.y, vWorldPos.y * uOrthoUvFine.z + uOrthoUvFine.w);
+        vec4 tF = texture(uOrthoTexFine, uvF);
+        wf = orthoCoverage(uvF, tF.a);
+        gF = orthoGain(tF.r);
       }
-      if (!hasSample && uHasOrthoCoarse == 1 && inCoarse) {
-        vec4 cTex = texture(uOrthoTexCoarse, uvCoarse);
-        if (cTex.a > 0.5) {
-          orthoTexel = cTex;
-          hasSample = true;
-        }
-      }
-
-      if (hasSample) {
-        float orthoLum = orthoTexel.r;
-        if (uOrthoMode == 1) {
-          // Hybrid: modulate base regolith with contrast-rich detail multiplier
-          float detailMult = mix(0.45, 1.45, orthoLum);
-          regolith = regolith * detailMult;
-        } else if (uOrthoMode == 2) {
-          // Pure HiRISE grayscale albedo
-          regolith = vec3(orthoLum);
-        }
+      if (uHasOrthoCoarse == 1) {
+        vec2 uvC = vec2(vWorldPos.x * uOrthoUvCoarse.x + uOrthoUvCoarse.y, vWorldPos.y * uOrthoUvCoarse.z + uOrthoUvCoarse.w);
+        vec4 tC = texture(uOrthoTexCoarse, uvC);
+        wc = orthoCoverage(uvC, tC.a);
+        gC = orthoGain(tC.r);
       }
     }
+    float coverage = wf + (1.0 - wf) * wc;
+    float gain = coverage > 0.0001 ? (wf * gF + (1.0 - wf) * wc * gC) / coverage : 1.0;
+    vec3 albedo = terrainCombineAlbedo(palette, coverage, gain, uOrthoMode == 2);
 
-    // Terrain positions are pre-scaled, so these normals still contain the
-    // visual exaggeration. Restore source slopes before calculating sunlight.
-    vec3 terrainNormal = normalize(vec3(normal.xy, normal.z * uTerrainExaggeration));
-    float direct = max(dot(terrainNormal, lightDir), 0.0) * daylight;
-    vec3 diffuseSky = vec3(0.39, 0.35, 0.33);
-    vec3 lit = regolith * vColor * (diffuseSky + vec3(0.64, 0.60, 0.55) * direct);
-    float fogFactor = clamp(1.0 - exp(-dist * 0.00045), 0.0, 0.82);
-    outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
+    // Procedural micro detail (visual detail, not data): world-fixed, deterministic, faded with distance.
+    vec2 microSlope = vec2(0.0);
+    float microTone = 0.0;
+    if (dist < ${(TERRAIN_SHADING_PARAMS.octaves[3].wavelengthM * TERRAIN_SHADING_PARAMS.fadeEndPerWavelength).toFixed(1)}) {
+      terrainMicro(vWorldPos.xy, dist, 1.0 + ${TERRAIN_SHADING_PARAMS.slopeRoughnessGain.toFixed(4)} * slopeW, microSlope, microTone);
+    }
+    albedo *= (1.0 + microTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.microToneOrthoReduction.toFixed(4)}));
+    albedo *= 1.0 - ${TERRAIN_SHADING_PARAMS.slopeDarkening.toFixed(4)} * slopeW;
+
+    vec3 nLit = terrainPerturbNormal(nPhys, microSlope);
+    float ndotl = max(dot(nLit, sunDir), 0.0);
+    float shadow = shadowFactor(vWorldPos, normal);
+    vec3 direct = marsSunIrradiance(sunDir) * (ndotl * shadow);
+    vec3 ambient = marsSkyAmbient(nLit, sunDir);
+    vec3 lit = albedo * (direct + ambient);
+
+    lit = applyAerialPerspective(lit, dist, rayV, sunDir, HAZE_DENSITY, HAZE_MAX);
+    if (uTerrainBounds.z > uTerrainBounds.x) {
+      float edgeM = min(min(vWorldPos.x - uTerrainBounds.x, uTerrainBounds.z - vWorldPos.x),
+                        min(vWorldPos.y - uTerrainBounds.y, uTerrainBounds.w - vWorldPos.y));
+      lit = mix(lit, marsHazeColor(rayV, sunDir), terrainMeshEdgeFade(edgeM, dist));
+    }
+    outColor = finishColor(lit, 1.0);
     return;
   }
 
   if (uRenderPass == 1) {
-    // 3D Waypoint beacons & route corridor guides
-    float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5) * 0.32;
-    float spec = pow(ndoth, 36.0) * 0.28 * daylight;
-    vec3 lit = uBaseColor * vColor * (0.38 + 0.68 * ndotl) + vec3(spec + rim);
-    float fogFactor = clamp(1.0 - exp(-dist * 0.00035), 0.0, 0.65);
-    outColor = vec4(mix(lit, horizonColor, fogFactor), 1.0);
+    // Waypoint beacons, route guides and surface lines: mostly emissive so they stay readable after tone mapping.
+    vec3 base = srgbToLinear(clamp(uBaseColor * vColor, 0.0, 1.0));
+    float ndotl = max(dot(normal, sunDir), 0.0);
+    vec3 shaded = base * (marsSunIrradiance(sunDir) * ndotl + marsSkyAmbient(normal, sunDir));
+    float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 2.5) * 0.18;
+    vec3 lit = base * (0.62 * EMISSIVE_GAIN) + 0.55 * shaded + vec3(rim) * base;
+    lit = applyAerialPerspective(lit, dist, rayV, sunDir, HAZE_DENSITY * 0.6, 0.45);
+    outColor = finishColor(lit, 1.0);
     return;
   }
 
-  // Pass 2: Astronaut EVA suit & first-person view-model arms/gloves/chestPack
-  float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.22;
-  float spec = pow(ndoth, 32.0) * 0.22 * daylight;
-  vec3 suitLit = uBaseColor * vColor * (ambient * 0.85 + 0.78 * ndotl) + vec3(1.0, 0.90, 0.78) * (spec + rim);
-  outColor = vec4(suitLit, uAlpha);
+  // Pass 2: astronaut EVA suit and first-person view-model arms/gloves/chest pack.
+  vec3 albedo = srgbToLinear(clamp(uBaseColor * vColor, 0.0, 1.0));
+  float ndotl = max(dot(normal, sunDir), 0.0);
+  float shadow = shadowFactor(vWorldPos, normal);
+  vec3 sunIrr = marsSunIrradiance(sunDir);
+  vec3 ambient = marsSkyAmbient(normal, sunDir);
+  vec3 halfVec = normalize(sunDir + viewDir);
+  float spec = pow(max(dot(normal, halfVec), 0.0), 32.0) * 0.12 * ndotl * shadow;
+  float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0) * 0.35;
+  vec3 lit = albedo * (sunIrr * (ndotl * shadow) + ambient) + sunIrr * spec + ambient * rim;
+  lit = applyAerialPerspective(lit, dist, rayV, sunDir, HAZE_DENSITY, HAZE_MAX);
+  outColor = finishColor(lit, uAlpha);
 }`;
 
 function compileShader(gl, type, source) {
@@ -377,49 +387,64 @@ function pointInClip(point, viewProjection) {
  * immutable snapshot movement state; world Z comes from bodyWorldZM, while sampled zM remains the
  * current-contact validity signal. The first-person arms/torso are a view model, not another body.
  */
-export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075], lightDirection = [-0.45, -0.35, 1], collectDiagnostics = false } = {}) {
+export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075], lightDirection = [-0.45, -0.35, 1], collectDiagnostics = false, shadows = 'auto' } = {}) {
   if (!canvas || typeof canvas.getContext !== 'function') throw new TypeError('A canvas element is required');
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: true, depth: true, powerPreference: 'high-performance' });
   if (!gl) throw new Error('WebGL2 is unavailable in this browser');
 
   const program = createProgram(gl);
+  const uniform = (name) => gl.getUniformLocation(program, name);
   const locations = {
     position: gl.getAttribLocation(program, 'aPosition'),
     normal: gl.getAttribLocation(program, 'aNormal'),
     color: gl.getAttribLocation(program, 'aColor'),
-    viewProjection: gl.getUniformLocation(program, 'uViewProjection'),
-    lightDirection: gl.getUniformLocation(program, 'uLightDirection'),
-    objectOffset: gl.getUniformLocation(program, 'uObjectOffset'),
-    baseColor: gl.getUniformLocation(program, 'uBaseColor'),
-    headingRad: gl.getUniformLocation(program, 'uHeadingRad'),
-    verticalScale: gl.getUniformLocation(program, 'uVerticalScale'),
-    partSize: gl.getUniformLocation(program, 'uPartSize'),
-    partCenter: gl.getUniformLocation(program, 'uPartCenter'),
-    partOffset: gl.getUniformLocation(program, 'uPartOffset'),
-    partRotationRad: gl.getUniformLocation(program, 'uPartRotationRad'),
-    rootOffset: gl.getUniformLocation(program, 'uRootOffset'),
-    rootRotationRad: gl.getUniformLocation(program, 'uRootRotationRad'),
-    cameraEye: gl.getUniformLocation(program, 'uCameraEye'),
-    elevBounds: gl.getUniformLocation(program, 'uElevBounds'),
-    terrainExaggeration: gl.getUniformLocation(program, 'uTerrainExaggeration'),
-    renderPass: gl.getUniformLocation(program, 'uRenderPass'),
-    alpha: gl.getUniformLocation(program, 'uAlpha'),
-    orthoTexFine: gl.getUniformLocation(program, 'uOrthoTexFine'),
-    orthoTexCoarse: gl.getUniformLocation(program, 'uOrthoTexCoarse'),
-    orthoUvFine: gl.getUniformLocation(program, 'uOrthoUvFine'),
-    orthoUvCoarse: gl.getUniformLocation(program, 'uOrthoUvCoarse'),
-    orthoMode: gl.getUniformLocation(program, 'uOrthoMode'),
-    hasOrthoFine: gl.getUniformLocation(program, 'uHasOrthoFine'),
-    hasOrthoCoarse: gl.getUniformLocation(program, 'uHasOrthoCoarse'),
+    viewProjection: uniform('uViewProjection'),
+    lightDirection: uniform('uLightDirection'),
+    objectOffset: uniform('uObjectOffset'),
+    baseColor: uniform('uBaseColor'),
+    headingRad: uniform('uHeadingRad'),
+    verticalScale: uniform('uVerticalScale'),
+    partSize: uniform('uPartSize'),
+    partCenter: uniform('uPartCenter'),
+    partOffset: uniform('uPartOffset'),
+    partRotationRad: uniform('uPartRotationRad'),
+    rootOffset: uniform('uRootOffset'),
+    rootRotationRad: uniform('uRootRotationRad'),
+    cameraEye: uniform('uCameraEye'),
+    elevBounds: uniform('uElevBounds'),
+    terrainBounds: uniform('uTerrainBounds'),
+    terrainExaggeration: uniform('uTerrainExaggeration'),
+    renderPass: uniform('uRenderPass'),
+    alpha: uniform('uAlpha'),
+    orthoTexFine: uniform('uOrthoTexFine'),
+    orthoTexCoarse: uniform('uOrthoTexCoarse'),
+    orthoUvFine: uniform('uOrthoUvFine'),
+    orthoUvCoarse: uniform('uOrthoUvCoarse'),
+    orthoMode: uniform('uOrthoMode'),
+    hasOrthoFine: uniform('uHasOrthoFine'),
+    hasOrthoCoarse: uniform('uHasOrthoCoarse'),
+    lightVP: uniform('uLightVP'),
+    shadowMap: uniform('uShadowMap'),
+    shadowParams: uniform('uShadowParams'),
+    shadowLightDir: uniform('uShadowLightDir'),
+    shadowMode: uniform('uShadowMode'),
+    receiveShadow: uniform('uReceiveShadow'),
   };
   if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
       !locations.partSize || !locations.partCenter || !locations.partOffset || !locations.partRotationRad ||
       !locations.rootOffset || !locations.rootRotationRad || !locations.cameraEye || !locations.elevBounds || !locations.renderPass || !locations.alpha ||
-      !locations.orthoTexFine || !locations.orthoTexCoarse || !locations.orthoUvFine || !locations.orthoUvCoarse || !locations.orthoMode || !locations.hasOrthoFine || !locations.hasOrthoCoarse) {
+      !locations.orthoTexFine || !locations.orthoTexCoarse || !locations.orthoUvFine || !locations.orthoUvCoarse || !locations.orthoMode || !locations.hasOrthoFine || !locations.hasOrthoCoarse ||
+      !locations.lightVP || !locations.shadowMap || !locations.shadowParams || !locations.shadowLightDir || !locations.shadowMode || !locations.receiveShadow || !locations.terrainBounds) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
   }
+
+  // Distinct texture units for the differently-typed samplers from the very first draw.
+  gl.useProgram(program);
+  gl.uniform1i(locations.orthoTexFine, 0);
+  gl.uniform1i(locations.orthoTexCoarse, 1);
+  gl.uniform1i(locations.shadowMap, 2);
 
   const lightLength = Math.hypot(...lightDirection);
   if (!(lightLength > 0) || lightDirection.some((value) => !Number.isFinite(value))) throw new TypeError('lightDirection must be a finite non-zero vector');
@@ -442,6 +467,9 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   const orthoUvCoarse = new Float32Array(4);
   let currentOrthoAssets = null;
 
+  const anisotropyExt = gl.getExtension('EXT_texture_filter_anisotropic');
+  const maxAnisotropy = anisotropyExt ? Math.min(8, gl.getParameter(anisotropyExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT)) : 1;
+
   function create1x1Texture(glInstance) {
     const tex = glInstance.createTexture();
     glInstance.bindTexture(glInstance.TEXTURE_2D, tex);
@@ -460,19 +488,52 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     glInstance.bindTexture(glInstance.TEXTURE_2D, tex);
     glInstance.pixelStorei(glInstance.UNPACK_FLIP_Y_WEBGL, false);
     glInstance.pixelStorei(glInstance.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    let uploaded = false;
     if (image instanceof HTMLImageElement || image instanceof ImageBitmap || image instanceof HTMLCanvasElement) {
       glInstance.texImage2D(glInstance.TEXTURE_2D, 0, glInstance.RGBA, glInstance.RGBA, glInstance.UNSIGNED_BYTE, image);
+      uploaded = true;
     } else if (image && image.data && image.width && image.height) {
       glInstance.texImage2D(glInstance.TEXTURE_2D, 0, glInstance.RGBA, image.width, image.height, 0, glInstance.RGBA, glInstance.UNSIGNED_BYTE, image.data);
+      uploaded = true;
     }
-    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_MIN_FILTER, glInstance.LINEAR);
+    // Mipmaps + anisotropy remove distant shimmer of the 0.318 m/px ortho; footprint/UV mapping is unchanged.
+    if (uploaded) glInstance.generateMipmap(glInstance.TEXTURE_2D);
+    glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_MIN_FILTER, uploaded ? glInstance.LINEAR_MIPMAP_LINEAR : glInstance.LINEAR);
     glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_MAG_FILTER, glInstance.LINEAR);
     glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_WRAP_S, glInstance.CLAMP_TO_EDGE);
     glInstance.texParameteri(glInstance.TEXTURE_2D, glInstance.TEXTURE_WRAP_T, glInstance.CLAMP_TO_EDGE);
+    if (anisotropyExt && maxAnisotropy > 1) glInstance.texParameterf(glInstance.TEXTURE_2D, anisotropyExt.TEXTURE_MAX_ANISOTROPY_EXT, maxAnisotropy);
     glInstance.bindTexture(glInstance.TEXTURE_2D, null);
     return tex;
   }
   const astronaut = createAstronautBuffers(gl, locations);
+
+  // Sky dome: renderer-owned unit cube (independent of the rig geometry), scaled by the vertex shader.
+  const skyDome = (() => {
+    const positions = new Float32Array([
+      -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5,
+      -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
+    ]);
+    const indices = new Uint16Array([
+      0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4,
+      1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7,
+    ]);
+    const vao = gl.createVertexArray();
+    const positionBuffer = gl.createBuffer();
+    const indexBuffer = gl.createBuffer();
+    if (!vao || !positionBuffer || !indexBuffer) throw new Error('WebGL2 sky dome buffer allocation failed');
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(locations.position);
+    gl.vertexAttribPointer(locations.position, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    return { vao, positionBuffer, indexBuffer, indexCount: indices.length };
+  })();
+
   const geologyVao = gl.createVertexArray();
   const geologyPositionBuffer = gl.createBuffer();
   if (!geologyVao || !geologyPositionBuffer) throw new Error('WebGL2 geology boundary buffers unavailable');
@@ -485,6 +546,93 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.clearColor(clearColor[0], clearColor[1], clearColor[2], 1);
+
+  // ---------- sun shadow map (presentation; silently disabled when depth textures/FBOs are unavailable) ----------
+  function readShadowQualityRequest(requested) {
+    if (requested && requested !== 'auto') return requested;
+    try {
+      const fromUrl = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('shadows') : null;
+      return SHADOW_QUALITY_NAMES.includes(fromUrl) ? fromUrl : undefined;
+    } catch { return undefined; }
+  }
+  let shadowPreset = resolveShadowQuality(readShadowQualityRequest(shadows));
+  let shadowSupported = null; // null = not tried yet
+  let shadowTerrainTarget = null; // cached terrain-only depth
+  let shadowFinalTarget = null; // terrain depth + dynamic rig casters (sampled by receivers)
+  let shadowTerrainKey = null;
+  let shadowTerrainMesh = null;
+  let shadowFailureReason = null;
+
+  const dummyShadowTexture = (() => {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, 1, 1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return tex;
+  })();
+
+  function createDepthTarget(resolution) {
+    const texture = gl.createTexture();
+    const framebuffer = gl.createFramebuffer();
+    if (!texture || !framebuffer) return null;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT24, resolution, resolution);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, texture, 0);
+    gl.drawBuffers([gl.NONE]);
+    gl.readBuffer(gl.NONE);
+    const complete = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    if (!complete) {
+      gl.deleteFramebuffer(framebuffer);
+      gl.deleteTexture(texture);
+      return null;
+    }
+    return { texture, framebuffer, resolution };
+  }
+  function releaseDepthTarget(target) {
+    if (!target) return;
+    gl.deleteFramebuffer(target.framebuffer);
+    gl.deleteTexture(target.texture);
+  }
+  function releaseShadowTargets() {
+    releaseDepthTarget(shadowTerrainTarget);
+    releaseDepthTarget(shadowFinalTarget);
+    shadowTerrainTarget = null;
+    shadowFinalTarget = null;
+    shadowTerrainKey = null;
+  }
+  function ensureShadowTargets(resolution) {
+    if (shadowSupported === false) return false;
+    if (shadowTerrainTarget && shadowTerrainTarget.resolution === resolution && shadowFinalTarget) return true;
+    releaseShadowTargets();
+    try {
+      for (let i = 0; i < 16 && gl.getError() !== gl.NO_ERROR; i++); // drop unrelated earlier errors
+      shadowTerrainTarget = createDepthTarget(resolution);
+      shadowFinalTarget = createDepthTarget(resolution);
+      if (!shadowTerrainTarget || !shadowFinalTarget || gl.getError() !== gl.NO_ERROR) throw new Error('depth framebuffer incomplete');
+      shadowSupported = true;
+      return true;
+    } catch (error) {
+      releaseShadowTargets();
+      shadowSupported = false;
+      shadowFailureReason = error?.message ?? 'depth texture unavailable';
+      return false;
+    }
+  }
 
   function releaseMesh() {
     if (!uploadedMesh) return;
@@ -586,6 +734,23 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     uploadedMesh = { source: mesh, vao, positionBuffer, normalBuffer, indexBuffer, indexCount: mesh.indices.length };
   }
 
+  // Resets the per-object transform uniforms to identity (world-space geometry such as terrain/markers).
+  function setIdentityObject(renderPass, baseColor = [1, 1, 1], partSize = [1, 1, 1]) {
+    gl.uniform1i(locations.renderPass, renderPass);
+    gl.uniform3f(locations.objectOffset, 0, 0, 0);
+    gl.uniform1f(locations.headingRad, 0);
+    gl.uniform1f(locations.verticalScale, 1);
+    gl.uniform3f(locations.partSize, partSize[0], partSize[1], partSize[2]);
+    gl.uniform3f(locations.partCenter, 0, 0, 0);
+    gl.uniform3f(locations.partOffset, 0, 0, 0);
+    gl.uniform3f(locations.partRotationRad, 0, 0, 0);
+    gl.uniform3f(locations.rootOffset, 0, 0, 0);
+    gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
+    gl.uniform3f(locations.baseColor, baseColor[0], baseColor[1], baseColor[2]);
+  }
+
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
+
   return {
     /** Sets the drawing buffer to CSS dimensions multiplied by device pixel ratio. */
     resize(width, height, pixelRatio = 1) {
@@ -602,7 +767,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
     renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null }) {
-      const frameStartedAt = collectDiagnostics ? performance.now() : 0;
+      const frameStartedAt = collectDiagnostics ? now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
         throw new TypeError('A frozen WorldSnapshot is required');
@@ -616,6 +781,114 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       const minZDisplay = Number.isFinite(terrainMesh.bounds?.minZDisplay) ? terrainMesh.bounds.minZDisplay : -20;
       const maxZDisplay = Number.isFinite(terrainMesh.bounds?.maxZDisplay) ? terrainMesh.bounds.maxZDisplay : 20;
 
+      const { astronaut: player } = snapshot;
+      const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
+      const elevationKnown = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
+      const movement = player.movement;
+      const firstPerson = camera.mode === 'first-person';
+      const hasPoseAnchor = Number.isFinite(player.bodyWorldZM);
+      const canDrawRig = movement && hasPoseAnchor && (firstPerson || elevationKnown);
+      // The same pure pose drives the drawn rig and its shadow caster.
+      const framePose = movement && hasPoseAnchor ? poseAstronautRig(movement) : null;
+      const rigHeadingRad = (firstPerson && Number.isFinite(camera.yawRad)
+        ? camera.yawRad
+        : (Number.isFinite(player.headingRad) ? player.headingRad : 0)) + ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad;
+      // Physical body anchor: where the world rig stands (also where its shadow is cast from in first person).
+      const worldRigOffset = hasPoseAnchor
+        ? [player.xM, player.yM, (player.bodyWorldZM - referenceElevationM) * verticalScale]
+        : null;
+
+      const timings = collectDiagnostics ? { shadowMs: 0, skyMs: 0, terrainMs: 0, guidesMs: 0, rigMs: 0 } : null;
+      let t0 = collectDiagnostics ? now() : 0;
+      const lap = (key) => { if (timings) { const t = now(); timings[key] += t - t0; t0 = t; } };
+
+      // ----- Shadow passes (cached terrain depth + per-frame rig caster) -----
+      let shadowMode = 0;
+      let shadowLightSpace = null;
+      let shadowTerrainRendered = false;
+      let shadowRigCasting = false;
+      let shadowSampleTexture = dummyShadowTexture;
+      const sunDisplay = (() => {
+        const x = light[0], y = light[1], z = light[2] * verticalScale;
+        const l = Math.hypot(x, y, z);
+        return [x / l, y / l, z / l];
+      })();
+      if (shadowPreset.resolution > 0 && shadowSupported !== false) {
+        const [focusX, focusY] = shadowFocusXY(camera);
+        const radiusM = chooseShadowRadiusM(camera, shadowPreset);
+        if (Number.isFinite(focusX) && Number.isFinite(focusY) && radiusM > 0) {
+          shadowLightSpace = computeShadowLightSpace({
+            sunDirDisplay: sunDisplay, focusXM: focusX, focusYM: focusY, radiusM,
+            zMinM: minZDisplay - 2, zMaxM: maxZDisplay + 4, resolution: shadowPreset.resolution,
+          });
+        }
+        if (shadowLightSpace?.enabled && ensureShadowTargets(shadowPreset.resolution)) {
+          const res = shadowPreset.resolution;
+          const cacheKey = `${shadowLightSpace.cacheKey}|${verticalScale}`;
+          gl.useProgram(program);
+          // Never sample a texture that is a framebuffer attachment during this pass.
+          gl.activeTexture(gl.TEXTURE2);
+          gl.bindTexture(gl.TEXTURE_2D, dummyShadowTexture);
+          gl.uniform1i(locations.shadowMap, 2);
+          gl.uniform1i(locations.shadowMode, 0);
+          gl.uniform1f(locations.receiveShadow, 0);
+          gl.uniformMatrix4fv(locations.viewProjection, false, shadowLightSpace.viewProjection);
+          gl.uniform3f(locations.cameraEye, eye.xM, eye.yM, eye.zDisplay);
+          gl.uniform1f(locations.terrainExaggeration, verticalScale);
+          gl.viewport(0, 0, res, res);
+          gl.enable(gl.DEPTH_TEST);
+          gl.depthMask(true);
+          if (shadowTerrainKey !== cacheKey || shadowTerrainMesh !== uploadedMesh.source) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, shadowTerrainTarget.framebuffer);
+            gl.clearDepth(1);
+            gl.clear(gl.DEPTH_BUFFER_BIT);
+            gl.enable(gl.POLYGON_OFFSET_FILL);
+            gl.polygonOffset(1.5, 2.0);
+            setIdentityObject(4);
+            gl.disableVertexAttribArray(locations.color);
+            gl.vertexAttrib3f(locations.color, 1, 1, 1);
+            gl.bindVertexArray(uploadedMesh.vao);
+            gl.drawElements(gl.TRIANGLES, uploadedMesh.indexCount, gl.UNSIGNED_INT, 0);
+            gl.disable(gl.POLYGON_OFFSET_FILL);
+            shadowTerrainKey = cacheKey;
+            shadowTerrainMesh = uploadedMesh.source;
+            shadowTerrainRendered = true;
+          }
+          // The physical body casts a shadow even in first person (the first-person arms are only a view model).
+          shadowRigCasting = Boolean(framePose && worldRigOffset && elevationKnown);
+          if (shadowRigCasting) {
+            gl.bindFramebuffer(gl.READ_FRAMEBUFFER, shadowTerrainTarget.framebuffer);
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, shadowFinalTarget.framebuffer);
+            gl.blitFramebuffer(0, 0, res, res, 0, 0, res, res, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFinalTarget.framebuffer);
+            setIdentityObject(4);
+            gl.uniform3fv(locations.objectOffset, worldRigOffset);
+            gl.uniform1f(locations.headingRad, rigHeadingRad);
+            gl.bindVertexArray(astronaut.vao);
+            gl.disableVertexAttribArray(locations.color);
+            gl.vertexAttrib3f(locations.color, 1, 1, 1);
+            gl.uniform3fv(locations.rootOffset, framePose.rootOffset);
+            gl.uniform3fv(locations.rootRotationRad, framePose.rootRotationRad);
+            for (const id of Object.keys(ASTRONAUT_RIG.parts)) {
+              const part = ASTRONAUT_RIG.parts[id];
+              const partPose = framePose.parts[id];
+              if (!part || !partPose) continue;
+              gl.uniform3fv(locations.partSize, part.size);
+              gl.uniform3fv(locations.partCenter, part.center);
+              gl.uniform3fv(locations.partOffset, partPose.offset);
+              gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
+              gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+            }
+          }
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.bindVertexArray(null);
+          gl.viewport(0, 0, canvas.width, canvas.height);
+          shadowSampleTexture = shadowRigCasting ? shadowFinalTarget.texture : shadowTerrainTarget.texture;
+          shadowMode = shadowPreset.kernel > 0 ? 2 : 1;
+        }
+      }
+      lap('shadowMs');
+
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.useProgram(program);
@@ -623,41 +896,46 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.uniform3fv(locations.lightDirection, light);
       gl.uniform3f(locations.cameraEye, eye.xM, eye.yM, eye.zDisplay);
       gl.uniform2f(locations.elevBounds, minZDisplay, maxZDisplay);
-      gl.uniform1f(locations.terrainExaggeration, terrainMesh.displayConfig.verticalScale);
+      const tb = terrainMesh.bounds;
+      if (Number.isFinite(tb?.minX) && Number.isFinite(tb?.maxX) && Number.isFinite(tb?.minY) && Number.isFinite(tb?.maxY)) {
+        gl.uniform4f(locations.terrainBounds, tb.minX, tb.minY, tb.maxX, tb.maxY);
+      } else {
+        gl.uniform4f(locations.terrainBounds, 0, 0, 0, 0);
+      }
+      gl.uniform1f(locations.terrainExaggeration, verticalScale);
+      gl.uniform1f(locations.alpha, 1);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, shadowSampleTexture);
+      gl.uniform1i(locations.shadowMap, 2);
+      gl.uniform1i(locations.shadowMode, shadowMode);
+      if (shadowLightSpace?.enabled) {
+        gl.uniformMatrix4fv(locations.lightVP, false, shadowLightSpace.viewProjection);
+        gl.uniform4f(locations.shadowParams, shadowLightSpace.texelWorldM, shadowLightSpace.depthRangeM, 1 / shadowPreset.resolution, 0);
+        gl.uniform3fv(locations.shadowLightDir, shadowLightSpace.lightDir);
+      } else {
+        gl.uniform4f(locations.shadowParams, 1, 1, 1, 0);
+        gl.uniform3f(locations.shadowLightDir, 0, 0, 1);
+      }
+      gl.uniform1f(locations.receiveShadow, 0);
 
-      // Pass 3: Procedural Martian Skybox Dome & Solar Mie Scattering
+      // Pass 3: procedural Martian sky dome (sunlit gradient, forward-scattering halo, 21' sun disc)
       gl.disable(gl.DEPTH_TEST);
       gl.depthMask(false);
-      gl.uniform1i(locations.renderPass, 3);
+      setIdentityObject(3, [1, 1, 1], [2000, 2000, 2000]);
       gl.uniform3f(locations.objectOffset, eye.xM, eye.yM, eye.zDisplay);
-      gl.uniform1f(locations.headingRad, 0);
-      gl.uniform1f(locations.verticalScale, 1);
-      gl.uniform3f(locations.partSize, 2000, 2000, 2000);
-      gl.uniform3f(locations.partCenter, 0, 0, 0);
-      gl.uniform3f(locations.partOffset, 0, 0, 0);
-      gl.uniform3f(locations.partRotationRad, 0, 0, 0);
-      gl.uniform3f(locations.rootOffset, 0, 0, 0);
-      gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
-      gl.uniform3f(locations.baseColor, 1, 1, 1);
       gl.disableVertexAttribArray(locations.color);
       gl.vertexAttrib3f(locations.color, 1, 1, 1);
-      gl.bindVertexArray(astronaut.vao);
-      gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+      gl.disableVertexAttribArray(locations.normal);
+      gl.vertexAttrib3f(locations.normal, 0, 0, 1);
+      gl.bindVertexArray(skyDome.vao);
+      gl.drawElements(gl.TRIANGLES, skyDome.indexCount, gl.UNSIGNED_SHORT, 0);
       gl.depthMask(true);
       gl.enable(gl.DEPTH_TEST);
+      lap('skyMs');
 
       // Pass 0: Jezero Crater Terrain Mesh
-      gl.uniform1i(locations.renderPass, 0);
-      gl.uniform3f(locations.objectOffset, 0, 0, 0);
-      gl.uniform1f(locations.headingRad, 0);
-      gl.uniform1f(locations.verticalScale, 1);
-      gl.uniform3f(locations.partSize, 1, 1, 1);
-      gl.uniform3f(locations.partCenter, 0, 0, 0);
-      gl.uniform3f(locations.partOffset, 0, 0, 0);
-      gl.uniform3f(locations.partRotationRad, 0, 0, 0);
-      gl.uniform3f(locations.rootOffset, 0, 0, 0);
-      gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
-      gl.uniform3f(locations.baseColor, 0.78, 0.43, 0.25);
+      setIdentityObject(0, [0.78, 0.43, 0.25]);
+      gl.uniform1f(locations.receiveShadow, 1);
       gl.disableVertexAttribArray(locations.color);
       gl.vertexAttrib3f(locations.color, 1, 1, 1);
 
@@ -678,6 +956,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
       gl.bindVertexArray(uploadedMesh.vao);
       gl.drawElements(gl.TRIANGLES, uploadedMesh.indexCount, gl.UNSIGNED_INT, 0);
+      lap('terrainMs');
 
       // Pass 1: 3D Waypoint Beacons and Route Guides (if supplied)
       let markersDrawn = false;
@@ -687,17 +966,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         uploadMarkerMesh(markerMesh);
       }
       if (uploadedMarkerMesh && uploadedMarkerMesh.indexCount > 0) {
-        gl.uniform1i(locations.renderPass, 1);
-        gl.uniform3f(locations.objectOffset, 0, 0, 0);
-        gl.uniform1f(locations.headingRad, 0);
-        gl.uniform1f(locations.verticalScale, 1);
-        gl.uniform3f(locations.partSize, 1, 1, 1);
-        gl.uniform3f(locations.partCenter, 0, 0, 0);
-        gl.uniform3f(locations.partOffset, 0, 0, 0);
-        gl.uniform3f(locations.partRotationRad, 0, 0, 0);
-        gl.uniform3f(locations.rootOffset, 0, 0, 0);
-        gl.uniform3f(locations.rootRotationRad, 0, 0, 0);
-        gl.uniform3f(locations.baseColor, 1, 1, 1);
+        setIdentityObject(1);
+        gl.uniform1f(locations.receiveShadow, 0);
         gl.bindVertexArray(uploadedMarkerMesh.vao);
         markerDrawPlan = getMarkerDrawPlan(uploadedMarkerMesh.source, camera);
         for (const range of markerDrawPlan.drawRanges) {
@@ -720,6 +990,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.uniform1f(locations.headingRad, 0);
         gl.uniform1f(locations.verticalScale, 1);
         gl.uniform3f(locations.baseColor, 1, baseGreen, baseBlue);
+        gl.uniform1f(locations.receiveShadow, 0);
         gl.bindVertexArray(geologyVao);
         gl.bindBuffer(gl.ARRAY_BUFFER, geologyPositionBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
@@ -734,26 +1005,18 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24, 2);
       drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1, 1, 1, 2);
       drawSurfaceLines(plannedRouteLinePositions, 0.12, 0.92, 0.78, 0.96, 1, 3);
+      lap('guidesMs');
 
-      const { astronaut: player } = snapshot;
-      const { referenceElevationM, verticalScale } = terrainMesh.displayConfig;
-      const elevationKnown = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
       let avatarDrawn = false;
       let firstPersonViewModelDrawn = false;
       let rigPose = null;
       let rigPartsDrawn = [];
       let firstPersonVisibleParts = [];
       let rigPresentation = 'world';
-      const movement = player.movement;
-      const firstPerson = camera.mode === 'first-person';
-      const hasPoseAnchor = Number.isFinite(player.bodyWorldZM);
-      const canDrawRig = movement && hasPoseAnchor && (firstPerson || elevationKnown);
       if (canDrawRig) {
-        rigPose = poseAstronautRig(movement);
+        rigPose = framePose;
         rigPresentation = firstPerson ? 'first-person-view-model' : 'world';
-        const headingRad = (firstPerson && Number.isFinite(camera.yawRad)
-          ? camera.yawRad
-          : (Number.isFinite(player.headingRad) ? player.headingRad : 0)) + ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad;
+        const headingRad = rigHeadingRad;
         // In both first-person and world modes, the astronaut suit maintains 1:1 human proportions.
         // Z-axis of body geometry is not stretched; ground contact altitude is positioned by objectOffset.
         const rigVerticalScale = 1;
@@ -768,7 +1031,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
             camera.zDisplay - FIRST_PERSON_VIEW_MODEL_ROOT_BELOW_EYE_M * rigVerticalScale,
           ];
         } else {
-          objectOffset = [player.xM, player.yM, (player.bodyWorldZM - referenceElevationM) * verticalScale];
+          objectOffset = worldRigOffset;
         }
         // The view-model terms are additive presentation motion for the upper body only.
         // Keep the world rig and the first-person legs anchored to the unmodified pose.
@@ -782,6 +1045,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.uniform1f(locations.headingRad, headingRad);
         gl.uniform1f(locations.verticalScale, rigVerticalScale);
         gl.uniform3f(locations.baseColor, 1, 1, 1);
+        // Third-person rig receives terrain/self shadows; the camera-attached view model does not.
+        gl.uniform1f(locations.receiveShadow, firstPerson ? 0 : 1);
         gl.bindVertexArray(astronaut.vao);
         gl.disableVertexAttribArray(locations.color);
         if (firstPerson) gl.disable(gl.DEPTH_TEST); // Deliberate lower-frame suit overlay; terrain cannot hide it.
@@ -847,9 +1112,12 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         avatarDrawn = !firstPerson && rigPartsDrawn.length > 0;
       }
       gl.bindVertexArray(null);
+      gl.activeTexture(gl.TEXTURE0);
+      lap('rigMs');
       if (collectDiagnostics) {
+        const sunIrr = marsSunIrradiance(light);
         lastFrameDiagnostics = {
-          frameRenderMs: performance.now() - frameStartedAt,
+          frameRenderMs: now() - frameStartedAt,
           terrainTriangles: uploadedMesh.indexCount / 3,
           plannedRouteLineVertexCount: plannedRouteLinePositions instanceof Float32Array ? plannedRouteLinePositions.length / 3 : 0,
           markersDrawn,
@@ -871,8 +1139,46 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           orthoMode: orthoMode === 2 ? 'ortho' : (orthoMode === 1 ? 'hybrid' : 'hillshade'),
           orthoFineLoaded: Boolean(hasOrthoFine),
           orthoCoarseLoaded: Boolean(hasOrthoCoarse),
+          // Stage Visual A additions (existing keys above are unchanged).
+          renderTimingMs: { total: now() - frameStartedAt, ...timings, note: 'CPU command-submission time; GPU time not measured' },
+          shadowResolution: shadowMode > 0 ? shadowPreset.resolution : 0,
+          lighting: {
+            model: 'linear light + ACES (Narkowicz) + sRGB, shared by sky/terrain/guides/rig',
+            sunDirection: [...light],
+            sunElevationDeg: (Math.asin(Math.min(1, Math.max(-1, light[2]))) * 180) / Math.PI,
+            sunIrradianceLuma: luminance(sunIrr),
+            sunAngularDiameterArcmin: MARS_SUN_ANGULAR_DIAMETER_ARCMIN,
+            exposure: SKY_PARAMS.exposure,
+            shadows: {
+              requested: shadowPreset.name,
+              active: shadowMode > 0,
+              supported: shadowSupported,
+              failureReason: shadowFailureReason,
+              resolution: shadowMode > 0 ? shadowPreset.resolution : 0,
+              kernel: shadowMode === 2 ? '3x3' : (shadowMode === 1 ? '1-tap' : 'none'),
+              coverageRadiusM: shadowLightSpace?.enabled ? shadowLightSpace.radiusM : 0,
+              texelWorldM: shadowLightSpace?.enabled ? shadowLightSpace.texelWorldM : null,
+              terrainDepthRerendered: shadowTerrainRendered,
+              rigCasting: shadowRigCasting,
+              disabledReason: shadowLightSpace && !shadowLightSpace.enabled ? shadowLightSpace.reason : null,
+            },
+            labels: 'sunum/presentation parameters; see Sim/stage-visual-a-scene-audit.md',
+          },
         };
       }
+    },
+
+    /** Sets shadow quality: 'off' | 'low' | 'high'. Unknown names fall back to the default preset. */
+    setShadowQuality(name) {
+      if (disposed) return;
+      const next = resolveShadowQuality(name);
+      if (next === shadowPreset) return;
+      shadowPreset = next;
+      releaseShadowTargets();
+    },
+
+    getShadowQuality() {
+      return shadowPreset.name;
     },
 
     /**
@@ -944,9 +1250,14 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       if (disposed) return;
       releaseMesh();
       releaseMarkerMesh();
+      releaseShadowTargets();
+      if (dummyShadowTexture) gl.deleteTexture(dummyShadowTexture);
       if (orthoTexFine) { gl.deleteTexture(orthoTexFine); orthoTexFine = null; }
       if (orthoTexCoarse) { gl.deleteTexture(orthoTexCoarse); orthoTexCoarse = null; }
       if (dummyTexture) { gl.deleteTexture(dummyTexture); }
+      gl.deleteVertexArray(skyDome.vao);
+      gl.deleteBuffer(skyDome.positionBuffer);
+      gl.deleteBuffer(skyDome.indexBuffer);
       gl.deleteVertexArray(geologyVao);
       gl.deleteBuffer(geologyPositionBuffer);
       gl.deleteVertexArray(astronaut.vao);

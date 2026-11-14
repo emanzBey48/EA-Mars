@@ -14,6 +14,12 @@
 
 **[KULLANICI BİLDİRDİ]** Etkinlik tarihleri 14–15 Kasım 2026 olarak bildirildi; bu tarih bilgisi resmi takvimden bağımsız doğrulanmış değildir.
 
+## Son bağımsız Stage 13 ve runtime doğrulaması — 14 Kasım 2026
+
+Stage 13 `astronaut-rig.js`/test teslimi bu daldaki mevcut koddur; bu doğrulama turunda kaynak değişmedi. Stage 13'e özel testler 7/7, `npm test` 241/241 geçti. Smoke testi önce sandbox'ın `127.0.0.1:9333` Edge DevTools bağlantısını `EACCES` ile engellemesi nedeniyle sayfa hedefi bulamadı; ardından `Sim/data/legacy-hirise/dtm_subset.f32` dosyasının gerçek raster yerine 132 baytlık Git LFS pointer'ı olduğu anlaşıldı. Yalnız bu LFS nesnesi çekildi; dosya 7.537.204 bayta ulaştı ve `git lfs fsck --objects --dry-run` başarılı oldu. Smoke yerel loopback erişimi olan çalıştırmada 32 kontrolden 26'sını geçti.
+
+**Alparslan'ın takip etmesi gereken smoke bulguları:** İlk 2D→3D açılışında terrain mesh, smoke'un 10 saniyelik bekleme penceresi içinde görünmedi (ölçülen ilk geçiş 10,975 ms; tekrar 2D→3D geçişi başarılı). Buna bağlı rig/mesh tanıları 6b/6i/6l boş kaldı. Kontrol 6h geçerli yüzey örneği (`sample=ok`) varken `grounded=false` ve kamera yönü testinde yaklaşık −4,45 m ilerleme bildirdi. Kontrol 5b, arşiv izi açıklamasındaki “güvenli rota bilgisi içermez” uyarısını smoke metin kontrolüne dahil etmiyor. Bu 6 başarısız kabul maddesi Stage 13 saf rig birim testlerinin başarısızlığı değildir; renderer/simülasyon/UI entegrasyon sahibi Alparslan'ın incelemesi gerekir. Smoke ekran görüntüleri HEAD'deki halleriyle geri yüklendi; kod değişmedi.
+
 **[KULLANICI BİLDİRDİ]** Alparslan regresyon kontrollerinin tümünün geçtiğini söyledi. Ayrıca 13 Kasım'da kullanıcı simülasyonun açıldığını, arayüzde “Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor)” uyarısını gördüğünü ve mevcut 3D görünümün hedef FPS deneyimine yakın olmadığını bildirdi. Bu kullanıcı gözlemleri bağımsız runtime kabulü değildir.
 
 ## ÜRÜN YÖNÜ GÜNCELLEMESİ — Minimap, otomatik rota ve tüm Mars kapsamı (14 Kasım 2026, akşam)

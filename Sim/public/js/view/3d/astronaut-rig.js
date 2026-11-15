@@ -189,7 +189,10 @@ const MOVING_SPEED_EPSILON_MPS = 0.04;
 // Stage 16 first-person view-model constants. These are visual choices for the lower-frame torso/arm
 // overlay, not suit or human biomechanics measurements. Camera head-bob lives in camera.js (owned
 // elsewhere), so these amplitudes are kept small to avoid double-counting the same motion.
-const BREATH_HZ = 0.22;
+// Breath rate is a presentation parameter on the WALL clock (same rate as camera-motion.js breathWallHz = 0.25).
+// `timeS` is scenario time, which runs timeScale (8x) faster, so the scenario-time rate is divided by timeScale.
+const BREATH_WALL_HZ = 0.25;
+const BREATH_HZ = BREATH_WALL_HZ / SCENARIO.timeScale;
 const VM_BREATH_OFFSET_Z = 0.004;
 const VM_BREATH_PITCH_RAD = 0.006;
 const WALK_FULL_SPEED_MPS = 1.4;
@@ -221,13 +224,12 @@ const FP_HAND_PITCH_MAX_RAD = -1.3;
 // Same clamp as camera.js first-person pitch (85 deg), so the view model follows the camera exactly.
 const FP_PITCH_LIMIT_RAD = (85 * Math.PI) / 180;
 
-// Transition windows on vertical speed (m/s), design constants mirroring the ~2.4 m/s scenario jump
-// impulse (SCENARIO.jumpImpulseMps). With the scenario clock at 8x a 60 fps frame spans ~0.5 m/s of
-// vertical speed, so the windows are 0.8 m/s wide to cover about two frames.
-const TAKEOFF_BLEND_VZ_FULL_MPS = 2.0; // at/above this the pose is still the grounded gait pose
-const TAKEOFF_BLEND_VZ_NONE_MPS = 1.2; // at/below this the pure flight pose applies
-const TOUCH_BLEND_VZ_FULL_MPS = -2.0; // at/below this the pose is the touchdown-absorb pose
-const TOUCH_BLEND_VZ_NONE_MPS = -1.2;
+// Launch blend on the impulse-driven vertical speed. The jump sets vz = SCENARIO.jumpImpulseMps (2.4 m/s)
+// and the scenario clock (8x) reduces it by ~0.5 m/s per 60 fps frame. The gait weight is LINEAR in vz over
+// [0, launch speed]: at launch it is 1 (continues the grounded gait), at vz = 0 it is 0. The gait-to-flight
+// difference is ~1.2 rad on the arms, so this slope keeps each 60 fps frame's change near 0.25 rad (measured
+// 0.26 at launch; see Sim/stage-jump-pose-note.md). Stateless: a function of vz only.
+const LAUNCH_VZ_MPS = SCENARIO.jumpImpulseMps;
 
 /**
  * Froude number v^2 / (g L). Defaults: Mars gravity and the model leg length.
@@ -294,9 +296,10 @@ export function advanceGaitPhaseRad(phaseRad, deltaDistanceM, speedMps) {
  * while speed changes; when omitted, the phase is `2π · (speed / stride) · timeS` as before.
  * Optional `gaitPhaseRad` (finite) is a caller-accumulated phase (see `advanceGaitPhaseRad`) and wins over both.
  *
- * Mid-air, the pose is a continuous blend of the flight pose with the grounded gait pose near take-off
- * (vertical speed 2.0 -> 1.2 m/s) and with the touchdown-absorb pose before landing (-1.2 -> -2.0 m/s), so a
- * jump does not snap the whole body between poses. All weights are functions of the inputs only.
+ * Mid-air, the pose is a continuous blend of the flight pose with the grounded gait pose just after take-off
+ * (gait weight = vz / 2.4 m/s, linear, so the gait fades out over the launch impulse) and with the touchdown-absorb
+ * pose before landing (weight = -vz / 2.4 m/s), so a jump does not snap the whole body between poses. All weights
+ * are functions of the inputs only.
  *
  * @param {{timeS:number, horizontalSpeedMps:number, verticalSpeedMps:number,
  *   grounded:boolean, airborne?:boolean, landingRecovery?:boolean, landingRecoveryFrac?:number,
@@ -523,8 +526,9 @@ function groundedCore({ timeS, speed, recFrac, gaitPhaseRad }) {
 // 2. Apex Balance (|verticalSpeedMps| <= 0.5): floating equilibrium, arms flared out, legs soft.
 // 3. Descent (verticalSpeedMps < -0.5): legs/boots reaching forward to brace for touchdown.
 function flightCore(timeS, vz) {
-  const tAscent = smoothstep01((vz - 0.5) / 1.0);
-  const tDescent = smoothstep01((-vz - 0.5) / 1.0);
+  // 1.5 m/s ramps (not 1.0) keep the per-frame change of the flight pose itself near 0.25 rad at 60 fps.
+  const tAscent = smoothstep01((vz - 0.5) / 1.5);
+  const tDescent = smoothstep01((-vz - 0.5) / 1.5);
   const tApex = 1 - tAscent - tDescent;
 
   const rootPitch = tAscent * 0.07 - tDescent * 0.06;
@@ -535,8 +539,9 @@ function flightCore(timeS, vz) {
   const parts = {};
   parts.helmet = hingedPart3D('helmet', [-0.45 * rootPitch - tDescent * 0.06, 0, 0]);
 
-  const leftArmPitch = tAscent * -0.95 + tApex * -0.34 + tDescent * -0.50;
-  const leftArmRoll = tAscent * 0.22 + tApex * 0.55 + tDescent * 0.38;
+  // Arms: reach up-forward on ascent, spread wide for balance at apex, hang out for the brace on descent.
+  const leftArmPitch = tAscent * -1.0 + tApex * -0.34 + tDescent * -0.50;
+  const leftArmRoll = tAscent * 0.22 + tApex * 0.75 + tDescent * 0.50;
   // Hands adapt dynamically across jump regimes
   const gripPitch = tAscent * -0.08 + tApex * -0.06 + tDescent * -0.12;
   const gripRoll = tAscent * 0.04 + tApex * 0.08 + tDescent * 0.05;
@@ -548,7 +553,8 @@ function flightCore(timeS, vz) {
     [gripPitch, -gripRoll, 0],
   );
 
-  const legPitch = tAscent * 0.38 + tApex * 0.0 - tDescent * 0.50;
+  // Legs: trail behind on ascent, reach forward to brace on descent (no knee joint in this rig).
+  const legPitch = tAscent * 0.45 + tApex * 0.0 - tDescent * 0.55;
   const legSpread = 0.04 + tApex * 0.05 + tDescent * 0.03;
   const stagger = tApex * 0.14 + tAscent * 0.10;
   const leftLegRot = [legPitch + stagger, -legSpread, 0];
@@ -568,8 +574,8 @@ function flightCore(timeS, vz) {
 function airborneCore({ timeS, speed, verticalSpeedMps: vz, carryPhaseRad }) {
   const flight = flightCore(timeS, vz);
   const carrySpeed = speed > MOVING_SPEED_EPSILON_MPS ? speed : 0;
-  const wTakeoff = smoothstep01((vz - TAKEOFF_BLEND_VZ_NONE_MPS) / (TAKEOFF_BLEND_VZ_FULL_MPS - TAKEOFF_BLEND_VZ_NONE_MPS));
-  const wTouch = smoothstep01((vz - TOUCH_BLEND_VZ_NONE_MPS) / (TOUCH_BLEND_VZ_FULL_MPS - TOUCH_BLEND_VZ_NONE_MPS));
+  const wTakeoff = clampRange(vz / LAUNCH_VZ_MPS, 0, 1);
+  const wTouch = clampRange(-vz / LAUNCH_VZ_MPS, 0, 1);
   let core = flight;
   if (wTakeoff > 0) {
     core = blendCores(core, groundedCore({ timeS, speed: carrySpeed, recFrac: 0, gaitPhaseRad: carryPhaseRad }), wTakeoff);

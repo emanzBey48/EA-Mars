@@ -66,7 +66,9 @@ export function bindControls({
     onPointerLockChange(locked);
   });
   document.addEventListener('mousemove', (e) => {
-    if (isFirstPerson() && document.pointerLockElement === lookEl) onLook(e.movementX, e.movementY);
+    // Screen-right mouse motion should turn the view to the user's right. Positive yaw turns north
+    // from an east-facing start, which is screen-left in this camera frame, so invert only X here.
+    if (isFirstPerson() && document.pointerLockElement === lookEl) onLook(-e.movementX, e.movementY);
   });
 
   mapEl.addEventListener('wheel', (e) => {

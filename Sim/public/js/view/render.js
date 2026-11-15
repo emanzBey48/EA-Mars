@@ -202,15 +202,19 @@ export function render(ctx, w, h, {
     ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
   }
 
-  // Presentation-only footfalls: each quad was sampled against the active DTM provider upstream.
+  // Presentation-only boot soles: each contour was sampled against the active DTM provider upstream.
   if (footprintTrail?.count > 0 && footprintTrail.quads instanceof Float32Array && footprintTrail.instances instanceof Float32Array) {
     ctx.save();
-    ctx.fillStyle = '#34251e';
+    ctx.fillStyle = '#24130e';
+    const shapePointCount = footprintTrail.shapePointCount;
+    const soleContours = footprintTrail.soleContours;
+    const hasSoleContours = Number.isInteger(shapePointCount) && shapePointCount >= 3 &&
+      soleContours instanceof Float32Array && soleContours.length === footprintTrail.count * (shapePointCount + 1) * 3;
     for (let i = 0; i < footprintTrail.count; i++) {
       const offset = i * 12;
       const alpha = Math.max(0, Math.min(1, footprintTrail.instances[i * 10 + 5]));
       if (alpha <= 0) continue;
-      ctx.globalAlpha = 0.68 * alpha;
+      ctx.globalAlpha = 0.84 * alpha;
       const p0 = T(footprintTrail.quads[offset], footprintTrail.quads[offset + 1]);
       const p1 = T(footprintTrail.quads[offset + 3], footprintTrail.quads[offset + 4]);
       const p3 = T(footprintTrail.quads[offset + 9], footprintTrail.quads[offset + 10]);
@@ -219,13 +223,17 @@ export function render(ctx, w, h, {
       ctx.beginPath();
       if (Math.min(projectedWidth, projectedHeight) < 2.5) {
         const p = T(footprintTrail.instances[i * 10], footprintTrail.instances[i * 10 + 1]);
-        ctx.arc(p.sx, p.sy, 1.7, 0, Math.PI * 2);
+        ctx.arc(p.sx, p.sy, 2.0, 0, Math.PI * 2);
         ctx.fill();
         continue;
       }
-      for (let corner = 0; corner < 4; corner++) {
-        const p = T(footprintTrail.quads[offset + corner * 3], footprintTrail.quads[offset + corner * 3 + 1]);
-        if (corner === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+      const shapeOffset = hasSoleContours ? i * (shapePointCount + 1) * 3 : 0;
+      const pointCount = hasSoleContours ? shapePointCount : 4;
+      for (let point = 0; point < pointCount; point++) {
+        const source = hasSoleContours ? shapeOffset + (point + 1) * 3 : offset + point * 3;
+        const p = T(hasSoleContours ? soleContours[source] : footprintTrail.quads[source],
+          hasSoleContours ? soleContours[source + 1] : footprintTrail.quads[source + 1]);
+        if (point === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
       }
       ctx.closePath();
       ctx.fill();

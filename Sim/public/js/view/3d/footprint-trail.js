@@ -7,8 +7,21 @@ export const FOOTPRINT_TRAIL_SCHEMA_VERSION = 1;
 export const FOOTPRINT_INSTANCE_FLOATS = 10;
 /** Floats per footprint in `quads`: four corners, each x, y, zM (source metres, lifted along the normal). */
 export const FOOTPRINT_QUAD_FLOATS = 12;
+/** Number of perimeter points in the presentation-only boot-sole silhouette. */
+export const FOOTPRINT_OUTLINE_POINT_COUNT = 16;
+/** Floats per footprint in `soleContours`: centre plus the perimeter, each x, y, zM. */
+export const FOOTPRINT_CONTOUR_FLOATS = (FOOTPRINT_OUTLINE_POINT_COUNT + 1) * 3;
 
 const RIG_BOOT = ASTRONAUT_RIG.parts.leftBoot;
+// Coordinates are (forward along heading, physical-left across heading), normalized to the
+// footprint bounds. The narrower heel, slight arch, broad ball and rounded toe make this read
+// as a boot sole while keeping all samples inside the existing bounding quad.
+const SOLE_OUTLINE = Object.freeze([
+  [-0.50, -0.20], [-0.46, -0.31], [-0.32, -0.38], [-0.12, -0.31],
+  [0.08, -0.39], [0.29, -0.36], [0.43, -0.28], [0.50, -0.15],
+  [0.50, 0.15], [0.43, 0.28], [0.29, 0.36], [0.08, 0.39],
+  [-0.12, 0.31], [-0.32, 0.38], [-0.46, 0.31], [-0.50, 0.20],
+]);
 
 /**
  * Tasarım/senaryo parametreleri. Hiçbiri biyomekanik ya da insan ölçüsü değildir.
@@ -96,6 +109,7 @@ function buildMeta(config, display) {
     layout: {
       instances: 'x, y, zM, yawRad, side, alpha, scale, nx, ny, nz (FOOTPRINT_INSTANCE_FLOATS per footprint)',
       quads: 'corners c0..c3 as x, y, zM (FOOTPRINT_QUAD_FLOATS per footprint); order (-a,-b), (+a,-b), (+a,+b), (-a,+b) in (heading-along, physical-left) axes',
+      soleContours: 'centre plus 16 boot-sole perimeter points as x, y, zM; toe points along +heading; source metres with groundOffsetM lift',
     },
     side: '+1 = physical left of the heading, -1 = physical right, 0 = centred landing patch. Footprints alternate over the placed footprints; the first one after a reset follows the gait schedule (footfall k even = left).',
     parameters: config,
@@ -195,8 +209,8 @@ export function createFootprintTrail({ sampleElevation, displayConfig = null, ..
   }
 
   /**
-   * Places one quad centred at (cxM, cyM), oriented along heading. Returns false (and stores nothing)
-   * when any corner is unknown, so no footprint is drawn over no-data or invented ground.
+   * Places a boot-sole decal and its legacy bounding quad at (cxM, cyM), oriented along heading.
+   * Returns false when any bounding, centre or perimeter sample is unknown.
    */
   function placeFootprint({ cxM, cyM, headingRad, side, scale, bornS }) {
     const a = config.footprintLengthM * scale;
@@ -236,6 +250,23 @@ export function createFootprintTrail({ sampleElevation, displayConfig = null, ..
       quad[i * 3 + 1] = corners[i][1] + n[1] * lift;
       quad[i * 3 + 2] = z[i] + n[2] * lift;
     }
+    const soleContours = new Float64Array(FOOTPRINT_CONTOUR_FLOATS);
+    const centreSample = sampleElevation(cxM, cyM);
+    if (!centreSample || centreSample.status !== 'ok' || !isFiniteNumber(centreSample.value)) return false;
+    soleContours[0] = cxM + n[0] * lift;
+    soleContours[1] = cyM + n[1] * lift;
+    soleContours[2] = centreSample.value + n[2] * lift;
+    for (let i = 0; i < SOLE_OUTLINE.length; i++) {
+      const [along, across] = SOLE_OUTLINE[i];
+      const x = cxM + along * a * ux + across * b * vx;
+      const y = cyM + along * a * uy + across * b * vy;
+      const sample = sampleElevation(x, y);
+      if (!sample || sample.status !== 'ok' || !isFiniteNumber(sample.value)) return false;
+      const offset = (i + 1) * 3;
+      soleContours[offset] = x + n[0] * lift;
+      soleContours[offset + 1] = y + n[1] * lift;
+      soleContours[offset + 2] = sample.value + n[2] * lift;
+    }
     items.push({
       bornS,
       xM: cxM,
@@ -246,6 +277,7 @@ export function createFootprintTrail({ sampleElevation, displayConfig = null, ..
       scale,
       normal: n,
       quad,
+      soleContours,
     });
     if (items.length > config.capacity) {
       items.shift();
@@ -349,6 +381,7 @@ export function createFootprintTrail({ sampleElevation, displayConfig = null, ..
     const n = items.length;
     const instances = new Float32Array(n * FOOTPRINT_INSTANCE_FLOATS);
     const quads = new Float32Array(n * FOOTPRINT_QUAD_FLOATS);
+    const soleContours = new Float32Array(n * FOOTPRINT_CONTOUR_FLOATS);
     const nowS = lastTimeS ?? 0;
     for (let i = 0; i < n; i++) {
       const it = items[i];
@@ -365,13 +398,16 @@ export function createFootprintTrail({ sampleElevation, displayConfig = null, ..
       instances[o + 8] = it.normal[1];
       instances[o + 9] = it.normal[2];
       quads.set(it.quad, i * FOOTPRINT_QUAD_FLOATS);
+      soleContours.set(it.soleContours, i * FOOTPRINT_CONTOUR_FLOATS);
     }
     return Object.freeze({
       schemaVersion: FOOTPRINT_TRAIL_SCHEMA_VERSION,
       count: n,
       capacity: config.capacity,
+      shapePointCount: FOOTPRINT_OUTLINE_POINT_COUNT,
       instances,
       quads,
+      soleContours,
       counters: Object.freeze({ ...counters }),
       meta,
     });

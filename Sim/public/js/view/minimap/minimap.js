@@ -444,12 +444,16 @@ export function createMinimap({
       const quads = trail.quads, instances = trail.instances;
       if (quads instanceof Float32Array && instances instanceof Float32Array) {
         ctx.save();
-        ctx.fillStyle = '#34251e';
+        ctx.fillStyle = '#24130e';
+        const shapePointCount = trail.shapePointCount;
+        const soleContours = trail.soleContours;
+        const hasSoleContours = Number.isInteger(shapePointCount) && shapePointCount >= 3 &&
+          soleContours instanceof Float32Array && soleContours.length === trail.count * (shapePointCount + 1) * 3;
         for (let i = 0; i < trail.count; i++) {
           const offset = i * 12;
           const alpha = Math.max(0, Math.min(1, instances[i * 10 + 5]));
           if (alpha <= 0) continue;
-          ctx.globalAlpha = 0.75 * alpha;
+          ctx.globalAlpha = 0.88 * alpha;
           ctx.beginPath();
           const p0 = worldToScreen(quads[offset], quads[offset + 1]);
           const p1 = worldToScreen(quads[offset + 3], quads[offset + 4]);
@@ -458,13 +462,17 @@ export function createMinimap({
           const projectedHeight = Math.hypot(p3.x - p0.x, p3.y - p0.y);
           if (Math.min(projectedWidth, projectedHeight) < 2.5) {
             const p = worldToScreen(instances[i * 10], instances[i * 10 + 1]);
-            ctx.arc(p.x, p.y, 1.6, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, 1.9, 0, Math.PI * 2);
             ctx.fill();
             continue;
           }
-          for (let corner = 0; corner < 4; corner++) {
-            const p = worldToScreen(quads[offset + corner * 3], quads[offset + corner * 3 + 1]);
-            if (corner === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+          const shapeOffset = hasSoleContours ? i * (shapePointCount + 1) * 3 : 0;
+          const pointCount = hasSoleContours ? shapePointCount : 4;
+          for (let point = 0; point < pointCount; point++) {
+            const source = hasSoleContours ? shapeOffset + (point + 1) * 3 : offset + point * 3;
+            const p = worldToScreen(hasSoleContours ? soleContours[source] : quads[source],
+              hasSoleContours ? soleContours[source + 1] : quads[source + 1]);
+            if (point === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
           }
           ctx.closePath();
           ctx.fill();

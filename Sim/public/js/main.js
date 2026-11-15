@@ -46,7 +46,7 @@ const targetYawRad = Math.atan2(waypoints[1].local.y - waypoints[0].local.y, way
 const sim = new MarswalkSim({ a: waypoints[0].local, b: waypoints[1].local }, SCENARIO);
 const camera = new Camera();
 const camera3d = createFirstPersonCamera({ xM: waypoints[0].local.x, yM: waypoints[0].local.y, yawRad: targetYawRad });
-const cameraMotion = createCameraMotion();
+const cameraMotion = createCameraMotion({ idleBreathing: false });
 let lastCameraMotion = null;
 const registry = createDefaultSurfaceRegistry({ expectedFrame: MAP_FRAME, adapter, baseUrl: 'data' });
 const layers = { dtm: new UnavailableLayer(dtmBaseDescriptor(), 'Yükleniyor…'), ortho: null, selectionReport: null };
@@ -1503,7 +1503,7 @@ function frame(now) {
       const mov = player.movement;
       const hasElevation = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
 
-      // Presentation camera motion (walk sway, idle breath, landing dip) from camera-motion.js; pure, no DOM.
+      // Presentation camera motion (walk sway and landing dip) from camera-motion.js; idle breathing is disabled in-app.
       const motion = cameraMotion.update({
         timeS: mov?.timeS,
         horizontalSpeedMps: mov?.horizontalSpeedMps,

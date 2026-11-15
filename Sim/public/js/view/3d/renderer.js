@@ -16,6 +16,7 @@ import {
 } from './astronaut-rig.js';
 import { MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, SKY_PARAMS, luminance, marsSunIrradiance } from './sky-model.js';
 import { TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS } from './terrain-shading.js';
+import { FOOTPRINT_OUTLINE_POINT_COUNT } from './footprint-trail.js';
 import {
   SHADOW_QUALITY_NAMES, SHADOW_RECEIVER_GLSL, chooseShadowRadiusM, computeShadowLightSpace,
   resolveShadowQuality, shadowFocusXY,
@@ -643,20 +644,21 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   const footprintVao = gl.createVertexArray();
   const footprintPositionBuffer = gl.createBuffer();
   const footprintAlphaBuffer = gl.createBuffer();
+  const footprintVerticesPerSole = FOOTPRINT_OUTLINE_POINT_COUNT * 3;
   if (!footprintVao || !footprintPositionBuffer || !footprintAlphaBuffer) throw new Error('WebGL2 footprint buffers unavailable');
   gl.bindVertexArray(footprintVao);
   gl.bindBuffer(gl.ARRAY_BUFFER, footprintPositionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, 400 * 6 * 3 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, 400 * footprintVerticesPerSole * 3 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
   gl.enableVertexAttribArray(locations.position);
   gl.vertexAttribPointer(locations.position, 3, gl.FLOAT, false, 0, 0);
   gl.bindBuffer(gl.ARRAY_BUFFER, footprintAlphaBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, 400 * 6 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, 400 * footprintVerticesPerSole * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
   gl.enableVertexAttribArray(locations.footprintAlpha);
   gl.vertexAttribPointer(locations.footprintAlpha, 1, gl.FLOAT, false, 0, 0);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  let footprintPositions = new Float32Array(400 * 6 * 3);
-  let footprintAlphas = new Float32Array(400 * 6);
+  let footprintPositions = new Float32Array(400 * footprintVerticesPerSole * 3);
+  let footprintAlphas = new Float32Array(400 * footprintVerticesPerSole);
   let footprintGpuCapacity = 400;
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
@@ -1201,43 +1203,68 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       }
 
       let footprintCountDrawn = 0;
+      let footprintVertexCountDrawn = 0;
       const footprintCount = Number.isInteger(footprintTrail?.count) ? footprintTrail.count : 0;
       const footprintQuads = footprintTrail?.quads;
       const footprintInstances = footprintTrail?.instances;
+      const shapePointCount = footprintTrail?.shapePointCount;
+      const soleContours = footprintTrail?.soleContours;
+      const hasSoleContours = Number.isInteger(shapePointCount) && shapePointCount >= 3 &&
+        shapePointCount <= FOOTPRINT_OUTLINE_POINT_COUNT && soleContours instanceof Float32Array &&
+        soleContours.length === footprintCount * (shapePointCount + 1) * 3;
       if (footprintCount > 0 && footprintQuads instanceof Float32Array && footprintInstances instanceof Float32Array &&
           footprintQuads.length === footprintCount * 12 && footprintInstances.length === footprintCount * 10) {
-        const vertexCount = footprintCount * 6;
+        const verticesPerFootprint = hasSoleContours ? shapePointCount * 3 : 6;
+        const vertexCount = footprintCount * verticesPerFootprint;
         if (footprintPositions.length < vertexCount * 3) footprintPositions = new Float32Array(vertexCount * 3);
         if (footprintAlphas.length < vertexCount) footprintAlphas = new Float32Array(vertexCount);
         if (footprintCount > footprintGpuCapacity) {
           footprintGpuCapacity = Math.max(footprintCount, Math.ceil(footprintGpuCapacity * 1.5));
           gl.bindBuffer(gl.ARRAY_BUFFER, footprintPositionBuffer);
-          gl.bufferData(gl.ARRAY_BUFFER, footprintGpuCapacity * 6 * 3 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+          gl.bufferData(gl.ARRAY_BUFFER, footprintGpuCapacity * footprintVerticesPerSole * 3 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
           gl.bindBuffer(gl.ARRAY_BUFFER, footprintAlphaBuffer);
-          gl.bufferData(gl.ARRAY_BUFFER, footprintGpuCapacity * 6 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
+          gl.bufferData(gl.ARRAY_BUFFER, footprintGpuCapacity * footprintVerticesPerSole * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
         }
         const { referenceElevationM: footprintReferenceM, verticalScale: footprintVerticalScale } = terrainMesh.displayConfig;
         const corners = [0, 1, 2, 0, 2, 3];
         for (let i = 0; i < footprintCount; i++) {
-          const sourceOffset = i * 12;
           const alpha = Math.max(0, Math.min(1, footprintInstances[i * 10 + 5]));
-          for (let vertex = 0; vertex < 6; vertex++) {
-            const source = sourceOffset + corners[vertex] * 3;
-            const target = (i * 6 + vertex) * 3;
-            footprintPositions[target] = footprintQuads[source];
-            footprintPositions[target + 1] = footprintQuads[source + 1];
-            footprintPositions[target + 2] = (footprintQuads[source + 2] - footprintReferenceM) * footprintVerticalScale;
-            footprintAlphas[i * 6 + vertex] = alpha;
+          if (hasSoleContours) {
+            const contourOffset = i * (shapePointCount + 1) * 3;
+            const centre = contourOffset;
+            for (let triangle = 0; triangle < shapePointCount; triangle++) {
+              const pointA = contourOffset + (triangle + 1) * 3;
+              const pointB = contourOffset + ((triangle + 1) % shapePointCount + 1) * 3;
+              const sources = [centre, pointA, pointB];
+              for (let vertex = 0; vertex < 3; vertex++) {
+                const source = sources[vertex];
+                const target = (i * verticesPerFootprint + triangle * 3 + vertex) * 3;
+                footprintPositions[target] = soleContours[source];
+                footprintPositions[target + 1] = soleContours[source + 1];
+                footprintPositions[target + 2] = (soleContours[source + 2] - footprintReferenceM) * footprintVerticalScale;
+                footprintAlphas[i * verticesPerFootprint + triangle * 3 + vertex] = alpha;
+              }
+            }
+          } else {
+            const sourceOffset = i * 12;
+            for (let vertex = 0; vertex < 6; vertex++) {
+              const source = sourceOffset + corners[vertex] * 3;
+              const target = (i * verticesPerFootprint + vertex) * 3;
+              footprintPositions[target] = footprintQuads[source];
+              footprintPositions[target + 1] = footprintQuads[source + 1];
+              footprintPositions[target + 2] = (footprintQuads[source + 2] - footprintReferenceM) * footprintVerticalScale;
+              footprintAlphas[i * verticesPerFootprint + vertex] = alpha;
+            }
           }
         }
-        // Own pass (5): terrain-lit dark decal, no emissive. World-space quads: identity transforms, receives shadow.
+        // Own pass (5): terrain-lit dark boot-sole decal, no emissive. The legacy quad remains a fallback.
         setIdentityObject(5);
         gl.uniform1f(locations.receiveShadow, 1);
-        gl.uniform1f(locations.alpha, 0.9);
+        gl.uniform1f(locations.alpha, 0.96);
         gl.disableVertexAttribArray(locations.normal);
         gl.vertexAttrib3f(locations.normal, 0, 0, 1);
         gl.disableVertexAttribArray(locations.color);
-        gl.vertexAttrib3f(locations.color, 0.34, 0.25, 0.20);
+        gl.vertexAttrib3f(locations.color, 0.19, 0.105, 0.072);
         gl.bindVertexArray(footprintVao);
         gl.bindBuffer(gl.ARRAY_BUFFER, footprintPositionBuffer);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, footprintPositions.subarray(0, vertexCount * 3));
@@ -1251,6 +1278,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.disable(gl.BLEND);
         gl.bindVertexArray(null);
         footprintCountDrawn = footprintCount;
+        footprintVertexCountDrawn = vertexCount;
       }
 
       let avatarDrawn = false;
@@ -1351,7 +1379,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           frameRenderMs: now() - frameStartedAt,
           terrainTriangles: uploadedMesh.indexCount / 3,
           footprintCount: footprintCountDrawn,
-          footprintVertexCount: footprintCountDrawn * 6,
+          footprintVertexCount: footprintVertexCountDrawn,
           plannedRouteLineVertexCount: plannedRouteLinePositions instanceof Float32Array ? plannedRouteLinePositions.length / 3 : 0,
           plannedRouteRibbonVertexCount: uploadedRouteRibbon ? uploadedRouteRibbon.source.positions.length / 3 : 0,
           plannedRouteRibbonTriangleCount: uploadedRouteRibbon ? uploadedRouteRibbon.indexCount / 3 : 0,

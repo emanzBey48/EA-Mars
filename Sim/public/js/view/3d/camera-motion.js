@@ -87,10 +87,12 @@ function noNegativeZero(x) {
  * low-passed in scenario time, so the output is continuous in time and deterministic for the same
  * input sequence. A non-finite timeS returns the last output unchanged.
  *
- * @param {{intensity?: number}} [options] intensity in [0, 1]; 0 disables all motion exactly.
+ * @param {{intensity?: number, idleBreathing?: boolean}} [options] intensity in [0, 1]; 0 disables all motion exactly.
+ *   `idleBreathing` retains the module's presentation option; callers can turn it off to keep an idle camera still.
  */
-export function createCameraMotion({ intensity = 1 } = {}) {
+export function createCameraMotion({ intensity = 1, idleBreathing = true } = {}) {
   if (!Number.isFinite(intensity)) throw new TypeError('intensity must be finite');
+  if (typeof idleBreathing !== 'boolean') throw new TypeError('idleBreathing must be a boolean');
   const k = clamp01(intensity);
   let state = null;
   let last = ZERO_OUTPUT;
@@ -119,7 +121,7 @@ export function createCameraMotion({ intensity = 1 } = {}) {
     const stand = input.grounded === true && !airborne && !landingActive;
     const easeIn = smoothstep01((speed - P.walkStartSpeedMps) / P.walkEaseSpeedMps);
     const walkTarget = stand ? easeIn * clamp01(speed / P.walkFullSpeedMps) : 0;
-    const idleTarget = stand ? 1 - easeIn : 0;
+    const idleTarget = idleBreathing && stand ? 1 - easeIn : 0;
     const airTarget = airborne ? 1 : 0;
     state.walk += (walkTarget - state.walk) * alpha;
     state.idle += (idleTarget - state.idle) * alpha;

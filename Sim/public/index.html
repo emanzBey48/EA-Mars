@@ -22,6 +22,7 @@
     <section id="mapwrap">
       <canvas id="map" class="map-canvas" aria-label="Jezero 2D haritası ve astronot"></canvas>
       <canvas id="map-3d" class="map-canvas" hidden aria-label="HiRISE DTM tabanlı Jezero 3D arazisi"></canvas>
+      <div class="helmet-visor" aria-hidden="true"></div>
       <div id="presentation-hud" class="presentation-hud" hidden aria-label="Sunum ve Jüri Telemetri Kapsülü">
         <div class="pres-header">
           <div class="pres-title">
@@ -118,9 +119,9 @@
       <div id="raster-banner" class="banner info" hidden></div>
       <div id="start-hint" class="hint">Başlangıç: <b>Sol 120 / WB1</b>. Hedef: <b>Sol 164 / Roubion</b>.<br>2D haritada WASD/oklarla hareket edin. 3D’de kamera yönüne göre yürüyün; senaryo saati ilk hareketle başlar.</div>
       <div id="legend" class="legend"></div>
-      <div id="hud-minimap-widget" class="hud-minimap-widget" hidden aria-label="3D Oyun İçi Radar Minimap">
+      <div id="hud-minimap-widget" class="hud-minimap-widget" hidden aria-label="3D HUD holografik 2D konum ve rota haritası">
         <div class="hud-minimap-header">
-          <span class="hud-minimap-title">🧭 MİNİMAP</span>
+          <span class="hud-minimap-title" title="Jezero holografik yerel harita">◈ HOLO MAP</span>
           <span id="hud-minimap-dist" class="hud-minimap-dist">Hedef: —</span>
           <div class="hud-minimap-actions">
             <button id="hud-minimap-follow" type="button" class="hud-mm-btn" aria-pressed="true" title="Oyuncuyu Takip Et / Tüm Rotayı Göster">🎯</button>

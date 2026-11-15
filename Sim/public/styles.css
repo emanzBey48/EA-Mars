@@ -12,6 +12,32 @@ main { display: flex; flex: 1 1 0; height: calc(100% - 46px); min-height: 0; }
 .map-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; outline: none; }
 #map-3d { cursor: crosshair; }
 .map-canvas[hidden] { display: none; }
+
+/* Presentation-only first-person helmet glass. The subtle optical wash is limited to the 3D viewport;
+   it does not recolor the map canvas or any underlying terrain data. */
+.helmet-visor {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  border-radius: clamp(18px, 2.2vw, 34px);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, rgba(174, 231, 237, 0.008) 48%, rgba(139, 211, 220, 0.035) 82%, rgba(19, 50, 58, 0.15) 100%),
+    linear-gradient(180deg, rgba(197, 242, 245, 0.025), transparent 18%, transparent 84%, rgba(130, 203, 212, 0.025));
+  -webkit-backdrop-filter: saturate(0.96) contrast(1.015);
+  backdrop-filter: saturate(0.96) contrast(1.015);
+  box-shadow: inset 0 0 0 1px rgba(201, 243, 246, 0.14), inset 0 0 28px rgba(92, 198, 210, 0.045);
+}
+body.view-3d .helmet-visor { display: block; }
+.helmet-visor::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(122deg, transparent 0 28%, rgba(224, 251, 252, 0.028) 29%, transparent 30% 100%);
+}
 .view-toolbar { position: absolute; top: 12px; right: 12px; z-index: 12; display: flex; align-items: center; gap: 5px; padding: 5px; border: 1px solid rgba(255, 179, 138, 0.32); border-radius: 10px; background: rgba(16, 13, 16, 0.88); backdrop-filter: blur(8px); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
 .view-toolbar > button { font-size: 11.5px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; }
 .view-toolbar button[aria-pressed="true"] { border-color: #ffb38a; background: linear-gradient(180deg, #6b4332 0%, #4d2f23 100%); color: #fff; box-shadow: 0 0 8px rgba(255, 179, 138, 0.3); }
@@ -538,6 +564,33 @@ body.presentation-mode #mapwrap {
 .hud-minimap-widget[hidden] {
   display: none;
 }
+/* Keep the player's live, interactive 2D map in the helmet's upper-left field of view. */
+body.view-3d #hud-minimap-widget {
+  top: 64px;
+  right: auto;
+  bottom: auto;
+  left: 14px;
+  width: 224px;
+  background: rgba(5, 19, 26, 0.70);
+  border: 1px solid rgba(91, 225, 235, 0.62);
+  border-radius: 8px;
+  backdrop-filter: blur(9px) saturate(1.08);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.15), inset 0 0 14px rgba(34, 211, 238, 0.055);
+}
+body.view-3d #hud-minimap-widget .hud-minimap-header {
+  background: linear-gradient(90deg, rgba(8, 37, 47, 0.94), rgba(12, 27, 37, 0.88));
+  border-bottom-color: rgba(103, 232, 249, 0.28);
+}
+body.view-3d #hud-minimap-widget .hud-minimap-title {
+  color: #a5f3fc;
+  letter-spacing: 0.65px;
+  text-shadow: 0 0 7px rgba(103, 232, 249, 0.55);
+}
+body.view-3d #hud-minimap-widget .hud-minimap-dist { color: #d8fbff; }
+body.view-3d #hud-minimap-widget .hud-minimap-footer {
+  background: rgba(7, 27, 35, 0.92);
+  border-top-color: rgba(103, 232, 249, 0.22);
+}
 .hud-minimap-header {
   display: flex;
   padding: 4px 8px;
@@ -914,9 +967,18 @@ body.presentation-mode .hud-minimap-widget {
     left: 8px;
     bottom: 44px;
   }
+  body.view-3d #hud-minimap-widget,
+  body.presentation-mode.view-3d #hud-minimap-widget {
+    top: 88px;
+    right: auto;
+    bottom: auto;
+    left: 8px;
+    width: 170px;
+  }
   #hud-minimap-canvas {
     height: 136px;
   }
+  body.view-3d #hud-minimap-canvas { height: 126px; }
   .mission-setup-overlay {
     padding: 8px;
   }

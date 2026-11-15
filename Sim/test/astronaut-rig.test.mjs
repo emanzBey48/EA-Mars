@@ -4,6 +4,11 @@ import {
   ASTRONAUT_RIG,
   FIRST_PERSON_RIG_PARTS,
   FIRST_PERSON_LOWER_BODY_PARTS,
+  FIRST_PERSON_LOOK_DOWN_UPPER_PARTS,
+  firstPersonDrawPlan,
+  firstPersonHandParts,
+  firstPersonLookDownLayers,
+  firstPersonRootPose,
   poseAstronautRig,
   chainedLimbPart,
   blendRigPoses,
@@ -94,12 +99,11 @@ test('astronaut rig: immutable template, coordinate metadata and geometry', () =
   assert.ok(ASTRONAUT_RIG.parts.rightGlove, 'Right EVA glove exists');
   assert.deepEqual(ASTRONAUT_RIG.parts.rightGlove.colorRgb, [0.20, 0.22, 0.25]);
 
-  // First-person rig parts contract
-  // Visual-realism stage B: the two metallic wrist rings were appended (drawn after the gloves) so the
-  // sleeve/glove coupling is visible in the first-person view-model; the first six entries are unchanged.
+  // First-person rig parts contract (Stage 17 / K2): camera-attached hands only. The torso and chest pack
+  // now appear only while looking down (FIRST_PERSON_LOOK_DOWN_UPPER_PARTS), never in the forward view.
   assert.deepEqual(
     FIRST_PERSON_RIG_PARTS,
-    ['torso', 'chestPack', 'leftArm', 'rightArm', 'leftGlove', 'rightGlove', 'leftWristRing', 'rightWristRing']
+    ['leftArm', 'rightArm', 'leftGlove', 'rightGlove', 'leftWristRing', 'rightWristRing']
   );
   assert.deepEqual(ASTRONAUT_RIG.metadata.firstPersonParts, FIRST_PERSON_RIG_PARTS);
 });
@@ -947,13 +951,15 @@ test('Stage 16: first-person lower-body export is frozen, additive and chained i
   // Visual-realism stage B: ankle rings appended after the original four lower-body parts.
   assert.deepEqual([...FIRST_PERSON_LOWER_BODY_PARTS], ['leftLeg', 'rightLeg', 'leftBoot', 'rightBoot', 'leftAnkleRing', 'rightAnkleRing']);
   assert.ok(Object.isFrozen(FIRST_PERSON_LOWER_BODY_PARTS));
-  // First-person list: original six entries unchanged (wrist rings appended), disjoint from the lower body.
-  assert.deepEqual([...FIRST_PERSON_RIG_PARTS].slice(0, 6), ['torso', 'chestPack', 'leftArm', 'rightArm', 'leftGlove', 'rightGlove']);
+  // First-person hand list (Stage 17 / K2) is disjoint from the lower body and from the look-down upper body.
   assert.ok(FIRST_PERSON_LOWER_BODY_PARTS.every((id) => !FIRST_PERSON_RIG_PARTS.includes(id)));
+  assert.ok(FIRST_PERSON_LOOK_DOWN_UPPER_PARTS.every((id) => !FIRST_PERSON_RIG_PARTS.includes(id)));
+  assert.ok(FIRST_PERSON_LOOK_DOWN_UPPER_PARTS.every((id) => !FIRST_PERSON_LOWER_BODY_PARTS.includes(id)));
   const hint = ASTRONAUT_RIG.metadata.firstPersonLowerBody;
   assert.deepEqual([...ASTRONAUT_RIG.metadata.firstPersonLowerBodyParts], [...FIRST_PERSON_LOWER_BODY_PARTS]);
+  assert.deepEqual([...ASTRONAUT_RIG.metadata.firstPersonLookDownUpperParts], [...FIRST_PERSON_LOOK_DOWN_UPPER_PARTS]);
   assert.equal(hint.visibleOnlyWhenLookingDown, true);
-  assert.equal(hint.provisional, true);
+  assert.equal(hint.provisional, false);
   assert.ok(hint.minLookDownPitchRad > 0 && hint.minLookDownPitchRad < hint.fullLookDownPitchRad);
   assert.ok(Object.isFrozen(hint));
   for (const id of FIRST_PERSON_LOWER_BODY_PARTS) {

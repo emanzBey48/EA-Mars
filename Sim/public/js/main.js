@@ -16,8 +16,8 @@ import { Camera, buildTerrainImage, render } from './view/render.js';
 import {
   cameraRelativeMovement, createFirstPersonCamera, lookCamera, setFirstPersonLook, setFirstPersonPose, zoomCamera,
 } from './view/3d/camera.js';
+import { createCameraMotion } from './view/3d/camera-motion.js';
 import { createTerrainRenderer } from './view/3d/renderer.js';
-import { ASTRONAUT_RIG } from './view/3d/astronaut-rig.js';
 import { buildTerrainMesh } from './view/3d/terrain-mesh.js';
 import { buildMarkerMeshes } from './view/3d/marker-mesh.js';
 import { buildRouteRibbon } from './view/3d/route-ribbon.js';
@@ -46,6 +46,8 @@ const targetYawRad = Math.atan2(waypoints[1].local.y - waypoints[0].local.y, way
 const sim = new MarswalkSim({ a: waypoints[0].local, b: waypoints[1].local }, SCENARIO);
 const camera = new Camera();
 const camera3d = createFirstPersonCamera({ xM: waypoints[0].local.x, yM: waypoints[0].local.y, yawRad: targetYawRad });
+const cameraMotion = createCameraMotion();
+let lastCameraMotion = null;
 const registry = createDefaultSurfaceRegistry({ expectedFrame: MAP_FRAME, adapter, baseUrl: 'data' });
 const layers = { dtm: new UnavailableLayer(dtmBaseDescriptor(), 'Yükleniyor…'), ortho: null, selectionReport: null };
 let terrain = null;
@@ -1350,6 +1352,8 @@ const { keys } = bindControls({
     camera3d.dynamicPitchOffsetRad = 0;
     camera3d.dynamicRollOffsetRad = 0;
     camera3d.dynamicEyeOffsetM = 0;
+    cameraMotion.reset();
+    lastCameraMotion = null;
     updateHud();
   },
   onZoom: (factor) => {
@@ -1499,34 +1503,22 @@ function frame(now) {
       const mov = player.movement;
       const hasElevation = player.elevationStatus === 'ok' && Number.isFinite(player.zM);
 
-      let eyeOffsetM = 0;
-      let pitchOffsetRad = 0;
-      let rollOffsetRad = 0;
-
-      if (mov?.landingRecovery) {
-        // Landing compression dip: cushions impact with downward camera dip (~0.055 m) and slight pitch tilt
-        const frac = Math.max(0, Math.min(1, mov.landingRecoveryFrac ?? 0));
-        const dipCurve = Math.sin(frac * Math.PI);
-        eyeOffsetM = -0.055 * dipCurve;
-        pitchOffsetRad = -0.015 * dipCurve;
-        rollOffsetRad = 0.004 * dipCurve * Math.sin(frac * 2 * Math.PI);
-      } else if (mov?.airborne) {
-        // Ballistic 0.38g flight: subtle vertical-velocity gaze tracking
-        const vz = mov.verticalSpeedMps ?? 0;
-        pitchOffsetRad = Math.max(-0.018, Math.min(0.018, vz * 0.006));
-      } else if (mov?.grounded && !mov?.airborne && !mov?.landingRecovery && (mov?.horizontalSpeedMps ?? 0) > 0.04) {
-        // Mars 0.38g loping head-bob: rhythmic flight bounce, pitch nod, and subtle weight-shift roll
-        // Match MOVING_SPEED_EPSILON_MPS in astronaut-rig.js.
-        const speed = mov.horizontalSpeedMps;
-        const speedNorm = Math.min(1, speed / 1.4);
-        const strideM = ASTRONAUT_RIG.metadata.presentationStrideLengthM;
-        const phase = mov.gaitDistanceM !== undefined
-          ? 2 * Math.PI * mov.gaitDistanceM / strideM
-          : 2 * Math.PI * (speed / strideM) * (mov.timeS ?? 0);
-        eyeOffsetM = 0.024 * speedNorm * Math.sin(2 * phase);
-        pitchOffsetRad = 0.006 * speedNorm * Math.sin(phase);
-        rollOffsetRad = 0.005 * speedNorm * Math.cos(phase);
-      }
+      // Presentation camera motion (walk sway, idle breath, landing dip) from camera-motion.js; pure, no DOM.
+      const motion = cameraMotion.update({
+        timeS: mov?.timeS,
+        horizontalSpeedMps: mov?.horizontalSpeedMps,
+        verticalSpeedMps: mov?.verticalSpeedMps,
+        grounded: mov?.grounded,
+        airborne: mov?.airborne,
+        phase: mov?.phase,
+        landingRecoveryFrac: mov?.landingRecoveryFrac,
+        gaitDistanceM: mov?.gaitDistanceM,
+      });
+      lastCameraMotion = motion;
+      const eyeOffsetM = motion.eyeOffsetZ;
+      const lateralOffsetM = motion.eyeOffsetLateral;
+      const pitchOffsetRad = motion.pitchOffsetRad;
+      const rollOffsetRad = motion.rollOffsetRad;
 
       if (Number.isFinite(player.bodyWorldZM)) {
         const bodyZDisplay = (player.bodyWorldZM - terrainMesh.displayConfig.referenceElevationM) * terrainMesh.displayConfig.verticalScale;
@@ -1535,6 +1527,7 @@ function frame(now) {
           yM: player.yM,
           bodyZDisplay,
           eyeOffsetM,
+          lateralOffsetM,
           pitchOffsetRad,
           rollOffsetRad,
         });
@@ -1618,6 +1611,7 @@ if (debugEnabled) {
       cameraMode: camera3d.mode,
       cameraEyeHeightM: camera3d.eyeHeightM,
       cameraFovYRad: camera3d.fovYRad,
+      cameraMotion: lastCameraMotion,
       movement: lastSnapshot?.astronaut?.movement ?? null,
       renderer: renderer3d?.getDiagnostics?.() ?? null,
       footprints: {

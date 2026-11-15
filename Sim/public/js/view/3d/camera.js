@@ -144,6 +144,7 @@ export function createFirstPersonCamera({
     dynamicPitchOffsetRad: 0,
     dynamicRollOffsetRad: 0,
     dynamicEyeOffsetM: 0,
+    dynamicLateralOffsetM: 0,
   };
   if (camera.eyeHeightM <= 0) throw new RangeError('eyeHeightM must be greater than zero');
   if (!(camera.fovYRad > 0 && camera.fovYRad < Math.PI)) throw new RangeError('fovYRad must be between 0 and PI');
@@ -163,19 +164,31 @@ export function setFirstPersonPose(camera, {
   bodyZDisplay,
   verticalScale = 1,
   eyeOffsetM = 0,
+  lateralOffsetM = 0,
   pitchOffsetRad = 0,
   rollOffsetRad = 0,
 }) {
   if (camera.mode !== 'first-person') throw new TypeError('A first-person camera is required');
-  camera.xM = finite(xM, 'xM');
-  camera.yM = finite(yM, 'yM');
+  const bodyX = finite(xM, 'xM');
+  const bodyY = finite(yM, 'yM');
   const scale = finite(verticalScale, 'verticalScale');
   if (scale <= 0) throw new RangeError('verticalScale must be greater than zero');
   const eyeOffset = finite(eyeOffsetM ?? 0, 'eyeOffsetM');
+  const lateralOffset = finite(lateralOffsetM ?? 0, 'lateralOffsetM');
   const pitchOffset = finite(pitchOffsetRad ?? 0, 'pitchOffsetRad');
   const rollOffset = finite(rollOffsetRad ?? 0, 'rollOffsetRad');
-  camera.zDisplay = finite(bodyZDisplay, 'bodyZDisplay') + (camera.eyeHeightM + eyeOffset) * scale;
+  const bodyZ = finite(bodyZDisplay, 'bodyZDisplay');
+  // The body anchor (xM/yM) stays on the simulated body. Lateral head sway is applied only to the eye in
+  // getCameraPosition, so the body, hands, beacon-hide distance and shadow anchor never slide sideways.
+  camera.xM = bodyX;
+  camera.yM = bodyY;
+  camera.zDisplay = bodyZ + (camera.eyeHeightM + eyeOffset) * scale;
+  // Unshifted body anchor: body geometry should stay on the ground while the head sways, dips or breathes.
+  camera.bodyAnchorXM = bodyX;
+  camera.bodyAnchorYM = bodyY;
+  camera.bodyAnchorZDisplay = bodyZ;
   camera.dynamicEyeOffsetM = eyeOffset;
+  camera.dynamicLateralOffsetM = lateralOffset;
   camera.dynamicPitchOffsetRad = pitchOffset;
   camera.dynamicRollOffsetRad = rollOffset;
   return camera;
@@ -242,7 +255,15 @@ export function zoomCamera(camera, factor) {
 
 /** Returns the camera position in local X/Y metres and display Z. */
 export function getCameraPosition(camera) {
-  if (camera.mode === 'first-person') return { xM: camera.xM, yM: camera.yM, zDisplay: camera.zDisplay };
+  if (camera.mode === 'first-person') {
+    // Lateral head sway (camera right = sin yaw, -cos yaw) is view-only; camera.xM/yM remain the body anchor.
+    const lateral = camera.dynamicLateralOffsetM || 0;
+    return {
+      xM: camera.xM + lateral * Math.sin(camera.yawRad),
+      yM: camera.yM - lateral * Math.cos(camera.yawRad),
+      zDisplay: camera.zDisplay,
+    };
+  }
   const horizontal = camera.distanceM * Math.cos(camera.pitchRad);
   return {
     xM: camera.targetXM + horizontal * Math.cos(camera.yawRad),

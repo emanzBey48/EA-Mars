@@ -113,15 +113,23 @@ try {
     return {mode:c.mode,eyeHeightM:c.eyeHeightM,eyeZ:c.zDisplay,bodyZ:s.astronaut.bodyWorldZM,
       avatarDrawn:d.renderer?.avatarDrawn,worldRigDrawn:d.renderer?.worldRigDrawn,viewModelDrawn:d.renderer?.firstPersonViewModelDrawn,triangles:d.renderer?.terrainTriangles,
       pose:d.renderer?.rigPose,parts:d.renderer?.rigPartsDrawn,visible:d.renderer?.firstPersonVisibleParts,
-      rigHeading:d.renderer?.rigHeadingRad,yaw:c.yawRad,contact:d.renderer?.surfaceContactStatus}; })()`);
+      rigHeading:d.renderer?.rigHeadingRad,yaw:c.yawRad,contact:d.renderer?.surfaceContactStatus,pitch:c.pitchRad,ndc:d.renderer?.firstPersonHandNdc}; })()`);
   check('6b Göz hizası first-person pozu geçerli DTM sahnesine bağlı', fpPose.mode === 'first-person' && fpPose.eyeHeightM > 0 &&
     Number.isFinite(fpPose.eyeZ) && Number.isFinite(fpPose.bodyZ) && fpPose.triangles > 0,
     `mode=${fpPose.mode}, eye=${fpPose.eyeHeightM} m, bodyWorldZM=${fpPose.bodyZ}, terrain triangles=${fpPose.triangles}`);
-  check('6i Rig torso/kolları çizim listesinde ve parça merkezleri frustum içinde; heading rig ekseniyle hizalı',
-    ['torso','leftArm','rightArm'].every((part) => fpPose.parts?.includes(part) && fpPose.visible?.includes(part)) &&
-      Math.abs(fpPose.rigHeading - (fpPose.yaw + Math.PI / 2)) < 1e-6 && fpPose.contact === 'ok' &&
+  // Stage 17 (K2): camera-attached hands (arms, gloves, wrist rings) are the only first-person parts that
+  // are always drawn; torso/PLSS/helmet/visor are never in the first-person list while looking forward,
+  // and both gloves sit in the lower half of the frame (NDC y < 0) between the centre and the side edges.
+  const fpHandsNdcOk = Array.isArray(fpPose.ndc) && fpPose.ndc.length === 2 &&
+    fpPose.ndc.every((p) => Array.isArray(p) && p[1] < 0 && Math.abs(p[0]) > 0.15 && Math.abs(p[0]) < 0.95);
+  // Forearms are drawn (in the list) but their centres sit below the lower edge; the visible hand is the glove and wrist ring.
+  check('6i Birinci şahıs elleri (kol, eldiven, bilek halkası) çizilir; eldiven ve bilek halkaları frustum içinde ve alt yarıda; gövde/PLSS/kask/vizör ileri bakışta çizilmez',
+    ['leftArm','rightArm','leftGlove','rightGlove','leftWristRing','rightWristRing'].every((part) => fpPose.parts?.includes(part)) &&
+      ['leftGlove','rightGlove','leftWristRing','rightWristRing'].every((part) => fpPose.visible?.includes(part)) &&
+      ['torso','chestPack','backpack','helmet','visor'].every((part) => !fpPose.parts?.includes(part)) &&
+      fpHandsNdcOk && Math.abs(fpPose.rigHeading - (fpPose.yaw + Math.PI / 2)) < 1e-6 && fpPose.contact === 'ok' &&
       fpPose.worldRigDrawn === false && fpPose.viewModelDrawn === true,
-    `poz=${fpPose.pose}, çizilen=${fpPose.parts?.join(',')}, frustum içi=${fpPose.visible?.join(',')}, yaw=${fpPose.yaw}, rig heading=${fpPose.rigHeading}`);
+    `poz=${fpPose.pose}, bakış eğimi=${fpPose.pitch}, çizilen=${fpPose.parts?.join(',')}, frustum içi=${fpPose.visible?.join(',')}, eldiven NDC=${JSON.stringify(fpPose.ndc)}, yaw=${fpPose.yaw}, rig heading=${fpPose.rigHeading}`);
   await shot('05-stage9-3d.png');
   const heapAfter = await send('Runtime.getHeapUsage').then((r) => r.result?.usedSize ?? null);
   const fps = await evaluate(`new Promise(resolve => { let n=0, start=performance.now(); function tick(t){ n++; if(t-start>=2500) resolve({frames:n,elapsedMs:t-start,fps:n*1000/(t-start)}); else requestAnimationFrame(tick); } requestAnimationFrame(tick); })`);
@@ -315,6 +323,8 @@ try {
     'Kot ve eğim yalnız arşiv DTM’sinden türetilmiş değerlerdir; güvenli/güvensiz yorumu, tehlike skoru veya rover karar desteği değildir.',
     'Sürüş izi canlı telemetri veya güvenli rota bilgisi içermez.',
     'Planlama göstergesi — güvenli rota sertifikası değildir.',
+    // Stage 31B kaynaklar/sınırlar paneli: olumsuzlanmış (feragat) cümle; "güvenli rota"yı iddia etmez, reddeder.
+    'EVA yürünebilirlik puanı ve kılavuz çizgi planlama göstergesidir; güvenli rota sertifikası değildir.',
   ];
   const missingDisclaimers = disclaimers.filter((disclaimer) => !text.includes(disclaimer));
   const rest = disclaimers.reduce((remaining, disclaimer) => remaining.replaceAll(disclaimer, ''), text);

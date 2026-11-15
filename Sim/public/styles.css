@@ -1245,3 +1245,50 @@ body.presentation-mode .hud-minimap-widget {
   .route-evidence { grid-template-columns: 1fr; }
   .route-evidence dd { margin-bottom: 3px; }
 }
+
+/* Keep the terrain as the focus during a recorded walkthrough. */
+body.presentation-mode header .sub,
+body.presentation-mode header .phase,
+body.presentation-mode .view-toolbar,
+body.presentation-mode .helmet-telemetry-widget,
+body.presentation-mode .fp-hud-hint {
+  display: none !important;
+}
+body.presentation-mode header { min-height: 42px; }
+body.presentation-mode .presentation-hud {
+  top: 18px;
+  left: 18px;
+  width: min(300px, calc(100% - 36px));
+  padding: 14px;
+  border-color: rgba(255, 179, 138, .35);
+  background: rgba(15, 17, 22, .88);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, .38);
+}
+body.presentation-mode .pres-header { gap: 10px; margin-bottom: 12px; padding-bottom: 10px; }
+body.presentation-mode .pres-heading { font-size: 15px; }
+body.presentation-mode .pres-actions { gap: 8px; margin-bottom: 12px; }
+body.presentation-mode .btn-pres-tour { font-size: 12px; padding: 9px 10px; }
+body.presentation-mode .btn-pres-sec { font-size: 11px; padding: 7px 8px; }
+body.presentation-mode .pres-grid { gap: 10px; padding: 0; border: 0; background: none; }
+body.presentation-mode .pres-cell:first-child { grid-column: 1 / -1; }
+body.presentation-mode .pres-lbl { font-size: 10px; color: #b9b1ad; }
+body.presentation-mode .pres-val { font-size: 12px; line-height: 1.35; }
+body.presentation-mode .pres-guide { margin-top: 12px; padding: 8px 10px; font-size: 11px; }
+body.presentation-mode .pres-note { margin: 9px 0 0; color: #aaa6a2; font-size: 10px; line-height: 1.35; }
+body.presentation-mode.view-3d #hud-minimap-widget {
+  top: auto;
+  right: 18px;
+  bottom: 18px;
+  left: auto;
+  width: 210px;
+}
+body.presentation-mode.view-3d #hud-minimap-canvas { height: 150px; }
+body.presentation-mode.view-3d #hud-minimap-widget .hud-minimap-footer { display: none; }
+
+@media (max-width: 760px) {
+  body.presentation-mode #mapwrap { min-height: max(calc(100dvh - 42px), 520px); }
+  body.presentation-mode .presentation-hud { top: 10px; left: 10px; width: min(290px, calc(100% - 20px)); padding: 10px; }
+  body.presentation-mode.view-3d #hud-minimap-widget { right: 10px; bottom: 10px; left: auto; width: 170px; }
+  body.presentation-mode.view-3d #hud-minimap-canvas { height: 112px; }
+  body.presentation-mode .pres-controls-hint { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 10px; font-size: 10px; color: #c4bab3; }
+}

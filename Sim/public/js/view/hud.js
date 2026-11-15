@@ -229,7 +229,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     }
     const presElev = $('pres-elev');
     if (presElev) {
-      presElev.textContent = ef.ok ? ef.text : 'Bilinmiyor';
+      presElev.textContent = ef.ok ? `${astronaut.zM.toFixed(1)} m` : 'Bilinmiyor';
       presElev.className = ef.ok ? 'pres-val status-ok' : 'pres-val status-bad';
     }
     const presSlope = $('pres-slope');

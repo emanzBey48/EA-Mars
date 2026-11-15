@@ -74,7 +74,7 @@ try {
 
   await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable');
   // 0. Verify normal run does NOT expose window.marswalk
-  const normalUrl = new URL(url); normalUrl.searchParams.delete('debug');
+  const normalUrl = new URL(url); normalUrl.searchParams.delete('debug'); normalUrl.searchParams.set('intro','0');
   await send('Page.navigate', { url: normalUrl.toString() });
   for (let i = 0; i < 60; i++) {
     const loaded = await evaluate(`document.getElementById('layers')?.innerText.includes('DTEEC_')`).catch(() => false);
@@ -85,7 +85,7 @@ try {
   check('0 Normal çalıştırmada window.marswalk dışarı açılmıyor', normalDebug === 'undefined', `typeof window.marswalk = ${normalDebug}`);
 
   // Explicitly enable debug mode (?debug=1) for state inspection and synthetic cell-mutation checks
-  const debugUrl = new URL(url); debugUrl.searchParams.set('debug', '1');
+  const debugUrl = new URL(url); debugUrl.searchParams.set('debug', '1'); debugUrl.searchParams.set('intro','0');
   await send('Page.navigate', { url: debugUrl.toString() });
   for (let i = 0; i < 100; i++) { const ok = await evaluate('!!(window.marswalk && window.marswalk.layers.dtm.available)').catch(() => false); if (ok) break; await sleep(200); }
   await sleep(500);

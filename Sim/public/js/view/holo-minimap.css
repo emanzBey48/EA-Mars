@@ -1,0 +1,90 @@
+/* Holografik minimap görünümü. Mevcut kaba (#hud-minimap-widget) sınıf eklenerek uygulanır. */
+.mw-holo-dock {
+  position: absolute;
+  left: clamp(56px, 8vw, 120px);
+  top: clamp(40px, 7vh, 80px);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: calc(100% - 2 * clamp(56px, 8vw, 120px));
+}
+
+.mw-holo {
+  position: relative;
+  background: rgba(6, 28, 34, 0.55) !important;
+  border: 1px solid rgba(90, 235, 235, 0.55) !important;
+  border-radius: 6px;
+  color: #bff7f7;
+  box-shadow: 0 0 14px rgba(60, 220, 230, 0.28), inset 0 0 18px rgba(60, 220, 230, 0.12),
+    6px 8px 14px rgba(0, 0, 0, 0.35);
+  transform: perspective(700px) rotateX(5deg) rotateY(-5deg);
+  transform-origin: left top;
+  overflow: hidden;
+  backdrop-filter: blur(2px);
+}
+
+.mw-holo::before,
+.mw-holo::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  border: 2px solid rgba(130, 255, 255, 0.9);
+}
+.mw-holo::before { left: 3px; top: 3px; border-right: 0; border-bottom: 0; }
+.mw-holo::after { right: 3px; bottom: 3px; border-left: 0; border-top: 0; }
+
+.mw-holo > canvas:not(.mw-mode-overlay) { position: relative; z-index: 1; }
+
+/* Tarama çizgisi */
+.mw-holo-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 0, rgba(120, 255, 255, 0.18) 50%, transparent 100%);
+  background-size: 100% 22%;
+  background-repeat: no-repeat;
+  animation: mw-holo-scan 3.6s linear infinite;
+}
+@keyframes mw-holo-scan {
+  from { background-position: 0 -30%; }
+  to { background-position: 0 130%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mw-holo-scan { animation: none; opacity: 0; }
+}
+
+/* Görüş modu çubuğu */
+.mw-holo-bar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 3px 6px;
+  background: rgba(6, 28, 34, 0.55);
+  border: 1px solid rgba(90, 235, 235, 0.35);
+  border-radius: 4px;
+  font: 600 10px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mw-holo-bar .mw-holo-bar-item,
+.mw-holo-bar > button,
+.mw-holo-bar > span {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 2px 5px;
+  color: rgba(160, 230, 230, 0.55);
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.mw-holo-bar .is-active,
+.mw-holo-bar [aria-pressed="true"],
+.mw-holo-bar [aria-current="true"] {
+  color: #eaffff;
+  text-shadow: 0 0 6px rgba(100, 255, 255, 0.9);
+}

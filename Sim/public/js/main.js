@@ -33,6 +33,14 @@ import { createFootprintTrail } from './view/3d/footprint-trail.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 import { createMinimap } from './view/minimap/minimap.js';
 import { classifyPlanResponse } from './route/plan-response-state.js';
+import { createGlobeScreen } from './view/globe/index.js';
+import { typeLabel as regionTypeLabel } from './view/globe/regions.js';
+import { createHelmetOverlay } from './view/helmet.js';
+import { createAutoDriveControls } from './view/auto-drive-controls.js';
+import { createViewModeBar } from './view/minimap/view-mode-bar.js';
+import { computeModeField, drawModeOverlay } from './view/minimap/view-modes.js';
+import { createAutoDrive } from './simulation/auto-drive.js';
+import { createDemoFlow, PLAN_SPEED_MPS } from './app/demo-flow.js';
 
 const $ = (id) => document.getElementById(id);
 const urlParams = new URLSearchParams(window.location.search);
@@ -118,6 +126,7 @@ let endpointRevision = 0;
 const routeWorkerRequests = new Map();
 let routeHeatmap = null;
 let activeRoute = null;
+let demoFlow = null; // tanıtım akışı (küre/kask/otomatik sürüş); ?intro=0 ile kurulmaz
 let plannedRouteLinePositions = new Float32Array();
 let plannedRouteRibbon = null;
 let plannedRoutePathCumulativeM = [];
@@ -763,6 +772,7 @@ function handleRouteWorkerMessage({ data }) {
       minimapController.setPlanning(errPlanning);
       hudMinimapController?.setPlanning(errPlanning);
       renderRouteSummary({ status: 'error', reason });
+      demoFlow?.onRouteResult(null);
       minimapStatus.textContent = `Rota planlayıcı: ${reason}`;
     }
     if (pending.kind === 'explain') minimapCellExplanation.textContent = `Hücre açıklaması alınamadı: ${reason}`;
@@ -782,6 +792,7 @@ function handleRouteWorkerMessage({ data }) {
     minimapController.setPlanning(resultPlanning);
     hudMinimapController?.setPlanning(resultPlanning);
     renderRouteSummary(activeRoute);
+    demoFlow?.onRouteResult(activeRoute);
     minimapStatus.textContent = activeRoute?.status === 'ok'
       ? `Rota planlandı. ${activeRoute.mode === 'eva_walkability' ? 'EVA yürünebilirlik' : 'Bölgesel ön planlama'}. Planlama göstergesi — güvenli rota sertifikası değildir.`
       : activeRoute?.reason || `Rota üretilemedi (${activeRoute?.status || 'bilinmiyor'}).`;
@@ -1022,6 +1033,7 @@ function updateViewControls() {
   if (hudMinimapWidget) {
     hudMinimapWidget.hidden = !is3d || missionSetupOpen;
   }
+  if (!is3d) demoFlow?.leave3d();
 }
 
 function updateScaleUi() {
@@ -1927,6 +1939,96 @@ updateViewControls();
 
 hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalScale);
 
+// Tanıtım akışı (küre -> kask + holografik minimap + otomatik sürüş). ?intro=0 ile tamamen atlanır (smoke/geliştirme).
+const introEnabled = urlParams.get('intro') !== '0';
+let resolveDataReady = () => {};
+const dataReady = new Promise((resolve) => { resolveDataReady = resolve; });
+let globeScreen = null;
+let introSimulate = null;
+let modeState = { mode: 'normal', field: null, overlay: null, acc: 0 };
+if (introEnabled) {
+  const autoDrive = createAutoDrive({});
+  const helmet = createHelmetOverlay({ root: mapWrap });
+  helmet.hide();
+  const dock = document.createElement('div');
+  dock.className = 'mw-holo-dock';
+  mapWrap.appendChild(dock);
+  if (hudMinimapWidget) { dock.appendChild(hudMinimapWidget); hudMinimapWidget.classList.add('mw-holo'); }
+  const barRoot = document.createElement('div');
+  barRoot.className = 'mw-holo-bar';
+  dock.appendChild(barRoot);
+  demoFlow = createDemoFlow({
+    doc: document, mapWrap, helmet, autoDrive, typeLabel: regionTypeLabel, onReturnToGlobe: () => globeScreen?.show(),
+    getPlayerPos: () => ({ x: sim.pos.x, y: sim.pos.y }),
+    getRoutePath: () => (activeRoute?.status === 'ok' ? activeRoute.path : null),
+    getRouteStats: () => activeRoute?.stats ?? null,
+    requestReplan: (pos) => {
+      if (pendingPlanId !== null || !routeWorkerReady || !minimapEndpoints.end) return false;
+      minimapEndpoints = { ...minimapEndpoints, start: { xM: pos.x, yM: pos.y } };
+      endpointRevision++;
+      planMinimapRoute();
+      return true;
+    },
+  });
+  const controls = createAutoDriveControls({
+    root: mapWrap,
+    onAutoToggle: (on) => demoFlow.toggleAuto(on),
+    onSpeed: (v) => demoFlow.setSpeed(v),
+    onPause: (p) => demoFlow.setPaused(p),
+    onReroute: () => demoFlow.reroute(),
+  });
+  demoFlow.attachControls(controls);
+  const overlay = document.createElement('canvas');
+  overlay.className = 'mw-mode-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  hudMinimapWidget?.appendChild(overlay);
+  modeState.overlay = overlay;
+  const modeBar = createViewModeBar({
+    root: barRoot,
+    onChange: (mode) => {
+      modeState.mode = mode;
+      let field = null;
+      try { field = computeModeField(mode, { grid: routeGrid.grid }); } catch { field = null; }
+      modeState.field = field;
+      modeBar.setField(field);
+    },
+  });
+  globeScreen = createGlobeScreen({
+    root: document.body,
+    getEtaMinutes: () => (Number.isFinite(activeRoute?.stats?.estimatedDurationS) ? activeRoute.stats.estimatedDurationS / 60 : null),
+    onSimulate: introSimulate = async (selection) => {
+      await dataReady;
+      globeScreen.hide();
+      await startDemoTour();
+      setPresentationMode(false);
+      demoFlow.enter3d(selection);
+    },
+  });
+}
+
+function drawMinimapModeOverlay() {
+  const { overlay, mode, field } = modeState;
+  const cv = hudMinimapCanvas;
+  if (!overlay || !cv || !hudMinimapController) return;
+  const w = cv.offsetWidth, h = cv.offsetHeight;
+  if (!w || !h) return;
+  const dpr = window.devicePixelRatio || 1;
+  overlay.style.left = `${cv.offsetLeft}px`; overlay.style.top = `${cv.offsetTop}px`;
+  overlay.style.width = `${w}px`; overlay.style.height = `${h}px`;
+  if (overlay.width !== Math.round(w * dpr) || overlay.height !== Math.round(h * dpr)) {
+    overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
+  }
+  const ctx = overlay.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  if (mode === 'normal') return;
+  const v = hudMinimapController.getView();
+  drawModeOverlay(ctx, {
+    mode, field, canvasW: w, canvasH: h, cellM: field?.cellM ?? null,
+    projectToCanvas: (x, y) => [w / 2 + (x - v.centerXM) * v.pxPerM, h / 2 - (y - v.centerYM) * v.pxPerM],
+  });
+}
+
 // Data loading via SurfaceProviderRegistry (app is playable meanwhile)
 (async () => {
   const [selection, ortho] = await Promise.all([
@@ -1962,11 +2064,15 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalSca
   hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalScale);
   updateScaleUi();
   updateHud();
+  resolveDataReady();
 
   if (urlParams.get('demo') === '1' || urlParams.get('presentation') === '1') {
     await startDemoTour();
   } else if (startIn3dRequested && layers.dtm.available && renderer3d && !forceWebgl2Failure) {
     await selectView('3d');
+  } else if (introEnabled) {
+    // Küre ekranı üstte; 3B/HUD arkada hazır. Rota planı Jezero varsayılanıyla SİMÜLE ET'te başlar.
+    globeScreen?.show();
   } else if (!debugEnabled) {
     openMissionSetup({ resetSelection: true });
   }
@@ -1996,11 +2102,22 @@ function frame(now) {
   if (activeView === '3d') renderer3d?.setQualityLevel(qualityStep.level);
   if (!missionSetupOpen) {
     if (activeView === '3d') {
-      const move = cameraRelativeMovement(camera3d.yawRad, keys);
-      sim.stepFirstPerson(dt, { ...move, jump: keys.jumpPressed, headingRad: camera3d.yawRad }, {
+      const surfaceNow = {
         status: lastSnapshot?.surface?.elevation?.status,
         value: lastSnapshot?.surface?.elevation?.value,
-      });
+      };
+      const auto = demoFlow?.autoStep(dt, { yawRad: camera3d.yawRad, simPhase: sim.phase });
+      if (auto) {
+        // Otomatik sürüş: yön ve kamera yaw'ı rotadan; hız çarpanı sim dt'sine, alt-adımlar ≤ 0.05 s.
+        camera3d.yawRad = auto.yawRad;
+        for (const h of auto.steps) {
+          sim.stepFirstPerson(h, { moveX: auto.moveX, moveY: auto.moveY, jump: false, headingRad: auto.yawRad }, surfaceNow);
+          sim.resolveSurfaceContact(layers.dtm.sampleElevation(sim.pos.x, sim.pos.y));
+        }
+      } else {
+        const move = cameraRelativeMovement(camera3d.yawRad, keys);
+        sim.stepFirstPerson(dt, { ...move, jump: keys.jumpPressed, headingRad: camera3d.yawRad }, surfaceNow);
+      }
       keys.jumpPressed = false;
     } else {
       sim.step(dt, keys);
@@ -2033,6 +2150,8 @@ function frame(now) {
       }
     }
   }
+  modeState.acc += dt;
+  if (modeState.overlay && activeView === '3d' && modeState.acc >= 0.1) { modeState.acc = 0; drawMinimapModeOverlay(); }
   camera.cx = snapshot.astronaut.xM; camera.cy = snapshot.astronaut.yM;
   const dpr = window.devicePixelRatio || 1;
   const w = Math.max(1, mapWrap.clientWidth), h = Math.max(1, mapWrap.clientHeight);
@@ -2146,6 +2265,9 @@ requestAnimationFrame(frame);
 // Debug/test handle is NEVER exposed during normal runs; only when explicitly enabled via ?debug=1 or __MARSWALK_ENABLE_DEBUG__.
 if (debugEnabled) {
   window.marswalk = {
+    introSimulate: (sel) => introSimulate?.(sel),
+    demoFlow: () => demoFlow,
+    setModeForShot: (m) => document.querySelector(`.mw-vm-btn[data-mode="${m}"]`)?.click(),
     sim, camera, camera3d, adapter, registry, layers, waypoints, keys, updateHud,
     rebuildTerrainMeshForScale,
     setVerticalScale: (scale) => rebuildTerrainMeshForScale(Number(scale)),

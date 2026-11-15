@@ -1,0 +1,20 @@
+/* Görüş modu çubuğu ek stilleri (temel stil: holo-minimap.css `mw-holo-bar`). */
+.mw-vm-bar { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+.mw-vm-btn {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px;
+  font: 600 11px/1.2 system-ui, sans-serif; color: #c9d4e6; cursor: pointer;
+  background: rgba(14, 20, 32, 0.7); border: 1px solid rgba(120, 150, 200, 0.35); border-radius: 4px;
+}
+.mw-vm-btn:hover { background: rgba(40, 60, 100, 0.7); }
+.mw-vm-btn.is-active { color: #fff; background: rgba(50, 110, 190, 0.8); border-color: #7fb8ff; }
+.mw-vm-badge {
+  font: 600 8px/1 system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 1px 3px; border-radius: 2px; color: #101622; background: #ffcf7a;
+}
+.mw-vm-btn[data-basis="unavailable-data"] .mw-vm-badge { background: #b9c2d0; }
+.mw-vm-legend { margin-top: 4px; font: 10px/1.3 system-ui, sans-serif; color: #aab6c8; }
+.mw-vm-legend[hidden], .mw-vm-legend__row[hidden] { display: none; }
+.mw-vm-legend__row { display: flex; align-items: center; gap: 6px; }
+.mw-vm-legend__ramp { flex: 1; height: 6px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.25); }
+.mw-vm-legend__note { margin-top: 2px; white-space: normal; }
+.mw-vm-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }

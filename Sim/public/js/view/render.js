@@ -1,10 +1,67 @@
 // Canvas rendering. Converts local metres -> screen pixels via a camera; never mutates simulation state.
 import { STATUS } from '../surface/layers.js';
+import { horn3x3Gradient } from '../geo/geo.js';
 
 export class Camera {
   constructor() { this.cx = 0; this.cy = 0; this.pxPerM = 2; this.min = 0.3; this.max = 16; }
   zoom(f) { this.pxPerM = Math.min(this.max, Math.max(this.min, this.pxPerM * f)); }
   toScreen(x, y, w, h) { return { sx: w / 2 + (x - this.cx) * this.pxPerM, sy: h / 2 - (y - this.cy) * this.pxPerM }; }
+}
+
+const TERRAIN_RAMP = Object.freeze([
+  [0.00, [74, 42, 34]],
+  [0.25, [132, 68, 44]],
+  [0.50, [178, 98, 58]],
+  [0.75, [214, 138, 84]],
+  [1.00, [244, 198, 152]],
+]);
+
+function tintOf(t) {
+  for (let k = 1; k < TERRAIN_RAMP.length; k++) if (t <= TERRAIN_RAMP[k][0]) {
+    const [t0, c0] = TERRAIN_RAMP[k - 1], [t1, c1] = TERRAIN_RAMP[k]; const u = (t - t0) / (t1 - t0);
+    return [c0[0] + u * (c1[0] - c0[0]), c0[1] + u * (c1[1] - c0[1]), c0[2] + u * (c1[2] - c0[2])];
+  }
+  return TERRAIN_RAMP[TERRAIN_RAMP.length - 1][1];
+}
+
+/**
+ * Shared painter (hillshade x elevation tint). `ok[i]` marks valid cells; `gradientAt(r, c)` returns
+ * { dzdx, dzdy } (metre-scaled Horn gradient) or null when the 3x3 window is not fully valid. Non-valid cells are
+ * painted as a magenta hatch, never as terrain. Pure paint: no sampling of any provider.
+ */
+function paintTerrainCanvas({ rows, cols, ok, cellValues, zMin, zMax, gradientAt }) {
+  const canvas = document.createElement('canvas');
+  canvas.width = cols; canvas.height = rows;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(cols, rows);
+  const az = 315 * Math.PI / 180, alt = 42 * Math.PI / 180;
+  const lx = Math.sin(az) * Math.cos(alt), ly = Math.cos(az) * Math.cos(alt), lz = Math.sin(alt);
+  const azFill = 60 * Math.PI / 180, altFill = 55 * Math.PI / 180;
+  const fx = Math.sin(azFill) * Math.cos(altFill), fy = Math.cos(azFill) * Math.cos(altFill), fz = Math.sin(altFill);
+  const range = zMax - zMin || 1;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const i = r * cols + c, p = i * 4;
+    if (!ok[i]) { // no-data / invalid: magenta hatch, never painted as terrain
+      const hatch = ((r + c) & 7) < 2; img.data[p] = hatch ? 255 : 90; img.data[p + 1] = 0; img.data[p + 2] = hatch ? 255 : 90; img.data[p + 3] = 255; continue;
+    }
+    let shade = 0.74;
+    let slopeDarken = 1.0;
+    const g = gradientAt(r, c);
+    if (g) {
+      const nlen = Math.hypot(g.dzdx, g.dzdy, 1);
+      const primary = Math.max(0, (-g.dzdx * lx - g.dzdy * ly + lz) / nlen);
+      const fill = Math.max(0, (-g.dzdx * fx - g.dzdy * fy + fz) / nlen);
+      shade = 0.78 * primary + 0.22 * fill;
+      const cosSlope = 1 / nlen;
+      slopeDarken = 0.72 + 0.28 * cosSlope;
+    }
+    const normZ = (cellValues[i] - zMin) / range;
+    const [R, G, B] = tintOf(normZ);
+    const k = (0.30 + 0.82 * shade) * slopeDarken;
+    img.data[p] = Math.min(255, R * k); img.data[p + 1] = Math.min(255, G * k); img.data[p + 2] = Math.min(255, B * k); img.data[p + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
 }
 
 /**
@@ -14,10 +71,6 @@ export class Camera {
  */
 export function buildTerrainImage(layer) {
   const { rows, cols, rowOffset, colOffset } = layer;
-  const canvas = document.createElement('canvas');
-  canvas.width = cols; canvas.height = rows;
-  const ctx = canvas.getContext('2d');
-  const img = ctx.createImageData(cols, rows);
   let zMin = Infinity, zMax = -Infinity;
   const cellValues = new Float32Array(rows * cols);
   const ok = new Uint8Array(rows * cols);
@@ -30,47 +83,13 @@ export function buildTerrainImage(layer) {
       if (st.value > zMax) zMax = st.value;
     }
   }
-  const az = 315 * Math.PI / 180, alt = 42 * Math.PI / 180;
-  const lx = Math.sin(az) * Math.cos(alt), ly = Math.cos(az) * Math.cos(alt), lz = Math.sin(alt);
-  const azFill = 60 * Math.PI / 180, altFill = 55 * Math.PI / 180;
-  const fx = Math.sin(azFill) * Math.cos(altFill), fy = Math.cos(azFill) * Math.cos(altFill), fz = Math.sin(altFill);
-  const ramp = [
-    [0.00, [74, 42, 34]],
-    [0.25, [132, 68, 44]],
-    [0.50, [178, 98, 58]],
-    [0.75, [214, 138, 84]],
-    [1.00, [244, 198, 152]],
-  ];
-  const tint = (t) => {
-    for (let k = 1; k < ramp.length; k++) if (t <= ramp[k][0]) {
-      const [t0, c0] = ramp[k - 1], [t1, c1] = ramp[k]; const u = (t - t0) / (t1 - t0);
-      return [c0[0] + u * (c1[0] - c0[0]), c0[1] + u * (c1[1] - c0[1]), c0[2] + u * (c1[2] - c0[2])];
-    }
-    return ramp[ramp.length - 1][1];
-  };
-  const range = zMax - zMin || 1;
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const i = r * cols + c, p = i * 4;
-    if (!ok[i]) { // no-data / invalid: magenta hatch, never painted as terrain
-      const hatch = ((r + c) & 7) < 2; img.data[p] = hatch ? 255 : 90; img.data[p + 1] = 0; img.data[p + 2] = hatch ? 255 : 90; img.data[p + 3] = 255; continue;
-    }
-    let shade = 0.74;
-    let slopeDarken = 1.0;
-    const g = layer.cellGradient(r + rowOffset, c + colOffset);
-    if (g.status === STATUS.OK) {
-      const nlen = Math.hypot(g.dzdx, g.dzdy, 1);
-      const primary = Math.max(0, (-g.dzdx * lx - g.dzdy * ly + lz) / nlen);
-      const fill = Math.max(0, (-g.dzdx * fx - g.dzdy * fy + fz) / nlen);
-      shade = 0.78 * primary + 0.22 * fill;
-      const cosSlope = 1 / nlen;
-      slopeDarken = 0.72 + 0.28 * cosSlope;
-    }
-    const normZ = (cellValues[i] - zMin) / range;
-    const [R, G, B] = tint(normZ);
-    const k = (0.30 + 0.82 * shade) * slopeDarken;
-    img.data[p] = Math.min(255, R * k); img.data[p + 1] = Math.min(255, G * k); img.data[p + 2] = Math.min(255, B * k); img.data[p + 3] = 255;
-  }
-  ctx.putImageData(img, 0, 0);
+  const canvas = paintTerrainCanvas({
+    rows, cols, ok, cellValues, zMin, zMax,
+    gradientAt: (r, c) => {
+      const g = layer.cellGradient(r + rowOffset, c + colOffset);
+      return g.status === STATUS.OK ? g : null;
+    },
+  });
   // Precompute local-metre placement of the visual terrain asset so render() needs no live layer or adapter.
   const nw = layer.adapter.pixelToLocal(rowOffset - 0.5, colOffset - 0.5);
   const bounds = Object.freeze({
@@ -79,7 +98,56 @@ export function buildTerrainImage(layer) {
     widthM: cols * layer.cellSizeM,
     heightM: rows * layer.cellSizeM,
   });
-  return { canvas, zMin, zMax, ramp, bounds };
+  return { canvas, zMin, zMax, ramp: TERRAIN_RAMP, bounds };
+}
+
+/**
+ * Visual-only terrain image from a prepared REGULAR local grid (K3-10 legacy route grid, see
+ * route/legacy-grid-plan.js). Samples nothing: it reads only grid.elevation / grid.validMask, so the minimap shows
+ * exactly the cells the planner and heatmap use. Gradients use the grid's own regular cell size; a gradient is
+ * produced only when the full 3x3 window is valid (edge cells and no-data neighbours get the flat shade).
+ */
+export function buildTerrainImageFromGrid(grid) {
+  const rows = grid?.rows, cols = grid?.cols, cellSizeM = grid?.cellSizeM;
+  if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || cols < 1) throw new TypeError('buildTerrainImageFromGrid: rows/cols pozitif tam sayı olmalı');
+  if (!Number.isFinite(cellSizeM) || !(cellSizeM > 0)) throw new TypeError('buildTerrainImageFromGrid: cellSizeM pozitif sonlu olmalı');
+  const n = rows * cols;
+  const { elevation, validMask } = grid;
+  if (!elevation || elevation.length !== n || !validMask || validMask.length !== n) {
+    throw new TypeError('buildTerrainImageFromGrid: elevation/validMask uzunluğu rows*cols olmalı');
+  }
+  let zMin = Infinity, zMax = -Infinity;
+  const cellValues = new Float32Array(n);
+  const ok = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const v = elevation[i];
+    if (validMask[i] === 1 && Number.isFinite(v)) {
+      ok[i] = 1; cellValues[i] = v;
+      if (v < zMin) zMin = v;
+      if (v > zMax) zMax = v;
+    }
+  }
+  const z9 = new Array(9);
+  const canvas = paintTerrainCanvas({
+    rows, cols, ok, cellValues, zMin, zMax,
+    gradientAt: (r, c) => {
+      if (r < 1 || c < 1 || r > rows - 2 || c > cols - 2) return null; // window leaves the grid
+      let k = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const j = (r + dr) * cols + (c + dc);
+        if (!ok[j]) return null;
+        z9[k++] = elevation[j];
+      }
+      return horn3x3Gradient(z9, cellSizeM);
+    },
+  });
+  const bounds = Object.freeze({
+    nwXM: grid.nwXM,
+    nwYM: grid.nwYM,
+    widthM: cols * cellSizeM,
+    heightM: rows * cellSizeM,
+  });
+  return { canvas, zMin, zMax, ramp: TERRAIN_RAMP, bounds };
 }
 
 /**

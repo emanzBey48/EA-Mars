@@ -12,7 +12,8 @@ import { createGeologyRegistry, lookupBestGeologicUnit } from './geo/geology-reg
 import { STATUS, UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
 import { createDefaultSurfaceRegistry } from './surface/registry.js';
 import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
-import { Camera, buildTerrainImage, render } from './view/render.js';
+import { Camera, buildTerrainImage, buildTerrainImageFromGrid, render } from './view/render.js';
+import { buildPlannerWindowInput, prepareRouteGrid, ROUTE_GRID_MODE } from './route/legacy-grid-plan.js';
 import {
   cameraRelativeMovement, createFirstPersonCamera, lookCamera, setFirstPersonLook, setFirstPersonPose, zoomCamera,
 } from './view/3d/camera.js';
@@ -77,6 +78,8 @@ let lastCameraMotion = null;
 const registry = createDefaultSurfaceRegistry({ expectedFrame: MAP_FRAME, adapter, baseUrl: 'data' });
 const layers = { dtm: new UnavailableLayer(dtmBaseDescriptor(), 'Yükleniyor…'), ortho: null, selectionReport: null };
 let terrain = null;
+// K3-10: planlayıcı + minimap ızgarası. grid !== null yalnız legacy köprü DTM'inde (bir kez yeniden örneklenmiş düzenli ızgara).
+let routeGrid = { mode: ROUTE_GRID_MODE.NATIVE, interpolation: null, grid: null, resampleMs: null, error: null };
 let terrainMesh = null;
 let markerMesh = null;
 let archiveTraverse = null;
@@ -810,24 +813,56 @@ function ensureRouteWorker() {
   return routeWorker;
 }
 
-function initializeRouteWorker() {
-  if (!layers.dtm.available || !terrain) return;
-  const worker = ensureRouteWorker();
+// K3-10: legacy köprü DTM'i için düzenli yerel ızgarayı BİR KEZ üretir (ana iş parçacığı, saf geo/route yardımcısı).
+// Legacy değilse (USGS/native) grid null kalır ve eski yol aynen çalışır. Hata açıkça bildirilir; sessiz yedek yok.
+function resolveRouteGrid(dtm) {
+  try {
+    return prepareRouteGrid(dtm);
+  } catch (error) {
+    viewStatus.textContent = `Düzenli yerel ızgara hazırlanamadı; eski ızgara kullanılıyor. ${error.message}`;
+    viewStatus.hidden = false;
+    return { mode: ROUTE_GRID_MODE.LEGACY_FALLBACK, interpolation: null, grid: null, resampleMs: null, error: error.message };
+  }
+}
+
+// Yerli (USGS/native) yol: layers.dtm değerleri olduğu gibi kopyalanır; davranış K3-10 öncesiyle aynıdır.
+function nativePlannerWindow() {
   const values = new Float32Array(layers.dtm.values);
   const dataView = new DataView(new ArrayBuffer(4));
   dataView.setUint32(0, layers.dtm.noDataBits, true);
-  const noDataValue = dataView.getFloat32(0, true);
-  const request = { type: 'init-window', id: ++routeWorkerId, window: {
+  return {
     elevation: values, rows: layers.dtm.rows, cols: layers.dtm.cols, cellSizeM: layers.dtm.cellSizeM,
-    nwXM: terrain.bounds.nwXM, nwYM: terrain.bounds.nwYM, noDataValue,
+    nwXM: terrain.bounds.nwXM, nwYM: terrain.bounds.nwYM, noDataValue: dataView.getFloat32(0, true),
     validMin: layers.dtm.validMin, validMax: layers.dtm.validMax,
-  } };
+  };
+}
+
+function routeGridDiagnostics() {
+  const g = routeGrid.grid;
+  return {
+    mode: routeGrid.mode,
+    interpolation: routeGrid.interpolation,
+    rows: g ? g.rows : (layers.dtm?.rows ?? null),
+    cols: g ? g.cols : (layers.dtm?.cols ?? null),
+    cellSizeM: g ? g.cellSizeM : (layers.dtm?.cellSizeM ?? null),
+    nwXM: g ? g.nwXM : (terrain?.bounds?.nwXM ?? null),
+    nwYM: g ? g.nwYM : (terrain?.bounds?.nwYM ?? null),
+    resampleMs: routeGrid.resampleMs,
+    error: routeGrid.error,
+  };
+}
+
+function initializeRouteWorker() {
+  if (!layers.dtm.available || !terrain) return;
+  const worker = ensureRouteWorker();
+  const planner = routeGrid.grid ? buildPlannerWindowInput(routeGrid.grid) : nativePlannerWindow();
+  const request = { type: 'init-window', id: ++routeWorkerId, window: planner };
   pendingInitId = request.id;
   routeWorkerRequests.set(request.id, { kind: 'init' });
   routeWorkerReady = false;
   minimapStatus.textContent = 'Planlama alanı Worker içinde hazırlanıyor…';
   updateMissionSetupUi();
-  worker.postMessage(request, [values.buffer]);
+  worker.postMessage(request, [planner.elevation.buffer]);
 }
 
 function renderCellExplanation(result) {
@@ -1902,8 +1937,9 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalSca
   layers.ortho = ortho;
   layers.selectionReport = selection;
   if (layers.dtm.available) {
+    routeGrid = resolveRouteGrid(layers.dtm);
     try {
-      terrain = buildTerrainImage(layers.dtm);
+      terrain = routeGrid.grid ? buildTerrainImageFromGrid(routeGrid.grid) : buildTerrainImage(layers.dtm);
       minimapController.setTerrain(terrain);
       hudMinimapController?.setTerrain(terrain);
     } catch (error) {
@@ -2128,6 +2164,7 @@ if (debugEnabled) {
       terrainMeshBuildMs,
       terrainMeshCellCount: layers.dtm?.rows * layers.dtm?.cols || null,
       terrainMeshProvenance: terrainMesh ? { ...terrainMesh.provenance } : null,
+      routeGrid: routeGridDiagnostics(),
       horizonStatus,
       markerMeshReady: Boolean(markerMesh),
       markerMeshError: markerMeshError?.message ?? null,

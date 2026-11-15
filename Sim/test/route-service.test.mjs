@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createDemWindow, localToCell, cellToLocal, buildFieldForWindow, planWalkingRoute, explainLocal,
-  classifyResolution, RESOLUTION_THRESHOLDS,
+  classifyResolution, RESOLUTION_THRESHOLDS, DEFAULT_SCENARIO_SPEED_MPS,
 } from '../public/js/route/route-service.js';
 import { explainCell, STATUS } from '../public/js/route/cost-model.js';
 import { adapterFromLabel } from '../public/js/geo/geo.js';
-import { MAP_FRAME, WAYPOINTS } from '../public/js/config.js';
+import { MAP_FRAME, WAYPOINTS, SCENARIO } from '../public/js/config.js';
 
 const ND = -9999;
 function makeWin(rows, cols, fn, o = {}) {
@@ -73,11 +73,38 @@ test('flat window: straight route, EVA mode, scores and elevation', () => {
   assert.equal(res.stats.minScore, 100);
   assert.equal(res.stats.elevationGainM, 0);
   assert.equal(res.stats.tooSteepCellsOnStraightLine, 0);
-  assert.ok(Math.abs(res.stats.estimatedDurationS - 25 / 0.8) < 1e-9);
+  // Süre hızı simülasyonun yürüme hızıdır (config.js SCENARIO.walkSpeedMps = 1,2 m/s); eski 0,8 m/s değildir.
+  assert.ok(Math.abs(res.stats.estimatedDurationS - 25 / SCENARIO.walkSpeedMps) < 1e-9);
   assert.equal(res.stats.durationAssumption.status, 'scenario');
+  assert.equal(res.stats.durationAssumption.value, SCENARIO.walkSpeedMps);
+  assert.match(res.stats.durationAssumption.source, /config\.js SCENARIO\.walkSpeedMps/);
   assert.deepEqual([res.path[0].row, res.path[0].col], [5, 5]);
   assert.match(res.provenance.caveatTR, /güvenlik sertifikası değildir/);
   assert.match(res.provenance.caveatEN, /not a safety certificate/);
+});
+
+test('süre hızı tek kaynak: servis varsayılanı config.js SCENARIO.walkSpeedMps ile aynıdır', () => {
+  assert.equal(DEFAULT_SCENARIO_SPEED_MPS.value, SCENARIO.walkSpeedMps);
+  assert.equal(DEFAULT_SCENARIO_SPEED_MPS.status, 'scenario');
+});
+
+test('süre hızı: çağıranın verdiği scenarioSpeedMps kullanılır ve kaynağı ayrı etiketlenir', () => {
+  const win = makeWin(30, 40, () => -2500);
+  const res = planWalkingRoute({ window: win, startLocal: at(win, 5, 5), endLocal: at(win, 5, 30), options: { scenarioSpeedMps: 0.8 } });
+  assert.equal(res.status, 'ok');
+  assert.ok(Math.abs(res.stats.estimatedDurationS - 25 / 0.8) < 1e-9);
+  assert.equal(res.stats.durationAssumption.value, 0.8);
+  assert.match(res.stats.durationAssumption.source, /çağıranın verdiği/);
+  const named = planWalkingRoute({ window: win, startLocal: at(win, 5, 5), endLocal: at(win, 5, 30), options: { scenarioSpeedMps: 2, scenarioSpeedSource: 'test kaynağı' } });
+  assert.equal(named.stats.durationAssumption.source, 'test kaynağı');
+  assert.equal(named.stats.estimatedDurationS, 12.5);
+});
+
+test('süre hızı: geçersiz scenarioSpeedSource açık invalid_input verir', () => {
+  const win = makeWin(30, 40, () => -2500);
+  const res = planWalkingRoute({ window: win, startLocal: at(win, 5, 5), endLocal: at(win, 5, 30), options: { scenarioSpeedSource: '  ' } });
+  assert.equal(res.status, 'invalid_input');
+  assert.match(res.reason, /scenarioSpeedSource/);
 });
 
 test('wall with gap: route passes through the gap cell centres in local metres', () => {

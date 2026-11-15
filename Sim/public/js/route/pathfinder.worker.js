@@ -1,10 +1,13 @@
 // Worker boundary for route planning. Cost-field preparation stays off the UI thread.
 import { handlePlanMessage } from './pathfinder.js';
-import { buildFieldForWindow, createDemWindow, explainLocal, planWalkingRoute } from './route-service.js';
+import {
+  buildFieldForWindow, createDemWindow, DEFAULT_SCENARIO_SPEED_MPS, explainLocal, planWalkingRoute,
+} from './route-service.js';
 import {
   REFERENCE_PREFERENCE_ID, describeRoutePreference, planRouteVariants,
   resolveRoutePreferenceId, routePreferenceParams,
 } from './route-compare.js';
+import { SCENARIO } from '../config.js';
 
 function workerError(id, err) {
   let message;
@@ -22,6 +25,21 @@ function plannerOptionsOf(options) {
   const out = {};
   for (const k of Object.keys(options)) if (!PREFERENCE_OPTION_KEYS.includes(k)) out[k] = options[k];
   return out;
+}
+
+// Süre tahmini hızı tek kaynaktan gelir: çağıran options.scenarioSpeedMps vermediyse simülasyonun yürüme hızı
+// (config.js SCENARIO.walkSpeedMps). Böylece "tahmini süre" ile simülasyon saati aynı hızı kullanır.
+// DEFAULT_SCENARIO_SPEED_MPS.value === SCENARIO.walkSpeedMps (route-service.test.mjs zorlar); kaynak metni de aynıdır.
+function withScenarioSpeed(options) {
+  const base = options === null ? undefined : options;
+  // Düz nesne değilse olduğu gibi bırak: planWalkingRoute bunu invalid_input olarak açıkça raporlar.
+  if (base !== undefined && (typeof base !== 'object' || Array.isArray(base))) return base;
+  if (base && base.scenarioSpeedMps !== undefined) return base;
+  return {
+    ...(base ?? {}),
+    scenarioSpeedMps: SCENARIO.walkSpeedMps,
+    scenarioSpeedSource: base?.scenarioSpeedSource ?? DEFAULT_SCENARIO_SPEED_MPS.source,
+  };
 }
 
 // Çözüm sırası: message.preference → message.options.preference → yok (undefined).
@@ -69,7 +87,7 @@ export function attachWorker(scope) {
       if (message.type === 'plan-walking-route') {
         if (!window) throw new Error('önce init-window gönderilmeli');
         const requested = requestedPreferenceOf(message);
-        const options = plannerOptionsOf(message.options);
+        const options = withScenarioSpeed(plannerOptionsOf(message.options));
         const budget = message.budget;
         if (requested === undefined) {
           // Tercih belirtilmedi: eski davranış (init-window params + field), mesaj biçimi değişmez.
@@ -101,6 +119,7 @@ export function attachWorker(scope) {
         // planRouteVariants her tercih için planWalkingRoute'u params ile çağırır; alan window önbelleğinden gelir.
         const result = planRouteVariants({
           window, startLocal: message.startLocal, endLocal: message.endLocal, budget: message.budget, preferences,
+          options: withScenarioSpeed(plannerOptionsOf(message.options)),
         });
         scope.postMessage({ type: 'variants-result', id, result });
         return;

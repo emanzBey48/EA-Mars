@@ -5,6 +5,7 @@ import {
   createDemWindow, cellToLocal, buildFieldForWindow, planWalkingRoute,
 } from '../public/js/route/route-service.js';
 import { planRouteVariants, ROUTE_PREFERENCE_IDS } from '../public/js/route/route-compare.js';
+import { SCENARIO } from '../public/js/config.js';
 
 const ND = -9999;
 const BASE = -2500;
@@ -211,4 +212,82 @@ test('(i) bilinmeyen mesaj tipi ve init-window hatası mevcut kalıpla raporlan�
   assert.equal(unknown.message, 'Bilinmeyen mesaj tipi: nope');
   const badInit = send(scope, { type: 'init-window', id: 2, window: { rows: 0 } });
   assert.equal(badInit.type, 'error');
+});
+
+// Süre tahmini (stage-route-eta): düz 687 m hat (1 m hücre, tek satır), süre = uzunluk / senaryo hızı.
+const FLAT_RAW = rawWin(5, 700, FLAT);
+const FLAT_S = at(FLAT_RAW, 2, 5), FLAT_E = at(FLAT_RAW, 2, 692);
+const flatPlan = (id, extra = {}) => ({ type: 'plan-walking-route', id, startLocal: FLAT_S, endLocal: FLAT_E, ...extra });
+const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
+
+test('(s1) plan-walking-route: options yoksa süre simülasyon hızıyla (config SCENARIO.walkSpeedMps) hesaplanır', () => {
+  const scope = makeScope();
+  send(scope, { type: 'init-window', id: 1, window: FLAT_RAW });
+  const r = send(scope, flatPlan(2)).result;
+  assert.equal(r.status, 'ok', JSON.stringify(r.reason));
+  assert.ok(near(r.stats.lengthM, 687), `uzunluk ${r.stats.lengthM}`);
+  assert.ok(near(r.stats.estimatedDurationS, r.stats.lengthM / SCENARIO.walkSpeedMps), `süre ${r.stats.estimatedDurationS}`);
+  assert.equal(r.stats.durationAssumption.value, SCENARIO.walkSpeedMps);
+  assert.equal(r.stats.durationAssumption.status, 'scenario');
+  assert.match(r.stats.durationAssumption.source, /config\.js SCENARIO\.walkSpeedMps/);
+});
+
+test('(s2) plan-walking-route: preference (options.preference) isteğinde de config hızı kullanılır', () => {
+  const scope = makeScope();
+  send(scope, { type: 'init-window', id: 1, window: FLAT_RAW });
+  const r = send(scope, flatPlan(2, { options: { preference: 'gentle' } })).result;
+  assert.equal(r.status, 'ok');
+  assert.ok(near(r.stats.estimatedDurationS, r.stats.lengthM / SCENARIO.walkSpeedMps));
+  assert.equal(r.stats.durationAssumption.value, SCENARIO.walkSpeedMps);
+});
+
+test('(s3) plan-walking-route: options.scenarioSpeedMps verilirse o kullanılır ve çağıran kaynağı etiketlenir', () => {
+  const scope = makeScope();
+  send(scope, { type: 'init-window', id: 1, window: FLAT_RAW });
+  const r = send(scope, flatPlan(2, { options: { scenarioSpeedMps: 0.8 } })).result;
+  assert.equal(r.status, 'ok');
+  assert.ok(near(r.stats.estimatedDurationS, r.stats.lengthM / 0.8));
+  assert.equal(r.stats.durationAssumption.value, 0.8);
+  assert.match(r.stats.durationAssumption.source, /çağıranın verdiği/);
+});
+
+test('(s4) geçersiz scenarioSpeedMps açık invalid_input olarak döner (sessiz varsayılan yok)', () => {
+  const scope = makeScope();
+  send(scope, { type: 'init-window', id: 1, window: FLAT_RAW });
+  for (const bad of [0, -1, Number.NaN, '1.2', null]) {
+    const r = send(scope, flatPlan(2, { options: { scenarioSpeedMps: bad } })).result;
+    assert.equal(r.status, 'invalid_input', `değer ${String(bad)}: ${JSON.stringify(r.status)}`);
+    assert.match(r.reason, /scenarioSpeedMps/);
+  }
+});
+
+test('(s5) plan-route-variants: her tercihin süresi aynı senaryo hızından (uzunluk / 1,2 m/s)', () => {
+  const scope = makeScope();
+  send(scope, { type: 'init-window', id: 1, window: FLAT_RAW });
+  const v = send(scope, { type: 'plan-route-variants', id: 2, startLocal: FLAT_S, endLocal: FLAT_E });
+  assert.equal(v.type, 'variants-result');
+  for (const id of ROUTE_PREFERENCE_IDS) {
+    const r = v.result.results[id];
+    assert.equal(r.status, 'ok', `${id}: ${r.reason}`);
+    assert.ok(near(r.stats.lengthM, 687), `${id} uzunluk ${r.stats.lengthM}`);
+    assert.ok(near(r.summary.estimatedDurationS, 687 / SCENARIO.walkSpeedMps), `${id} süre ${r.summary.estimatedDurationS}`);
+    assert.equal(r.stats.durationAssumption.value, SCENARIO.walkSpeedMps);
+  }
+});
+
+test('(s6) plan-route-variants: options.scenarioSpeedMps tüm tercihlerde kullanılır', () => {
+  const scope = makeScope();
+  send(scope, { type: 'init-window', id: 1, window: FLAT_RAW });
+  const v = send(scope, { type: 'plan-route-variants', id: 2, startLocal: FLAT_S, endLocal: FLAT_E, options: { scenarioSpeedMps: 2 } });
+  for (const id of ROUTE_PREFERENCE_IDS) {
+    assert.ok(near(v.result.results[id].summary.estimatedDurationS, 687 / 2), `${id}`);
+  }
+});
+
+test('(s7) plan-route-variants: geçersiz hız her tercihte invalid_input olarak raporlanır', () => {
+  const scope = makeScope();
+  send(scope, { type: 'init-window', id: 1, window: FLAT_RAW });
+  const v = send(scope, { type: 'plan-route-variants', id: 2, startLocal: FLAT_S, endLocal: FLAT_E, options: { scenarioSpeedMps: -3 } });
+  assert.notEqual(v.result.status, 'ok');
+  for (const id of ROUTE_PREFERENCE_IDS) assert.equal(v.result.results[id].status, 'invalid_input');
 });

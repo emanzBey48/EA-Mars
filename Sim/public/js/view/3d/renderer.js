@@ -18,6 +18,7 @@ import { MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, SKY_PARAMS, glslF
 import { HORIZON_FAR_M, HORIZON_HAZE, HORIZON_NEAR_M } from './horizon-mesh.js';
 import { TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS } from './terrain-shading.js';
 import { FOOTPRINT_OUTLINE_POINT_COUNT } from './footprint-trail.js';
+import { QUALITY_LEVEL_SETTINGS } from './quality-governor.js';
 import {
   SHADOW_QUALITY_NAMES, SHADOW_RECEIVER_GLSL, chooseShadowRadiusM, computeShadowLightSpace,
   resolveShadowQuality, shadowFocusXY,
@@ -113,6 +114,8 @@ uniform float uReceiveShadow;
 uniform vec3 uSkySunDir;
 uniform vec3 uPartAlbedo; // rig pass: linear albedo of the current part (from part.material)
 uniform vec2 uPartRoughMetal; // rig pass: x = roughness, y = metallic
+uniform vec4 uDetailGain; // terrain pass: quality-governor gains (x micro, y pebbles, z rocks, w craters); 0 skips the layer
+uniform float uDustGain; // terrain pass: quality-governor dust gain (1 = full dust mantle, 0 = bare albedo)
 out vec4 outColor;
 ${MARS_LIGHTING_GLSL}
 ${TERRAIN_SHADING_GLSL}
@@ -203,34 +206,37 @@ void main() {
     vec3 albedo = terrainCombineAlbedo(palette, coverage, gain, uOrthoMode == 2);
     // Surface aeolian dust mantle (görsel detay, veri değildir):
     // Softens underlying texture pixelation, tile seams, and harsh contrast flaws
-    albedo = terrainApplyDust(albedo, vWorldPos.xy, slopeW, dist, coverage);
+    // uDustGain / uDetailGain are quality-governor gains (1 = the full look; a layer with gain 0 is skipped).
+    albedo = mix(albedo, terrainApplyDust(albedo, vWorldPos.xy, slopeW, dist, coverage), uDustGain);
 
     // Procedural micro detail (visual detail, not data): world-fixed, deterministic, faded with distance.
     vec2 microSlope = vec2(0.0);
     float microTone = 0.0;
-    if (dist < ${(TERRAIN_SHADING_PARAMS.octaves[3].wavelengthM * TERRAIN_SHADING_PARAMS.fadeEndPerWavelength).toFixed(1)}) {
+    if (dist < ${(TERRAIN_SHADING_PARAMS.octaves[3].wavelengthM * TERRAIN_SHADING_PARAMS.fadeEndPerWavelength).toFixed(1)} && uDetailGain.x > 0.0) {
       terrainMicro(vWorldPos.xy, dist, 1.0 + ${TERRAIN_SHADING_PARAMS.slopeRoughnessGain.toFixed(4)} * slopeW, microSlope, microTone);
+      microSlope *= uDetailGain.x;
+      microTone *= uDetailGain.x;
     }
     // Pebble/gravel scatter (visual detail, not data): kept weak where HiRISE ortho luminance exists.
-    if (dist < ${TERRAIN_SHADING_PARAMS.pebbles[1].fadeEndM.toFixed(1)}) {
+    if (dist < ${TERRAIN_SHADING_PARAMS.pebbles[1].fadeEndM.toFixed(1)} && uDetailGain.y > 0.0) {
       vec2 pebSlope; float pebTone;
       terrainPebbles(vWorldPos.xy, dist, pebSlope, pebTone);
-      microSlope += pebSlope;
-      albedo *= 1.0 + pebTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.pebbleOrthoToneReduction.toFixed(4)});
+      microSlope += pebSlope * uDetailGain.y;
+      albedo *= 1.0 + pebTone * uDetailGain.y * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.pebbleOrthoToneReduction.toFixed(4)});
     }
     // Rock and boulder scatter (görsel detay, veri değildir)
-    if (dist < ${TERRAIN_SHADING_PARAMS.rocks[1].fadeEndM.toFixed(1)}) {
+    if (dist < ${TERRAIN_SHADING_PARAMS.rocks[1].fadeEndM.toFixed(1)} && uDetailGain.z > 0.0) {
       vec2 rkSlope; float rkTone;
       terrainRocks(vWorldPos.xy, dist, rkSlope, rkTone);
-      microSlope += rkSlope;
-      albedo *= 1.0 + rkTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.rockOrthoToneReduction.toFixed(4)});
+      microSlope += rkSlope * uDetailGain.z;
+      albedo *= 1.0 + rkTone * uDetailGain.z * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.rockOrthoToneReduction.toFixed(4)});
     }
     // Small impact craters & pit hollows (görsel detay, veri değildir)
-    if (dist < ${TERRAIN_SHADING_PARAMS.craters[1].fadeEndM.toFixed(1)}) {
+    if (dist < ${TERRAIN_SHADING_PARAMS.craters[1].fadeEndM.toFixed(1)} && uDetailGain.w > 0.0) {
       vec2 cratSlope; float cratTone;
       terrainCraters(vWorldPos.xy, dist, cratSlope, cratTone);
-      microSlope += cratSlope;
-      albedo *= 1.0 + cratTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.craterOrthoToneReduction.toFixed(4)});
+      microSlope += cratSlope * uDetailGain.w;
+      albedo *= 1.0 + cratTone * uDetailGain.w * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.craterOrthoToneReduction.toFixed(4)});
     }
     albedo *= (1.0 + microTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.microToneOrthoReduction.toFixed(4)}));
     albedo *= 1.0 - ${TERRAIN_SHADING_PARAMS.slopeDarkening.toFixed(4)} * slopeW;
@@ -582,6 +588,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     partRoughMetal: uniform('uPartRoughMetal'),
     routeTimeS: uniform('uRouteTimeS'),
     routePulseUM: uniform('uRoutePulseUM'),
+    detailGain: uniform('uDetailGain'),
+    dustGain: uniform('uDustGain'),
   };
   if (locations.position < 0 || locations.normal < 0 || locations.color < 0 || locations.footprintAlpha < 0 || locations.routeUv < 0 || !locations.viewProjection || !locations.lightDirection ||
       !locations.objectOffset || !locations.baseColor || !locations.headingRad || !locations.verticalScale ||
@@ -590,7 +598,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       !locations.routeTimeS || !locations.routePulseUM ||
       !locations.orthoTexFine || !locations.orthoTexCoarse || !locations.orthoUvFine || !locations.orthoUvCoarse || !locations.orthoMode || !locations.hasOrthoFine || !locations.hasOrthoCoarse ||
       !locations.lightVP || !locations.shadowMap || !locations.shadowParams || !locations.shadowLightDir || !locations.shadowMode || !locations.receiveShadow || !locations.terrainBounds ||
-      !locations.partAlbedo || !locations.partRoughMetal) {
+      !locations.partAlbedo || !locations.partRoughMetal || !locations.detailGain || !locations.dustGain) {
     gl.deleteProgram(program);
     throw new Error('WebGL2 shader attributes or uniforms were not linked');
   }
@@ -623,6 +631,12 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   })();
   let uploadedHorizonMesh = null;
   let horizonError = null;
+  // Quality-governor state (presentation only; see setQualityLevel). Defaults equal the full-quality look.
+  let appliedQualityLevel = null;
+  let horizonQualityAllowed = true;
+  let detailGain = [1, 1, 1, 1]; // micro, pebbles, rocks, craters
+  let dustGain = 1;
+  let footprintMaxDraw = null; // null = draw every footprint in the trail
 
   let orthoTexFine = null;
   let orthoTexCoarse = null;
@@ -740,13 +754,22 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       return SHADOW_QUALITY_NAMES.includes(fromUrl) ? fromUrl : undefined;
     } catch { return undefined; }
   }
-  let shadowPreset = resolveShadowQuality(readShadowQualityRequest(shadows));
+  // An explicit request (constructor option or ?shadows=) pins the shadow preset; quality levels then leave it alone.
+  const shadowRequest = readShadowQualityRequest(shadows);
+  const shadowLockedByRequest = shadowRequest !== undefined;
+  let shadowPreset = resolveShadowQuality(shadowRequest);
   let shadowSupported = null; // null = not tried yet
   let shadowTerrainTarget = null; // cached terrain-only depth
   let shadowFinalTarget = null; // terrain depth + dynamic rig casters (sampled by receivers)
   let shadowTerrainKey = null;
   let shadowTerrainMesh = null;
   let shadowFailureReason = null;
+  function applyShadowQuality(name) {
+    const next = resolveShadowQuality(name);
+    if (next === shadowPreset) return;
+    shadowPreset = next;
+    releaseShadowTargets();
+  }
 
   const dummyShadowTexture = (() => {
     const tex = gl.createTexture();
@@ -1216,7 +1239,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       // precision of the local projection. The horizon is outside the local window by construction, so nothing
       // overlaps it. It neither casts nor receives shadows (the shadow pass never draws it).
       let horizonDrawn = false;
-      if (horizonRequested && horizonMesh) {
+      if (horizonRequested && horizonQualityAllowed && horizonMesh) {
         try {
           uploadHorizonMesh(horizonMesh);
           horizonError = null;
@@ -1225,7 +1248,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           releaseHorizonMesh();
         }
       }
-      if (horizonRequested && uploadedHorizonMesh) {
+      if (horizonRequested && horizonQualityAllowed && uploadedHorizonMesh) {
         const horizonViewProjection = getViewProjectionMatrix({ ...camera, nearM: HORIZON_NEAR_M, farM: HORIZON_FAR_M }, canvas.width / canvas.height);
         gl.uniformMatrix4fv(locations.viewProjection, false, horizonViewProjection);
         setIdentityObject(7);
@@ -1242,6 +1265,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
       // Pass 0: Jezero Crater Terrain Mesh
       setIdentityObject(0, [0.78, 0.43, 0.25]);
+      gl.uniform4f(locations.detailGain, detailGain[0], detailGain[1], detailGain[2], detailGain[3]);
+      gl.uniform1f(locations.dustGain, dustGain);
       gl.uniform1f(locations.receiveShadow, 1);
       gl.disableVertexAttribArray(locations.color);
       gl.vertexAttrib3f(locations.color, 1, 1, 1);
@@ -1350,11 +1375,14 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       if (footprintCount > 0 && footprintQuads instanceof Float32Array && footprintInstances instanceof Float32Array &&
           footprintQuads.length === footprintCount * 12 && footprintInstances.length === footprintCount * 10) {
         const verticesPerFootprint = hasSoleContours ? shapePointCount * 3 : 6;
-        const vertexCount = footprintCount * verticesPerFootprint;
+        // Quality governor may draw only the newest footprintMaxDraw; the trail arrays are ordered oldest first.
+        const firstDrawn = footprintMaxDraw === null ? 0 : Math.max(0, footprintCount - footprintMaxDraw);
+        const drawnCount = footprintCount - firstDrawn;
+        const vertexCount = drawnCount * verticesPerFootprint;
         if (footprintPositions.length < vertexCount * 3) footprintPositions = new Float32Array(vertexCount * 3);
         if (footprintAlphas.length < vertexCount) footprintAlphas = new Float32Array(vertexCount);
-        if (footprintCount > footprintGpuCapacity) {
-          footprintGpuCapacity = Math.max(footprintCount, Math.ceil(footprintGpuCapacity * 1.5));
+        if (drawnCount > footprintGpuCapacity) {
+          footprintGpuCapacity = Math.max(drawnCount, Math.ceil(footprintGpuCapacity * 1.5));
           gl.bindBuffer(gl.ARRAY_BUFFER, footprintPositionBuffer);
           gl.bufferData(gl.ARRAY_BUFFER, footprintGpuCapacity * footprintVerticesPerSole * 3 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
           gl.bindBuffer(gl.ARRAY_BUFFER, footprintAlphaBuffer);
@@ -1362,7 +1390,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         }
         const { referenceElevationM: footprintReferenceM, verticalScale: footprintVerticalScale } = terrainMesh.displayConfig;
         const corners = [0, 1, 2, 0, 2, 3];
-        for (let i = 0; i < footprintCount; i++) {
+        for (let i = firstDrawn; i < footprintCount; i++) {
+          const slot = i - firstDrawn;
           const alpha = Math.max(0, Math.min(1, footprintInstances[i * 10 + 5]));
           if (hasSoleContours) {
             const contourOffset = i * (shapePointCount + 1) * 3;
@@ -1373,22 +1402,22 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
               const sources = [centre, pointA, pointB];
               for (let vertex = 0; vertex < 3; vertex++) {
                 const source = sources[vertex];
-                const target = (i * verticesPerFootprint + triangle * 3 + vertex) * 3;
+                const target = (slot * verticesPerFootprint + triangle * 3 + vertex) * 3;
                 footprintPositions[target] = soleContours[source];
                 footprintPositions[target + 1] = soleContours[source + 1];
                 footprintPositions[target + 2] = (soleContours[source + 2] - footprintReferenceM) * footprintVerticalScale;
-                footprintAlphas[i * verticesPerFootprint + triangle * 3 + vertex] = alpha;
+                footprintAlphas[slot * verticesPerFootprint + triangle * 3 + vertex] = alpha;
               }
             }
           } else {
             const sourceOffset = i * 12;
             for (let vertex = 0; vertex < 6; vertex++) {
               const source = sourceOffset + corners[vertex] * 3;
-              const target = (i * verticesPerFootprint + vertex) * 3;
+              const target = (slot * verticesPerFootprint + vertex) * 3;
               footprintPositions[target] = footprintQuads[source];
               footprintPositions[target + 1] = footprintQuads[source + 1];
               footprintPositions[target + 2] = (footprintQuads[source + 2] - footprintReferenceM) * footprintVerticalScale;
-              footprintAlphas[i * verticesPerFootprint + vertex] = alpha;
+              footprintAlphas[slot * verticesPerFootprint + vertex] = alpha;
             }
           }
         }
@@ -1412,7 +1441,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.depthMask(true);
         gl.disable(gl.BLEND);
         gl.bindVertexArray(null);
-        footprintCountDrawn = footprintCount;
+        footprintCountDrawn = drawnCount;
         footprintVertexCountDrawn = vertexCount;
       }
 
@@ -1541,13 +1570,22 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           orthoCoarseLoaded: Boolean(hasOrthoCoarse),
           // Regional-context horizon (K2-3/K2-4). 'off' = disabled by option or ?horizon=off; 'unavailable' = no mesh or upload failed.
           horizon: {
-            status: !horizonRequested ? 'off' : (horizonDrawn ? 'ready' : 'unavailable'),
+            status: !horizonRequested ? 'off' : (!horizonQualityAllowed ? 'suspended-by-quality' : (horizonDrawn ? 'ready' : 'unavailable')),
             triangles: uploadedHorizonMesh ? uploadedHorizonMesh.indexCount / 3 : 0,
             label: horizonMesh?.meta?.label ?? null,
           },
           // Stage Visual A additions (existing keys above are unchanged).
           renderTimingMs: { total: now() - frameStartedAt, ...timings, note: 'CPU command-submission time; GPU time not measured' },
           shadowResolution: shadowMode > 0 ? shadowPreset.resolution : 0,
+          // Quality-governor settings in effect for this frame (null level = governor not used; full look).
+          appliedQuality: {
+            level: appliedQualityLevel,
+            shadowsPinned: shadowLockedByRequest,
+            detailGain: [...detailGain],
+            dustGain,
+            horizonAllowed: horizonQualityAllowed,
+            footprintMax: footprintMaxDraw,
+          },
           lighting: {
             model: 'linear light + ACES (Narkowicz) + sRGB, shared by sky/terrain/guides/rig',
             sunDirection: [...light],
@@ -1577,10 +1615,24 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     /** Sets shadow quality: 'off' | 'low' | 'high'. Unknown names fall back to the default preset. */
     setShadowQuality(name) {
       if (disposed) return;
-      const next = resolveShadowQuality(name);
-      if (next === shadowPreset) return;
-      shadowPreset = next;
-      releaseShadowTargets();
+      applyShadowQuality(name);
+    },
+
+    /**
+     * Applies one quality-governor level (presentation only; geometry, heights and routes never change).
+     * Levels: high | medium | low | minimal (see quality-governor.js). Unknown names and repeats are no-ops.
+     * An explicit ?shadows= or constructor shadows option keeps its shadow preset.
+     */
+    setQualityLevel(name) {
+      if (disposed) return;
+      const settings = QUALITY_LEVEL_SETTINGS[name];
+      if (!settings || name === appliedQualityLevel) return;
+      appliedQualityLevel = name;
+      detailGain = [settings.detail.micro, settings.detail.pebbles, settings.detail.rocks, settings.detail.craters];
+      dustGain = settings.detail.dust;
+      horizonQualityAllowed = settings.horizon;
+      footprintMaxDraw = settings.footprintMax;
+      if (!shadowLockedByRequest) applyShadowQuality(settings.shadows);
     },
 
     getShadowQuality() {

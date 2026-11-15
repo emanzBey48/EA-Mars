@@ -8,6 +8,7 @@ import {
   planRouteVariants, describeRoutePreference, ROUTE_PREFERENCES, ROUTE_PREFERENCE_IDS,
   ROUTE_COMPARE_DISCLAIMER_TR, REFERENCE_PREFERENCE_ID,
 } from '../public/js/route/route-compare.js';
+import { SCENARIO } from '../public/js/config.js';
 
 const ND = -9999;
 const FORBIDDEN_TR = /güvenli(?!k)|güvensiz|tehlike/i;
@@ -95,9 +96,10 @@ test('düz zemin: üç tercih aynı yol, identicalPath true, tüm Δ = 0', () =>
     assert.equal(c.deltaMinScore, 0);
     assert.deepEqual(c.lateralDeviation, { direction: 'candidate_to_reference', meanM: 0, maxM: 0 });
   }
-  // Özet: uzunluk stats'ten; süre planner'ın senaryo hızından (25 m / 0,8 m/s).
+  // Özet: uzunluk stats'ten; süre planner'ın senaryo hızından (25 m / 1,2 m/s = config.js SCENARIO.walkSpeedMps).
+  // Eski beklenti 0,8 m/s idi; süre tahmini artık simülasyon yürüme hızını kullanır.
   assert.ok(Math.abs(out.results.balanced.summary.lengthM - 25) < 1e-9);
-  assert.ok(Math.abs(out.results.balanced.summary.estimatedDurationS - 25 / 0.8) < 1e-9);
+  assert.ok(Math.abs(out.results.balanced.summary.estimatedDurationS - 25 / SCENARIO.walkSpeedMps) < 1e-9);
   assert.equal(out.results.gentle.summary.minScore, 100);
   assert.match(out.results.gentle.summary.scoreSource, /kendi ağırlıklarıyla/);
 });

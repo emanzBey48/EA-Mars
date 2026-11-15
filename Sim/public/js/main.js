@@ -18,6 +18,7 @@ import {
 } from './view/3d/camera.js';
 import { createCameraMotion } from './view/3d/camera-motion.js';
 import { createTerrainRenderer } from './view/3d/renderer.js';
+import { createQualityGovernor, QUALITY_MODES } from './view/3d/quality-governor.js';
 import { buildTerrainMesh } from './view/3d/terrain-mesh.js';
 import { buildHorizonMesh, regionalGridFromBinary } from './view/3d/horizon-mesh.js';
 import { buildMarkerMeshes } from './view/3d/marker-mesh.js';
@@ -619,6 +620,11 @@ function updateRouteButton() {
         : routeWorkerReady ? 'Rota planla' : 'Rota planlayıcı kullanılamıyor';
 }
 
+function formatDurationS(totalS) {
+  const mins = Math.floor(totalS / 60), secs = totalS % 60;
+  return mins > 0 ? `${mins} dk ${secs} sn` : `${secs} sn`;
+}
+
 function renderRouteSummary(result) {
   const rows = [];
   const add = (key, value, className = '') => rows.push([key, value, className]);
@@ -628,10 +634,11 @@ function renderRouteSummary(result) {
   } else {
     add('Toplam mesafe', Number.isFinite(stats.lengthM) ? `${stats.lengthM.toFixed(0)} m` : 'bilinmiyor');
     if (Number.isFinite(stats.estimatedDurationS)) {
-      const mins = Math.floor(stats.estimatedDurationS / 60);
-      const secs = Math.round(stats.estimatedDurationS % 60);
-      const timeStr = mins > 0 ? `${mins} dk ${secs} sn` : `${secs} sn`;
-      add('Tahmini yürüme süresi', `${timeStr} (0,8 m/s senaryo hızı)`);
+      // Süre simülasyon saatindedir: aynı senaryo hızı (config.js SCENARIO.walkSpeedMps) ile hesaplanır.
+      const speed = stats.durationAssumption?.value;
+      const speedStr = Number.isFinite(speed) ? `${String(speed).replace('.', ',')} m/s` : 'bilinmeyen hız';
+      add('Tahmini yürüme süresi', `${formatDurationS(Math.round(stats.estimatedDurationS))} (simülasyon saati, ${speedStr} senaryo hızı)`);
+      add('Duvar saati (tahmini)', `${formatDurationS(Math.round(stats.estimatedDurationS / SCENARIO.timeScale))} (×${SCENARIO.timeScale} zaman hızı)`);
     } else {
       add('Tahmini yürüme süresi', 'yok (bölgesel çözünürlük)');
     }
@@ -1929,10 +1936,28 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalSca
   }
 })();
 
+// Adaptive quality governor: ?quality=auto (default) | high | medium | low | minimal. A named level pins it.
+const qualityRequest = (() => {
+  try {
+    const value = new URLSearchParams(location.search).get('quality');
+    return QUALITY_MODES.includes(value) ? value : 'auto';
+  } catch { return 'auto'; }
+})();
+const qualityGovernor = createQualityGovernor({ mode: qualityRequest });
+function withQualityDiagnostics(rendererDiagnostics) {
+  return rendererDiagnostics ? { ...rendererDiagnostics, quality: qualityGovernor.getState() } : null;
+}
+
 // Main animation loop: one immutable WorldSnapshot is shared by the active renderer and HUD.
 let last = performance.now(), hudAcc = 0;
 function frame(now) {
   const dt = (now - last) / 1000; last = now;
+  // Presentation only: 2D view, hidden tab, paused simulation and the setup panel are not measured.
+  const qualityStep = qualityGovernor.update(dt * 1000, {
+    hidden: document.hidden || activeView !== '3d' || !renderer3d || missionSetupOpen,
+    paused: sim.phase === 'paused',
+  });
+  if (activeView === '3d') renderer3d?.setQualityLevel(qualityStep.level);
   if (!missionSetupOpen) {
     if (activeView === '3d') {
       const move = cameraRelativeMovement(camera3d.yawRad, keys);
@@ -2112,7 +2137,7 @@ if (debugEnabled) {
       cameraFovYRad: camera3d.fovYRad,
       cameraMotion: lastCameraMotion,
       movement: lastSnapshot?.astronaut?.movement ?? null,
-      renderer: renderer3d?.getDiagnostics?.() ?? null,
+      renderer: withQualityDiagnostics(renderer3d?.getDiagnostics?.() ?? null),
       footprints: {
         count: footprintTrailSnapshot.count,
         capacity: footprintTrailSnapshot.capacity,

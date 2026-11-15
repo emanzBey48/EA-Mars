@@ -296,11 +296,15 @@ const PLANNER_STATUS_EN = Object.freeze({
   no_path: 'No passable connection between start and end', budget_exceeded: 'Search budget exceeded; no route produced',
   invalid_input: 'Invalid planner input',
 });
-const SERVICE_OPTION_KEYS = ['snapToNearestPassableWithinM', 'scenarioSpeedMps'];
+const SERVICE_OPTION_KEYS = ['snapToNearestPassableWithinM', 'scenarioSpeedMps', 'scenarioSpeedSource'];
+// Süre tahmini hızı. Tek kaynak: config.js SCENARIO.walkSpeedMps (simülasyonun kullandığı hız). Bu modül saf kalsın
+// diye config.js'i import etmez; değer aynıdır ve test/route-service.test.mjs eşitliği zorlar. Worker sınırı
+// (pathfinder.worker.js) options.scenarioSpeedMps'i çağıran vermediyse config'ten doldurur.
 export const DEFAULT_SCENARIO_SPEED_MPS = Object.freeze({
-  value: 0.8, unit: 'm/s', status: 'scenario',
-  source: 'Senaryo varsayımı (düz hızlı yürüyüş); kaynaklı değer yok, eğim/giysi etkisi modellenmedi',
+  value: 1.2, unit: 'm/s', status: 'scenario',
+  source: 'simülasyon senaryo hızı, config.js SCENARIO.walkSpeedMps (1,2 m/s); kaynaklı değer yok, eğim/giysi etkisi modellenmedi',
 });
+const CALLER_SPEED_SOURCE = 'çağıranın verdiği senaryo hızı (options.scenarioSpeedMps); kaynaklı değer yok, eğim/giysi etkisi modellenmedi';
 
 function fail(status, reasonTR, reasonEN, extra = {}) {
   return deepFreeze({ status, reason: reasonTR, reasonEN, mode: null, path: [], segments: [], stats: null, ...extra });
@@ -335,8 +339,12 @@ function planImpl(args, t0) {
   if (typeof o !== 'object' || Array.isArray(o)) return fail('invalid_input', 'options düz nesne olmalı', 'options must be a plain object');
   const snapWithin = o.snapToNearestPassableWithinM ?? 0;
   if (!isFiniteNum(snapWithin) || snapWithin < 0) return fail('invalid_input', 'snapToNearestPassableWithinM >= 0 sayı olmalı', 'snapToNearestPassableWithinM must be a number >= 0');
-  const speed = o.scenarioSpeedMps ?? DEFAULT_SCENARIO_SPEED_MPS.value;
+  const speed = o.scenarioSpeedMps === undefined ? DEFAULT_SCENARIO_SPEED_MPS.value : o.scenarioSpeedMps; // null -> açık hata
   if (!isFiniteNum(speed) || !(speed > 0)) return fail('invalid_input', 'scenarioSpeedMps > 0 olmalı', 'scenarioSpeedMps must be > 0');
+  if (o.scenarioSpeedSource !== undefined && (typeof o.scenarioSpeedSource !== 'string' || o.scenarioSpeedSource.trim() === '')) {
+    return fail('invalid_input', 'scenarioSpeedSource boş olmayan metin olmalı', 'scenarioSpeedSource must be a non-empty string');
+  }
+  const speedSource = o.scenarioSpeedSource ?? (o.scenarioSpeedMps === undefined ? DEFAULT_SCENARIO_SPEED_MPS.source : CALLER_SPEED_SOURCE);
   const plannerOptions = {};
   for (const k of Object.keys(o)) if (!SERVICE_OPTION_KEYS.includes(k)) plannerOptions[k] = o[k];
 
@@ -432,7 +440,7 @@ function planImpl(args, t0) {
   if (eva) {
     stats.minScore = num(st.minScore); stats.meanScore = num(st.meanScore);
     stats.estimatedDurationS = st.lengthM / speed;
-    stats.durationAssumption = { ...DEFAULT_SCENARIO_SPEED_MPS, value: speed, note: 'Tahmini süre = düz yol uzunluğu / senaryo hızı; eğim, giysi veya metabolik model yok' };
+    stats.durationAssumption = { ...DEFAULT_SCENARIO_SPEED_MPS, value: speed, source: speedSource, note: 'Tahmini süre = düz yol uzunluğu / senaryo hızı (simülasyon saati); eğim, giysi veya metabolik model yok' };
   }
   for (const k of eva ? [] : CAV_SCORE_KEYS) delete stats[k];
 

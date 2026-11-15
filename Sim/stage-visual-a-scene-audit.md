@@ -83,3 +83,11 @@ Değerlendirme (dürüst):
 
 - Gölge kalitesi için `createTerrainRenderer(canvas, { shadows })` parametresi `config.js` veya kullanıcı tercihinden verilebilir; şu an URL `?shadows=` ve varsayılan `auto`→`high`.
 - `getDiagnostics().renderer.lighting` HUD'a yalnız "sunum" etiketiyle eklenebilir.
+
+## 9. K2-5 son görsel turu (15 Kasım 2026)
+
+USGS 1 m DTM etkin yüzey olduktan sonra birinci şahıs aşağı bakış ve panorama görünümü yeniden incelendi. Yakın alanda düzenli aralıklarla görünen sentetik oval taş/çukur kabartıları DTM verisi değildir; bu görsel ayrıntıların yoğunluğu azaltıldı (küçük/orta taş ve pit yoğunlukları ile pit derinlikleri düşürüldü). Amaç, yüzeyin 1 m DTM'den gelen biçiminin baskın kalması ve tekrar hissinin azalmasıdır. Kot, mesh, eğim, no-data, rota ve fizik değiştirilmedi.
+
+Sonuç: yakın görünümde oval kabartılar daha seyrek; panorama görünümünde DTM relief'i, gökyüzü ve güneş aydınlatması korunuyor. Bunlar kaynaklı kaya/krater envanteri veya gerçek regolit ölçümü değildir. Ortomozaik ile DTM hizası doğrulanana kadar mikrodoku görsel sunum katmanı olarak kalır. Astronot kollarının birinci şahıs kadrajında geniş yer kaplaması ayrıca göze çarpıyor; bu turda rig geometrisi değiştirilmedi.
+
+Görsel kontrol: yerel Edge/WebGL2, Intel Iris Xe (D3D11); aşağı bakış ve panorama kareleri alındı. Bu koşu otomatik test, GPU süresi ölçümü veya tarayıcı kabul matrisi değildir. K2-5'in bu yüzey ayarı kısmı işlendi; astronot kadrajı/animasyon ve tam tarayıcı kabulü açık kalır.

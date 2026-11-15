@@ -858,6 +858,7 @@ export function createMinimap({
       draw();
     },
     getView() { return Object.freeze({ centerXM: state.centerXM, centerYM: state.centerYM, pxPerM: state.pxPerM }); },
+    selectionRejection,
     fitGlobal,
     destroy() {
       state.destroyed = true;

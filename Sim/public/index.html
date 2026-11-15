@@ -184,11 +184,15 @@
               <option value="balanced" selected>Dengeli EVA Yürünebilirlik</option>
               <option value="shortest">En Kısa Mesafe</option>
               <option value="flattest">En Düz / Düşük Eğim</option>
+              <option value="highland_explore">Yüksek Arazi Keşfi</option>
+              <option value="depression_explore">Çukur / Krater Benzeri Arazi Keşfi</option>
             </select>
           </div>
+          <p id="route-preference-note" class="route-preference-note" aria-live="polite">Rota tercihi DTM kotu, eğimi ve pürüzlülüğüyle hesaplanan senaryo ağırlığıdır. Çukur/krater benzeri görünüm, doğrulanmış krater tespiti değildir.</p>
           <button id="minimap-plan-route" type="button" disabled>Başlangıç ve bitiş seçin</button>
           <p class="planning-disclaimer">Planlama göstergesi — güvenli rota sertifikası değildir.</p>
           <dl id="minimap-route-summary" class="minimap-summary" aria-live="polite"><dt>Rota</dt><dd>Henüz hesaplanmadı</dd></dl>
+          <dl id="route-evidence" class="route-evidence" aria-live="polite"><dt>Veri dayanağı</dt><dd>Rota hesaplanınca çözünürlük, kapsam ve süre varsayımı burada gösterilir; güvenlik olasılığı hesaplanmaz.</dd></dl>
           <p id="minimap-status" class="muted small" role="status" aria-live="polite">Başlangıç ve bitiş seçin; ardından planlayın.</p>
           <section id="minimap-cell-explanation" class="minimap-cell-explanation" aria-live="polite" hidden></section>
         </div>
@@ -292,13 +296,30 @@
         <div class="setup-modal-header">
           <div>
             <h2 id="setup-modal-title">🧭 Marswalk — Başlangıç ve Bitiş Noktası Seçimi</h2>
-            <p class="setup-modal-sub">Simülasyona girmeden önce harita üzerinden başlangıç ve hedef noktalarınızı belirleyin. Koridor ve A* yürüyüş rotası önceden hesaplanır.</p>
+            <p class="setup-modal-sub">Mars küresinde başlangıç ve bitiş noktalarını seçin. Doğrulanmış arazi verisi bulunan bölge için ayrıntılı rota hesaplanabilir.</p>
           </div>
           <button id="btn-close-setup" type="button" class="btn-setup-close" title="Detaylı ayar paneline geç">⚙ Ayarları İncele</button>
         </div>
         <div id="setup-step-banner" class="setup-step-banner">1. Adım: Harita üzerinde <b>Başlangıç</b> noktasını tıklayın veya alttaki örnek rotalardan birini seçin.</div>
         <div class="setup-modal-body">
-          <div id="setup-map-slot" class="setup-map-slot"></div>
+          <div class="setup-map-column">
+            <section id="setup-globe-stage" class="setup-globe-stage" aria-label="Mars küresel görünümü">
+              <canvas id="setup-globe-canvas" class="setup-globe-canvas" tabindex="0" role="img" aria-label="Döndürülebilir Mars küresi; Jezero bölgesi işaretli"></canvas>
+              <p id="setup-globe-status" class="muted small" role="status" aria-live="polite">Mars küresel görüntüsü yükleniyor…</p>
+              <div class="setup-globe-actions">
+                <button id="setup-globe-pick-start" type="button" aria-pressed="true">A · Başlangıç Seç</button>
+                <button id="setup-globe-pick-end" type="button" aria-pressed="false">B · Bitiş Seç</button>
+                <button id="setup-globe-focus" type="button">Jezero ayrıntılı haritası →</button>
+                <button id="setup-globe-zoom-out" type="button" aria-label="Mars küresinden uzaklaş">−</button>
+                <button id="setup-globe-zoom-in" type="button" aria-label="Mars küresine yaklaş">+</button>
+              </div>
+              <p id="setup-globe-selection" class="muted small" role="status" aria-live="polite">Küreyi döndürün, A noktasını seçmek için yüzeye tıklayın. Viking MDIM 2.1 yalnız renk bağlamıdır.</p>
+            </section>
+            <section id="setup-local-stage" class="setup-local-stage" aria-label="Jezero ayrıntılı rota haritası" hidden>
+              <button id="setup-back-to-globe" class="setup-back-to-globe" type="button">← Mars küresine dön</button>
+              <div id="setup-map-slot" class="setup-map-slot"></div>
+            </section>
+          </div>
           <div class="setup-side-col">
             <div id="setup-planner-slot" class="setup-planner-slot"></div>
             <div class="setup-corridor-row">

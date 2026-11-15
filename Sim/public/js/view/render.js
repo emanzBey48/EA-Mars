@@ -175,21 +175,26 @@ export function render(ctx, w, h, {
   ctx.closePath();
   ctx.fillStyle = 'rgba(90,200,255,0.16)'; ctx.fill();
   ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(120,215,255,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.setLineDash([]);
 
-  // Simplified route line
-  const pa = T(a.xM, a.yM), pb = T(b.xM, b.yM);
-  ctx.setLineDash([10, 6]); ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke(); ctx.setLineDash([]);
-  // Route label at midpoint
-  const pm = T((a.xM + b.xM) / 2, (a.yM + b.yM) / 2);
-  label(ctx, routeNote, pm.sx + 14, pm.sy, '#ffd34d', 'rgba(0,0,0,0.65)', 12);
+  const hideLegacyStraightLine = (Array.isArray(plannedRoute) && plannedRoute.length > 1) || waypoints.some((wp) => wp.custom);
+  if (!hideLegacyStraightLine) {
+    // Simplified route line
+    const pa = T(a.xM, a.yM), pb = T(b.xM, b.yM);
+    ctx.setLineDash([10, 6]); ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke(); ctx.setLineDash([]);
+    // Route label at midpoint
+    const pm = T((a.xM + b.xM) / 2, (a.yM + b.yM) / 2);
+    label(ctx, routeNote, pm.sx + 14, pm.sy, '#ffd34d', 'rgba(0,0,0,0.65)', 12);
+  }
 
   // Waypoints
   waypoints.forEach((wp) => {
     const p = T(wp.xM, wp.yM);
     ctx.beginPath(); ctx.arc(p.sx, p.sy, 7, 0, Math.PI * 2); ctx.fillStyle = '#ffd34d'; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.stroke();
-    label(ctx, `${wp.label} (tarihsel waypoint)`, p.sx + 12, p.sy - 12, '#fff', 'rgba(0,0,0,0.65)', 12);
+    const wpLabel = wp.custom ? wp.label : `${wp.label} (tarihsel waypoint)`;
+    label(ctx, wpLabel, p.sx + 12, p.sy - 12, '#fff', 'rgba(0,0,0,0.65)', 12);
   });
 
   // Planned route & start/goal markers (distinct cyan/aquamarine layer above mission corridor)

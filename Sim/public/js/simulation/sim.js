@@ -55,6 +55,19 @@ export class MarswalkSim {
     return this.corridorHalfWidthM;
   }
 
+  setRoute(route) {
+    if (!route?.a || !route?.b || !Number.isFinite(route.a.x) || !Number.isFinite(route.a.y) || !Number.isFinite(route.b.x) || !Number.isFinite(route.b.y)) return;
+    this.route = { a: { x: route.a.x, y: route.a.y }, b: { x: route.b.x, y: route.b.y } };
+    const pad = this.scenario.roamLimitM;
+    this.bounds = {
+      xMin: Math.min(this.route.a.x, this.route.b.x) - pad,
+      xMax: Math.max(this.route.a.x, this.route.b.x) + pad,
+      yMin: Math.min(this.route.a.y, this.route.b.y) - pad,
+      yMax: Math.max(this.route.a.y, this.route.b.y) + pad,
+    };
+    this.restart();
+  }
+
   /** Scenario speed in local metres per wall-clock second. */
   get metresPerWallSecond() { return this.scenario.walkSpeedMps * this.scenario.timeScale; }
 
@@ -396,6 +409,7 @@ export function createWorldSnapshot({
         lonDeg: wp.lonDeg,
         xM: wp.local.x,
         yM: wp.local.y,
+        custom: Boolean(wp.custom),
       })),
     },
     trail: sim.trail.map((p) => ({ xM: p.x, yM: p.y })),

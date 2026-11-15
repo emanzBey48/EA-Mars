@@ -115,6 +115,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       legend.innerHTML = `<b>Zemin yok</b> — raster verisi kullanılamıyor; yalnız metre ızgarası.<div><span class="swatch"></span>${routeOriginNote} · <span class="swatch" style="background:#63e6be"></span>planlanan rota (planlama göstergesi)</div><div><span class="swatch corr"></span>senaryo koridoru (güvenlik sınırı değil)</div>`;
     }
     const rb = $('raster-banner'); rb.hidden = notes.length === 0; rb.textContent = notes.join(' ');
+    rb.classList.toggle('visually-compact-note', Boolean(layers.dtm.available));
     $('v-calc-note').textContent = layers.dtm.available
       ? `Kaynak: ${layers.dtm.descriptor.product}. Kot: en yakın DTM hücresi (${layers.dtm.descriptor.verticalDatum ?? 'düşey datum doğrulanmadı'}, m). Eğim: aynı hücrede 3×3 Horn, hücre ${layers.dtm.cellSizeM.toFixed(2)} m; 9 hücrenin hepsi geçerli değilse eğim üretilmez.`
       : 'DTM katmanı yüklenmediği için kot ve eğim hesaplanmıyor.';

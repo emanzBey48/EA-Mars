@@ -9,6 +9,14 @@ const ROUTE_HALO_ALPHA = 0.2;
 // Route dash animation is throttled; interaction redraws are not.
 const ROUTE_ANIMATION_INTERVAL_MS = 1000 / 15;
 
+function normalizePoint(pt) {
+  if (!pt || typeof pt !== 'object') return null;
+  const xM = pt.xM ?? pt.x;
+  const yM = pt.yM ?? pt.y;
+  if (!Number.isFinite(xM) || !Number.isFinite(yM)) return null;
+  return { xM, yM };
+}
+
 function routeScoreColor(score) {
   if (!Number.isFinite(score)) return '#63e6ff';
   const value = clamp(score, 0, 100);
@@ -42,6 +50,7 @@ export function createMinimap({
   descriptor = null,
   endpoints = { start: null, end: null },
   selectionMode = null,
+  compactHud = false,
   onPointSelected = () => {},
   onCellClick = () => {},
 } = {}) {
@@ -67,6 +76,9 @@ export function createMinimap({
     },
     planning: { heatmap: null, route: null, segments: null, heatmapVisible: false },
     selectionMode: selectionMode === 'start' || selectionMode === 'end' ? selectionMode : null,
+    compactHud: Boolean(compactHud),
+    player: null,
+    corridor: null,
     centerXM: 0,
     centerYM: 0,
     pxPerM: 1,
@@ -446,6 +458,38 @@ export function createMinimap({
         ctx.restore();
       }
     }
+    if (state.corridor?.a && state.corridor?.b && Number.isFinite(state.corridor.halfWidthM) && state.corridor.halfWidthM > 0) {
+      const { a, b, halfWidthM: hw } = state.corridor;
+      if (Number.isFinite(a.xM) && Number.isFinite(a.yM) && Number.isFinite(b.xM) && Number.isFinite(b.yM)) {
+        const ux = b.xM - a.xM, uy = b.yM - a.yM, len = Math.hypot(ux, uy) || 1;
+        const dx = ux / len, dy = uy / len, nx = -dy, ny = dx;
+        const base = Math.atan2(ny, nx);
+        const pts = [];
+        for (let k = 0; k <= 16; k++) {
+          const t = base - Math.PI * k / 16;
+          pts.push([b.xM + hw * Math.cos(t), b.yM + hw * Math.sin(t)]);
+        }
+        for (let k = 0; k <= 16; k++) {
+          const t = base + Math.PI - Math.PI * k / 16;
+          pts.push([a.xM + hw * Math.cos(t), a.yM + hw * Math.sin(t)]);
+        }
+        ctx.save();
+        ctx.beginPath();
+        pts.forEach(([xM, yM], i) => {
+          const p = worldToScreen(xM, yM);
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(90, 200, 255, 0.14)';
+        ctx.fill();
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = 'rgba(120, 215, 255, 0.65)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
     if (state.planning.route?.length) {
       const route = state.planning.route;
       const scores = state.planning.segments;
@@ -528,7 +572,7 @@ export function createMinimap({
       ctx.fillStyle = '#ddd';
       ctx.font = '12px system-ui, sans-serif';
       ctx.fillText('Kapsam verisi yok; harita alanı boş bırakıldı.', 16, 62);
-    } else {
+    } else if (!state.compactHud) {
       ctx.fillStyle = 'rgba(255,255,255,.84)';
       ctx.font = '11px system-ui, sans-serif';
       ctx.fillText('Eflatun tarama: DTM no-data / geçersiz hücre', 16, state.height - 49);
@@ -538,10 +582,32 @@ export function createMinimap({
     const endPoint = (state.draggingEndpoint === 'end' && state.draggedPos) ? state.draggedPos : state.endpoints.end;
     drawMarker(startPoint, 'Başlangıç', '#52c7a5', state.draggingEndpoint === 'start');
     drawMarker(endPoint, 'Bitiş', '#ffb04a', state.draggingEndpoint === 'end');
+    if (state.player && Number.isFinite(state.player.xM) && Number.isFinite(state.player.yM)) {
+      const p = worldToScreen(state.player.xM, state.player.yM);
+      const canvasAngle = -(Number.isFinite(state.player.headingRad) ? state.player.headingRad : 0);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.arc(p.x, p.y, 22, canvasAngle - 0.52, canvasAngle + 0.52);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(0, 245, 212, 0.28)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, state.compactHud ? 5 : 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#00f5d4';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#111';
+      ctx.stroke();
+      ctx.restore();
+    }
     drawNorth();
     drawScale();
-    drawAttribution();
-    drawGlobalKey();
+    if (!state.compactHud) {
+      drawAttribution();
+      drawGlobalKey();
+    }
 
     if (state.selectionMode) {
       const y = state.globalBase ? 64 : 39;
@@ -560,13 +626,15 @@ export function createMinimap({
       ctx.fillText(state.selectionMessage, 16, y + 16);
     }
     if (state.planning.route?.length) {
-      const legend = 'Renk: yürünebilirlik puanı • planlama göstergesi; güvenli rota sertifikası değildir';
-      ctx.fillStyle = 'rgba(7, 16, 22, .78)';
-      ctx.fillRect(10, state.height - 61, Math.min(state.width - 20, 420), 21);
-      ctx.fillStyle = '#e9fbff';
-      ctx.font = '9px system-ui, sans-serif';
-      ctx.fillText(legend, 16, state.height - 47, Math.max(1, state.width - 32));
-      scheduleRouteAnimation();
+      if (!state.compactHud) {
+        const legend = 'Renk: yürünebilirlik puanı • planlama göstergesi; güvenli rota sertifikası değildir';
+        ctx.fillStyle = 'rgba(7, 16, 22, .78)';
+        ctx.fillRect(10, state.height - 61, Math.min(state.width - 20, 420), 21);
+        ctx.fillStyle = '#e9fbff';
+        ctx.font = '9px system-ui, sans-serif';
+        ctx.fillText(legend, 16, state.height - 47, Math.max(1, state.width - 32));
+      }
+      scheduleRouteAnimation(); // throttled (~15 Hz) and skipped while the minimap is hidden (demo-mode FPS fix)
     }
   }
 
@@ -760,6 +828,32 @@ export function createMinimap({
       if (!state.planning.route?.length && routeAnimationFrame !== null && typeof cancelAnimationFrame === 'function') {
         cancelAnimationFrame(routeAnimationFrame);
         routeAnimationFrame = null;
+      }
+      draw();
+    },
+    setPlayer(player) {
+      const pt = normalizePoint(player);
+      state.player = pt
+        ? { xM: pt.xM, yM: pt.yM, headingRad: Number.isFinite(player?.headingRad) ? player.headingRad : 0 }
+        : null;
+      draw();
+    },
+    setCorridor(corridor) {
+      const a = normalizePoint(corridor?.a);
+      const b = normalizePoint(corridor?.b);
+      const halfWidthM = corridor?.halfWidthM;
+      state.corridor = a && b && Number.isFinite(halfWidthM) && halfWidthM > 0
+        ? { a, b, halfWidthM }
+        : null;
+      draw();
+    },
+    centerOn(xM, yM, pxPerM) {
+      if (!Number.isFinite(xM) || !Number.isFinite(yM)) return;
+      preserveUserViewOnTerrainLoad = true;
+      state.centerXM = xM;
+      state.centerYM = yM;
+      if (Number.isFinite(pxPerM) && pxPerM > 0) {
+        state.pxPerM = clamp(pxPerM, state.minPxPerM, state.maxPxPerM);
       }
       draw();
     },

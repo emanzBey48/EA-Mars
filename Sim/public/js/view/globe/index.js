@@ -48,7 +48,11 @@ export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null
     tipType.textContent = typeLabel(m.region.type);
     tip.hidden = false;
     const r = screen.getBoundingClientRect();
-    tip.style.left = `${p.clientX - r.left + 16}px`; tip.style.top = `${p.clientY - r.top + 16}px`;
+    // Imleç sağ kenara/panele yakınsa ipucu imlecin soluna açılır (panel altında kesilmesin).
+    const x = p.clientX - r.left, y = p.clientY - r.top;
+    const flip = x > r.width - 640;
+    tip.style.left = flip ? `${Math.max(8, x - 16 - tip.offsetWidth)}px` : `${x + 16}px`;
+    tip.style.top = `${Math.min(r.height - tip.offsetHeight - 8, y + 16)}px`;
   }
 
   function onPick(p) {
@@ -77,7 +81,7 @@ export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null
   }
 
   return {
-    show() { screen.classList.remove('mw-globe-screen--hidden'); globe?.setActive(true); requestAnimationFrame(() => panel.show()); },
+    show() { screen.classList.remove('mw-globe-screen--hidden'); globe?.resetView(); globe?.setActive(true); requestAnimationFrame(() => panel.show()); },
     hide() { screen.classList.add('mw-globe-screen--hidden'); panel.hide(); globe?.setActive(false); tip.hidden = true; },
     dispose() { state.disposed = true; globe?.dispose(); panel.dispose(); screen.remove(); },
   };

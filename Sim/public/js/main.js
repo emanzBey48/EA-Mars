@@ -2267,6 +2267,8 @@ if (debugEnabled) {
   window.marswalk = {
     introSimulate: (sel) => introSimulate?.(sel),
     demoFlow: () => demoFlow,
+    getActiveRoute: () => activeRoute,
+    getMinimapEndpoints: () => minimapEndpoints,
     setModeForShot: (m) => document.querySelector(`.mw-vm-btn[data-mode="${m}"]`)?.click(),
     sim, camera, camera3d, adapter, registry, layers, waypoints, keys, updateHud,
     rebuildTerrainMeshForScale,

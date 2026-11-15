@@ -179,7 +179,8 @@ export function marchingSquares(values, cols, rows, levels) {
 
 const NICE_INTERVALS = [0.5, 1, 2, 5, 10, 20, 50, 100];
 /** Hedef ~12 kontur aralığı; varsayılan 5-10 m civarında seçilir. */
-export function autoContourInterval(min, max, targetCount = 12) {
+// Yerel görüş düz bir alan olabildiğinden (Jezero tabanı) daha sık aralık seçilir; kalın çizgiler yine her 5. seviyedir.
+export function autoContourInterval(min, max, targetCount = 40) {
   const range = Math.max(max - min, 1e-6);
   const want = range / targetCount;
   for (const step of NICE_INTERVALS) if (step >= want) return step;

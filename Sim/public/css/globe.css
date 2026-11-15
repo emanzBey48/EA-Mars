@@ -10,6 +10,8 @@
 .mw-globe-hint { position: absolute; left: 28px; bottom: 22px; font-size: 12px; color: #8696ad; pointer-events: none; }
 .mw-globe-tip { position: absolute; pointer-events: none; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px;
   background: rgba(8, 12, 22, 0.62); border: 1px solid rgba(110, 220, 255, 0.3); border-radius: 8px; font-size: 12px; max-width: 260px; }
+.mw-globe-tip { z-index: 3; }
+.mw-globe-tip[hidden] { display: none; }
 .mw-globe-tip strong { font-size: 13px; color: #fff; }
 .mw-globe-tip span { color: #8fe3ff; }
 .mw-globe-tip em { color: #9aa8bd; font-size: 11px; }

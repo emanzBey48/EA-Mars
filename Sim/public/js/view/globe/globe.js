@@ -203,7 +203,7 @@ varying float v_b;
 void main(){
   float tw = 1.0 + u_twinkle*(0.3*sin(u_time*2.0 + a_pos.x*40.0 + a_pos.y*17.0) - 0.3);
   v_b = a_data.y * tw;
-  gl_PointSize = a_data.x * u_dpr * (1.0 + u_pulse*0.25*sin(u_time*4.0));
+  gl_PointSize = a_data.x * u_dpr * (1.0 + u_pulse*0.4*sin(u_time*4.0));
   gl_Position = u_proj*u_view*(u_rot*vec4(a_pos,1.0));
 }`;
 const POINT_FS = `
@@ -368,6 +368,18 @@ export function createGlobe({ canvas, dataBase = '/data/viking-mdim', onPick, on
     gl.bindBuffer(gl.ARRAY_BUFFER, dyn.pos); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(P), gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, dyn.data); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(D), gl.DYNAMIC_DRAW);
     dyn.arcN = arcN;
+    dyn.base = new Float32Array(D); // yay parıltısı için taban boyut/parlaklık (yalnız görsel)
+  }
+  // Seçili iki nokta arasındaki yay boyunca akan parıltı (saf görsel; veri/rota anlamı yok).
+  function animateArc(now) {
+    const n = dyn.arcN || 0;
+    if (n < 2 || !dyn.base) return;
+    const phase = (now / 2600) % 1.3 - 0.15, d = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      const g = Math.exp(-Math.pow((i / (n - 1) - phase) / 0.07, 2));
+      d[i * 2] = dyn.base[i * 2] * (1 + 1.6 * g); d[i * 2 + 1] = Math.min(1, dyn.base[i * 2 + 1] * (0.55 + 0.9 * g));
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, dyn.data); gl.bufferSubData(gl.ARRAY_BUFFER, 0, d);
   }
   rebuildDynamic();
 
@@ -427,6 +439,7 @@ export function createGlobe({ canvas, dataBase = '/data/viking-mdim', onPick, on
     // işaretler + yay
     const total = (dyn.arcN || 0) + (marker.start ? 1 : 0) + (marker.end ? 1 : 0);
     if (total) {
+      animateArc(now);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
       gl.useProgram(pts.p); setMats(pts, proj, viewM, rot);
       gl.uniform1f(pts.u.u_twinkle, 0);

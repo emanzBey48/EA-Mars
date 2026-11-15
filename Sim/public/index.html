@@ -22,6 +22,11 @@
     <section id="mapwrap">
       <canvas id="map" class="map-canvas" aria-label="Jezero 2D haritası ve astronot"></canvas>
       <canvas id="map-3d" class="map-canvas" hidden aria-label="HiRISE DTM tabanlı Jezero 3D arazisi"></canvas>
+      <div id="simulation-speed-control" class="simulation-speed-control" hidden>
+        <label for="simulation-speed">Simülasyon hızı <output id="simulation-speed-value" for="simulation-speed">8×</output></label>
+        <input id="simulation-speed" type="range" min="0.5" max="10" step="0.5" value="8" aria-label="Simülasyon hızı, 0.5× ile 10×">
+        <button id="btn-stop-simulation" type="button">Durdur · ayarlara dön</button>
+      </div>
       <div id="presentation-hud" class="presentation-hud" hidden aria-label="Sunum ve Jüri Telemetri Kapsülü">
         <div class="pres-header">
           <div class="pres-title">
@@ -181,6 +186,14 @@
           <button id="btn-restart" type="button">Yeniden başlat</button>
         </div>
       </details>
+
+      <section class="card scenario-setup" aria-labelledby="scenario-setup-title">
+        <h2 id="scenario-setup-title">Görev başlangıç ayarları</h2>
+        <label class="auto-drive-option"><input id="toggle-auto-drive" type="checkbox"> Planlanan EVA rotasını otomatik takip et</label>
+        <p id="auto-drive-note" class="muted small">Otomatik sürüş için başlangıç ve bitiş noktalarını seçip EVA rotasını planlayın.</p>
+        <p class="muted small">Eğimle değişen tempo, açıklanmış bir sunum senaryosu varsayımıdır; doğrulanmış astronot yürüyüş biyomekaniği değildir. Genel Mars atmosferi yerel hava ölçümü veya insan/suit performans modeli sağlamadığından hıza atmosfer kuvveti uygulanmaz.</p>
+        <button id="btn-start-simulation" type="button">Simülasyonu başlat</button>
+      </section>
 
       <details class="card scenario disclosure">
         <summary><h2><span class="tag tag-scn">Senaryo/UI</span> Simülasyon durumu</h2></summary>

@@ -67,7 +67,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     `<li>Düz çizgi uzunluğu (yerel projeksiyon düzleminde): ${routeLengthM.toFixed(1)} m · Kaynak: Mars 2020 Initial Reports (PDS)</li>`;
   $('sources').innerHTML = sources.map((s) => `<li><a href="${s.url}" target="_blank" rel="noopener">${s.label}</a></li>`).join('') +
     '<li>Görüntü/veri: NASA / JPL-Caltech / University of Arizona / USGS Astrogeology Science Center.</li>';
-  $('v-speed').textContent = `${scenario.walkSpeedMps} m/s senaryo hızı × ${scenario.timeScale} zaman hızlandırma (gerçek Mars yürüyüş hızı iddiası değil). 3D düşey ivme: ${scenario.marsGravityMps2} m/s² (NASA küresel referansı; Jezero yerel ölçümü değil). Space sıçrama girdisi ${scenario.jumpImpulseMps} m/s oyun varsayımıdır, suit performansı değildir.`;
+  $('v-speed').textContent = `${scenario.walkSpeedMps} m/s temel senaryo hızı · değişken zaman ölçeği (gerçek Mars yürüyüş hızı iddiası değil). 3D düşey ivme: ${scenario.marsGravityMps2} m/s² (NASA küresel referansı; Jezero yerel ölçümü değil). Space sıçrama girdisi ${scenario.jumpImpulseMps} m/s oyun varsayımıdır, suit performansı değildir.`;
   const geologyProvenance = $('geology-provenance');
 
   let activeVerticalScale = 1;
@@ -124,6 +124,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       ? `${astronaut.latDeg.toFixed(6)}°K, ${astronaut.lonDeg.toFixed(6)}°D (DTM equirectangular tanımıyla)`
       : '—';
     $('v-clock').textContent = `${formatClock(simTimeS)} (senaryo süresi, T+0’dan)`;
+    $('v-speed').textContent = `${Number.isFinite(astronaut.movement?.horizontalSpeedMps) ? astronaut.movement.horizontalSpeedMps.toFixed(2) : '0.00'} m/s senaryo hızı · ${Number(snapshot.timeScale ?? scenario.timeScale).toFixed(1).replace(/\.0$/, '')}× simülasyon zamanı (görsel/sunum ayarı; gerçek astronot performansı değil).`;
     $('v-progress').textContent = `${route.progressM.toFixed(1)} / ${route.routeLengthM.toFixed(1)} m (%${(route.progressFrac * 100).toFixed(1)}) · hedefe ${route.distToEndM.toFixed(1)} m`;
     const dev = $('v-dev');
     dev.textContent = `${route.deviationM.toFixed(1)} m — ${route.outsideCorridor ? `koridor dışında (> ${route.corridorHalfWidthM} m)` : `koridor içinde (≤ ${route.corridorHalfWidthM} m)`} (yerel equirectangular düzlemde; güvenlik sınırı değil)`;

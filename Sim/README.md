@@ -44,6 +44,7 @@ Bu komutla uygulama doğrudan **Sunum Modu**'nda açılır:
 7. **Perseverance Ham Fotoğraf Arşivi:** Sol 120 ve Sol 164 duraklarında Navcam/Hazcam/Mastcam-Z fotoğraflarıyla birinci şahıs ufuk yönelimi.
 8. **Sağlam 2D Fallback:** WebGL2 desteği bulunmadığında veya kullanıcı 2D'yi seçtiğinde tüm katmanlar ve rota planlaması 2D Canvas üzerinde kesintisiz çalışır.
 9. **Mars global minimap bağlamı:** Viking MDIM 2.1 renkli karo piramidi, Jezero çevresinde 232 m/piksel kesit ve yakın ölçekte HiRISE DTM hillshade katmanını gösterir. Viking mozaik kot verisi veya ortogörüntü değildir; lisans manifestte belirtilmemiştir.
+10. **Otomatik EVA rota sunumu:** Başlangıç ve bitiş noktalarını minimap'te seçip EVA yürünebilirlik rotasını planladıktan sonra başlangıç ayarlarından otomatik takip açılabilir. Astronot planlı polylinedaki hücreleri sırayla izler; tempo, yerel DTM eğimine göre açıkça senaryo varsayımı olarak değişir. Çalışma sırasında sağ alttaki kaydırıcı simülasyon zamanını 0,5×–10× aralığında ayarlar. Bu özellik gerçek astronot biyomekaniği veya operasyonel otonomi değildir.
 
 ### Viking MDIM 2.1 yerel karo paketi
 
@@ -62,6 +63,8 @@ node scripts/ingest-viking-mosaic.mjs --input data-external/Mars_Viking_MDIM21_C
 - **2D:** WASD / ok tuşları hareket eder; P veya Space duraklatır/devam ettirir.
 - **3D:** WASD / ok tuşları kamera yönüne göre hareket eder; Space küçük bir simülasyon sıçraması yapar; P duraklatır/devam ettirir. Sahneye tıklamak fare bakışını açar; Esc fare kilidini bırakır.
 - **Her iki görünümde:** R yeniden başlatır; + / − / fare tekerleği yalnız görünümü yakınlaştırır.
+- Otomatik sürüşte önce başlangıç/bitiş seçip **EVA yürünebilirlik rotasını planlayın**, ardından görev başlangıç ayarlarından otomatik takibi seçerek simülasyonu başlatın. Simülasyon sırasında ayarlar paneli gizlenir; sağ alttaki hız kaydırıcısı görünür. Durdurup ayarlara döndüğünüzde ayrıntılı panel geri gelir.
+- Eğim-tempo bağıntısı kaynaklı astronot yürüyüş verisi bulunmadığı için yalnızca görsel/senaryo ayarıdır; rotadaki DTM eğiminden türetilir ve UI'da etiketlenir. Mars atmosferi Jezero anlık ölçümünü ve suit/insan parametrelerini vermediğinden yürüyüş hızına atmosfer kuvveti eklenmez.
 
 3D görünümünü doğrudan açmak için sunucuyu başlattıktan sonra `http://127.0.0.1:8080/?view=3d` adresini kullanın. Bu seçim, doğrulanmış HiRISE DTM ve WebGL2 kullanılabilir, başlangıç konumunda kot biliniyorsa uygulanır; aksi durumda 2D görünüm açık kalır.
 

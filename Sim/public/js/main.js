@@ -12,6 +12,7 @@ import { createGeologyRegistry, lookupBestGeologicUnit } from './geo/geology-reg
 import { STATUS, UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
 import { createDefaultSurfaceRegistry } from './surface/registry.js';
 import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
+import { createAutoDriveController } from './simulation/auto-drive.js';
 import { Camera, buildTerrainImage, render } from './view/render.js';
 import {
   cameraRelativeMovement, createFirstPersonCamera, lookCamera, setFirstPersonLook, setFirstPersonPose, zoomCamera,
@@ -89,6 +90,8 @@ let endpointRevision = 0;
 const routeWorkerRequests = new Map();
 let routeHeatmap = null;
 let activeRoute = null;
+let autoDriveController = null;
+let autoDriveState = null;
 let plannedRouteLinePositions = new Float32Array();
 let plannedRouteRibbon = null;
 let plannedRoutePathCumulativeM = [];
@@ -137,6 +140,13 @@ const btnDemoTour = $('btn-demo-tour');
 const btnDemoToggleView = $('btn-demo-toggle-view');
 const btnDemoRestart = $('btn-demo-restart');
 const presGuideBanner = $('pres-guide-banner');
+const autoDriveToggle = $('toggle-auto-drive');
+const autoDriveNote = $('auto-drive-note');
+const startSimulationButton = $('btn-start-simulation');
+const simulationSpeedControl = $('simulation-speed-control');
+const simulationSpeedInput = $('simulation-speed');
+const simulationSpeedValue = $('simulation-speed-value');
+const stopSimulationButton = $('btn-stop-simulation');
 
 let presentationModeActive = false;
 let pendingDemoTour = false;
@@ -208,6 +218,98 @@ function showSelectedPoint(kind, point, byDrag = false) {
   if (byDrag && minimapEndpoints.start && minimapEndpoints.end && routeWorkerReady) {
     planMinimapRoute();
   }
+  if (autoDriveNote && autoDriveToggle?.checked) {
+    autoDriveNote.textContent = 'Nokta seçimi değişti; otomatik sürüşten önce EVA rotasını yeniden planlayın.';
+  }
+}
+
+function updateSimulationControls() {
+  const running = sim.phase === 'running';
+  const active = running || sim.phase === 'paused';
+  document.body.classList.toggle('simulation-running', active);
+  simulationSpeedControl.hidden = !active;
+  if (autoDriveToggle) autoDriveToggle.disabled = active;
+  if (startSimulationButton) {
+    startSimulationButton.textContent = running || sim.phase === 'paused' || sim.phase === 'arrived'
+      ? 'Simülasyonu durdur ve ayarlara dön'
+      : 'Simülasyonu başlat';
+    startSimulationButton.disabled = false;
+  }
+  if (simulationSpeedInput && simulationSpeedValue) {
+    simulationSpeedInput.value = String(sim.scenario.timeScale);
+    simulationSpeedValue.value = `${Number(sim.scenario.timeScale).toFixed(1).replace(/\.0$/, '')}×`;
+    simulationSpeedValue.textContent = simulationSpeedValue.value;
+  }
+  if (autoDriveNote && sim.phase === 'running' && autoDriveController && autoDriveState) {
+    const slopeText = autoDriveState.slopeDeg === null ? 'eğim bilinmiyor' : `eğim ${autoDriveState.slopeDeg.toFixed(1)}°`;
+    autoDriveNote.textContent = `Otomatik sürüş · ${slopeText} · senaryo tempo çarpanı ${(autoDriveState.paceFactor * 100).toFixed(0)}% (görsel varsayım).`;
+  }
+}
+
+function resetSimulationToSettings() {
+  sim.restart();
+  autoDriveController = null;
+  autoDriveState = null;
+  resetFootprints();
+  hasEntered3dOnce = false;
+  camera3d.dynamicPitchOffsetRad = 0;
+  camera3d.dynamicRollOffsetRad = 0;
+  camera3d.dynamicEyeOffsetM = 0;
+  cameraMotion.reset();
+  lastCameraMotion = null;
+  camera3d.xM = sim.pos.x;
+  camera3d.yM = sim.pos.y;
+  camera3d.yawRad = Math.atan2(sim.route.b.y - sim.route.a.y, sim.route.b.x - sim.route.a.x);
+  updateSimulationControls();
+  updateHud();
+}
+
+async function startSimulation() {
+  if (sim.phase === 'running' || sim.phase === 'paused' || sim.phase === 'arrived') {
+    resetSimulationToSettings();
+    return;
+  }
+
+  const start = minimapEndpoints.start;
+  const goal = minimapEndpoints.end;
+  if (autoDriveToggle?.checked) {
+    if (!start || !goal || activeRoute?.status !== 'ok' || activeRoute.mode !== 'eva_walkability') {
+      if (autoDriveNote) autoDriveNote.textContent = 'Önce minimap üzerinde başlangıç ve bitiş seçip EVA yürünebilirlik rotasını planlayın.';
+      return;
+    }
+    const path = [start, ...activeRoute.path.slice(1, -1), goal];
+    autoDriveController = createAutoDriveController(path);
+    if (!autoDriveController) {
+      if (autoDriveNote) autoDriveNote.textContent = 'Planlanan rota otomatik sürüş için kullanılabilir bir çizgi içermiyor.';
+      return;
+    }
+    if (!sim.setRoute({ a: { x: start.xM, y: start.yM }, b: { x: goal.xM, y: goal.yM } })) {
+      autoDriveController = null;
+      if (autoDriveNote) autoDriveNote.textContent = 'Seçilen rota noktaları geçerli değil.';
+      return;
+    }
+    camera3d.xM = start.xM;
+    camera3d.yM = start.yM;
+    const firstTarget = path[Math.min(1, path.length - 1)];
+    camera3d.yawRad = Math.atan2(firstTarget.yM - start.yM, firstTarget.xM - start.xM);
+    sim.headingRad = camera3d.yawRad;
+    if (renderer3d && layers.dtm.available && !terrainMeshError && !forceWebgl2Failure) await selectView('3d');
+  } else {
+    autoDriveController = null;
+    autoDriveState = null;
+    if (start && goal) {
+      sim.setRoute({ a: { x: start.xM, y: start.yM }, b: { x: goal.xM, y: goal.yM } });
+      camera3d.xM = start.xM;
+      camera3d.yM = start.yM;
+      camera3d.yawRad = Math.atan2(goal.yM - start.yM, goal.xM - start.xM);
+      sim.headingRad = camera3d.yawRad;
+    }
+  }
+
+  sim.scenario.timeScale = Number(simulationSpeedInput?.value) || SCENARIO.timeScale;
+  sim.start();
+  updateSimulationControls();
+  updateHud();
 }
 
 const minimapController = createMinimap({
@@ -1392,18 +1494,7 @@ const { keys } = bindControls({
   corridorMax: SCENARIO.corridorHalfWidthMaxM,
   initialCorridor: sim.corridorHalfWidthM,
   onTogglePause: () => { sim.togglePause(); updateHud(); },
-  onRestart: () => {
-    sim.restart();
-    resetFootprints();
-    hasEntered3dOnce = false;
-    camera3d.yawRad = targetYawRad;
-    camera3d.dynamicPitchOffsetRad = 0;
-    camera3d.dynamicRollOffsetRad = 0;
-    camera3d.dynamicEyeOffsetM = 0;
-    cameraMotion.reset();
-    lastCameraMotion = null;
-    updateHud();
-  },
+  onRestart: resetSimulationToSettings,
   onZoom: (factor) => {
     camera.zoom(factor);
     zoomCamera(camera3d, 1 / factor);
@@ -1437,6 +1528,23 @@ const { keys } = bindControls({
   },
 });
 
+startSimulationButton?.addEventListener('click', () => { void startSimulation(); });
+stopSimulationButton?.addEventListener('click', resetSimulationToSettings);
+autoDriveToggle?.addEventListener('change', () => {
+  if (!autoDriveNote) return;
+  autoDriveNote.textContent = autoDriveToggle.checked
+    ? 'Otomatik sürüş için başlangıç ve bitiş noktalarını seçip EVA yürünebilirlik rotasını planlayın.'
+    : 'Manuel sürüş: WASD / ok tuşlarıyla hareket edin.';
+});
+simulationSpeedInput?.addEventListener('input', () => {
+  const scale = Math.max(0.5, Math.min(10, Number(simulationSpeedInput.value)));
+  sim.scenario.timeScale = scale;
+  if (simulationSpeedValue) {
+    simulationSpeedValue.value = `${scale.toFixed(1).replace(/\.0$/, '')}×`;
+    simulationSpeedValue.textContent = simulationSpeedValue.value;
+  }
+});
+
 if (selectVerticalScale) {
   selectVerticalScale.value = String(currentVerticalScale);
   selectVerticalScale.addEventListener('change', () => {
@@ -1450,10 +1558,8 @@ btnClosePresentation?.addEventListener('click', () => setPresentationMode(false)
 btnDemoTour?.addEventListener('click', () => void startDemoTour());
 btnDemoToggleView?.addEventListener('click', () => void selectView(activeView === '3d' ? '2d' : '3d'));
 btnDemoRestart?.addEventListener('click', () => {
-  sim.restart();
-  resetFootprints();
-  hasEntered3dOnce = false;
-  camera3d.yawRad = targetYawRad;
+  resetSimulationToSettings();
+  if (presentationModeActive && autoDriveToggle?.checked) void startSimulation();
   updateHud();
 });
 
@@ -1507,15 +1613,37 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalSca
 let last = performance.now(), hudAcc = 0;
 function frame(now) {
   const dt = (now - last) / 1000; last = now;
+  if (autoDriveController && sim.phase === 'running') {
+    const slope = layers.dtm.sampleSlope(sim.pos.x, sim.pos.y);
+    autoDriveState = autoDriveController.update({ xM: sim.pos.x, yM: sim.pos.y }, slope);
+    if (autoDriveState && activeView === '3d') {
+      camera3d.yawRad = autoDriveState.headingRad;
+      sim.headingRad = autoDriveState.headingRad;
+    }
+  }
   if (activeView === '3d') {
-    const move = cameraRelativeMovement(camera3d.yawRad, keys);
-    sim.stepFirstPerson(dt, { ...move, jump: keys.jumpPressed, headingRad: camera3d.yawRad }, {
+    const move = autoDriveState && autoDriveController
+      ? { moveX: autoDriveState.moveX, moveY: autoDriveState.moveY }
+      : cameraRelativeMovement(camera3d.yawRad, keys);
+    sim.stepFirstPerson(dt, {
+      ...move,
+      jump: !autoDriveController && keys.jumpPressed,
+      headingRad: autoDriveController ? autoDriveState?.headingRad : camera3d.yawRad,
+      ...(autoDriveController ? { walkSpeedMps: SCENARIO.walkSpeedMps * (autoDriveState?.paceFactor ?? 1) } : {}),
+    }, {
       status: lastSnapshot?.surface?.elevation?.status,
       value: lastSnapshot?.surface?.elevation?.value,
     });
     keys.jumpPressed = false;
   } else {
-    sim.step(dt, keys);
+    sim.step(dt, autoDriveController
+      ? {
+        moveX: autoDriveState?.moveX ?? 0,
+        moveY: autoDriveState?.moveY ?? 0,
+        headingRad: autoDriveState?.headingRad,
+        walkSpeedMps: SCENARIO.walkSpeedMps * (autoDriveState?.paceFactor ?? 1),
+      }
+      : keys);
   }
   if (activeView === '3d') {
     // Composition root samples current ground after movement; simulation rules only receive the sample.
@@ -1627,7 +1755,7 @@ function frame(now) {
       });
     }
   }
-  hudAcc += dt; if (hudAcc > 0.08) { hudAcc = 0; updateHudFromSnapshot(snapshot); }
+  hudAcc += dt; if (hudAcc > 0.08) { hudAcc = 0; updateHudFromSnapshot(snapshot); updateSimulationControls(); }
   requestAnimationFrame(frame);
 }
 updateHud();

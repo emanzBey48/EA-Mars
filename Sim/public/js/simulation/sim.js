@@ -48,6 +48,23 @@ export class MarswalkSim {
     return this.phase;
   }
 
+  start() {
+    if (this.phase === PHASE.READY || this.phase === PHASE.PAUSED) this.phase = PHASE.RUNNING;
+    return this.phase;
+  }
+
+  setRoute(route) {
+    if (!route?.a || !route?.b || ![route.a.x, route.a.y, route.b.x, route.b.y].every(Number.isFinite)) return false;
+    this.route = { a: { ...route.a }, b: { ...route.b } };
+    const pad = this.scenario.roamLimitM;
+    this.bounds = {
+      xMin: Math.min(route.a.x, route.b.x) - pad, xMax: Math.max(route.a.x, route.b.x) + pad,
+      yMin: Math.min(route.a.y, route.b.y) - pad, yMax: Math.max(route.a.y, route.b.y) + pad,
+    };
+    this.restart();
+    return true;
+  }
+
   setCorridorHalfWidth(m) {
     const v = Number(m);
     if (!Number.isFinite(v)) return this.corridorHalfWidthM;
@@ -65,8 +82,8 @@ export class MarswalkSim {
    */
   step(dtWall, input = {}) {
     const dt = Math.max(0, Math.min(0.1, dtWall)); // clamp large frame gaps (tab switch etc.)
-    const ix = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    const iy = (input.up ? 1 : 0) - (input.down ? 1 : 0);
+    const ix = Number.isFinite(input.moveX) ? input.moveX : (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const iy = Number.isFinite(input.moveY) ? input.moveY : (input.up ? 1 : 0) - (input.down ? 1 : 0);
     const moving = ix !== 0 || iy !== 0;
     if (this.phase === PHASE.READY && moving) this.phase = PHASE.RUNNING;
     if (this.phase !== PHASE.RUNNING) return;
@@ -74,12 +91,14 @@ export class MarswalkSim {
     this.simTimeS += dt * this.scenario.timeScale;
     if (moving) {
       const n = Math.hypot(ix, iy);
-      const d = this.metresPerWallSecond * dt;
+      const speedMps = Number.isFinite(input.walkSpeedMps) && input.walkSpeedMps >= 0
+        ? input.walkSpeedMps : this.scenario.walkSpeedMps;
+      const d = speedMps * this.scenario.timeScale * dt;
       const nx = Math.min(this.bounds.xMax, Math.max(this.bounds.xMin, this.pos.x + (ix / n) * d));
       const ny = Math.min(this.bounds.yMax, Math.max(this.bounds.yMin, this.pos.y + (iy / n) * d));
       this.distanceWalkedM += Math.hypot(nx - this.pos.x, ny - this.pos.y);
       this.pos.x = nx; this.pos.y = ny;
-      this.headingRad = Math.atan2(iy, ix);
+      this.headingRad = Number.isFinite(input.headingRad) ? input.headingRad : Math.atan2(iy, ix);
       const last = this.trail[this.trail.length - 1];
       if (Math.hypot(last.x - nx, last.y - ny) > 2) this.trail.push({ x: nx, y: ny });
     }
@@ -104,6 +123,8 @@ export class MarswalkSim {
     const moveY = Number.isFinite(input.moveY) ? input.moveY : 0;
     const moveLength = Math.hypot(moveX, moveY);
     const moving = moveLength > 0;
+    const commandedWalkSpeedMps = Number.isFinite(input.walkSpeedMps) && input.walkSpeedMps >= 0
+      ? input.walkSpeedMps : this.scenario.walkSpeedMps;
 
     if (this.phase === PHASE.PAUSED) return;
     if (this.phase === PHASE.ARRIVED) {
@@ -135,7 +156,7 @@ export class MarswalkSim {
       this.grounded = false;
       this.airborne = true;
       if (moving) {
-        const speed = this.scenario.walkSpeedMps;
+        const speed = commandedWalkSpeedMps;
         this.horizontalVelocityXMps = (moveX / moveLength) * speed;
         this.horizontalVelocityYMps = (moveY / moveLength) * speed;
       }
@@ -189,7 +210,7 @@ export class MarswalkSim {
       // In ballistic flight, horizontal velocity is conserved; mid-air braking is unphysical without thrusters.
     } else if (recoveryWasActive || this.landingRecovery || landedThisStep) {
       // During landing recovery, ground velocity smoothly equalizes toward commanded ground input
-      const targetSpeed = moving ? this.scenario.walkSpeedMps : 0;
+      const targetSpeed = moving ? commandedWalkSpeedMps : 0;
       recoveryTargetVx = moving ? (moveX / moveLength) * targetSpeed : 0;
       recoveryTargetVy = moving ? (moveY / moveLength) * targetSpeed : 0;
       const recoveryDtSim = landedThisStep ? groundedDtSim : dtSim;
@@ -206,7 +227,7 @@ export class MarswalkSim {
       this.horizontalVelocityYMps += (recoveryTargetVy - this.horizontalVelocityYMps) * blendFactor;
     } else if (moving && dtSim > 0) {
       const nx = moveX / moveLength, ny = moveY / moveLength;
-      const speed = this.scenario.walkSpeedMps;
+      const speed = commandedWalkSpeedMps;
       this.horizontalVelocityXMps = nx * speed;
       this.horizontalVelocityYMps = ny * speed;
     } else {
@@ -398,6 +419,8 @@ export function createWorldSnapshot({
   const snapshot = {
     phase: sim.phase,
     simTimeS: sim.simTimeS,
+    timeScale: sim.scenario.timeScale,
+    walkSpeedMps: sim.scenario.walkSpeedMps,
     distanceWalkedM: sim.distanceWalkedM,
     astronaut: {
       xM,

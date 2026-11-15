@@ -1,6 +1,6 @@
 # Marswalk — Tam Proje Yol Haritası
 
-**Son güncelleme:** 14 Kasım 2026 (gece sonu — Stage 23A–23D, 24A–24B, 25, 25B, 21B-Ön, 26A ve 27 entegrasyonu sonrası; FAZ 3–7 devam planı dahil, HEAD: `246a99d`..`c562205`)
+**Son güncelleme:** 15 Kasım 2026 (K1 entegrasyon durumu ve sonraki rota/veri denetimi; taban `origin/codex/marswalk-ui-simplification` @ `3e1f570`)
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Bu belge:** Kodlama planı ve karar kaydıdır; uygulama/test çalıştırma kaydı değildir.
 
@@ -26,7 +26,11 @@ Stage 13 `astronaut-rig.js`/test teslimi bu daldaki mevcut koddur; bu doğrulama
 
 Bu bölüm aşağıdaki FAZ 3–7 tablolarının **güncel durumunu** özetler ve kalan işi Efe tarafı (kullanıcı + Claude ajanları) ile Alparslan arasında böler. Çelişkide bu bölüm geçerlidir.
 
-### Bugüne kadar tamamlananlar (depoda, test edilmiş)
+**15 Kasım durum düzeltmesi (repo commitlerinden doğrulandı; bu not için test/tarayıcı çalıştırılmadı):** Efe'nin K2-1/K2-2 kamera hareketi `f7ea37b`, K2-3/K2-4 bölgesel ufuk ve gövde ankrajı `bbf75b6` commitleri push edildi. `5d97844` bunları `codex/k1-efe-horizon-integration` dalında Alparslan'ın `26fa9b0` fare yönü/ayak izi düzeltmesiyle birleştirdi. `db15f8f` sahne/rota arayüzünü sadeleştirdi; `3e1f570` minimap test beklentisini mevcut renkle eşitledi. K1-1 **kod birleşimi hazır**, fakat bu birleşik kesitte bağımsız birim/smoke ve gerçek tarayıcı kabulü yapılmadığından **çalışma zamanı kabulü açık**. Efe commit mesajlarındaki 573/573 ve 38/38 kendi dalına ait bildirilen sonuçtur; bu notun bağımsız doğrulaması değildir. K1-2 **açık**; `Sim/stage29-acceptance.md` içindeki eski PASS ifadeleri yeni birleşik kesit için ekran görüntülü kanıt yerine geçmez. K1-5 demo dondurma, K1-1 çalışma zamanı kabulü ve K1-2 görsel kabulü kapanana kadar yapılmaz; `demo-freeze` etiketi konmaz.
+
+**K1 sonrası ayrı görev sırası:** Önce Efe, mevcut **500 hücre marjlı kesitte** iki anlamlı A* başlangıç/bitiş örneği seçip koordinat, yol/segment, hücre geçerliliği, DTM ve ortomozaik kapsamı ile sonuçları ölçülü bir raporda teslim eder. Ardından **500→750 hücre marjı yalnız aday** olarak ele alınır: veri boyutu/bellek ve kare/rota süresi, no-data ve kapsam boşlukları, ortomozaik hizası/kapsamı ve mevcut fallback karşılaştırmalı ölçülür. Ölçüm ve kabul olmadan marj büyütülmez; yeni sınırın güvenli rota veya tüm Mars EVA kapsamı olduğu söylenmez. Alparslan, Efe'nin kanıtı gelince `main.js`/provider/renderer entegrasyon kararını verir ve Luna'nın sade UI çizgisiyle minimap/rota etkileşimini birleştirir. Bu iş K1-2 tarayıcı kabulünden ayrı branch ve kabul ölçütüdür; Efe saf rota/veri/rapor dosyalarında, Alparslan entegrasyon/UI dosyalarında tek sahipli çalışır.
+
+### Bugüne kadar kodda bulunanlar (test tarihleri ve dalları ayrıca belirtilir)
 - **Efe tarafı:** 35A (kabartma ölçümü), 32A (ayak izi motoru), 33A (rota şeridi geometrisi), 34A + uyumluluk (rota tercihleri, worker), 36A (Viking karoları), 37A (MOLA bölgesel kot), 29B (no-data fixture ve testler), 29C (`scripts/preflight.mjs`), 31A (`SOURCES.md` üretici), görsel gerçekçilik dalı (ton eşleme, gökyüzü modeli, gölge haritası, arazi gölgelendirmesi, kapsül hatlı beyaz astronot, malzeme bağlama).
 - **Alparslan tarafı (birleştirildi):** 32B, 33B, 34B, 35B, 36B, 622f526, 39A/39B, 25, 27, 29A (rapor), 30 (demo modu).
 - **Doğrulama durumu (15 Kasım 2026, `codex/efe-visual-realism` @ `b5be052`):** `node --test test/` **527/527**, `npm run smoke` **38/38**, `node scripts/preflight.mjs` HAZIR. Ekran görüntüleriyle gözlem yalnızca Efe tarafı ajanlarınca yapıldı; Alparslan'ın raporları 33B/36B/622f526 için tarayıcı kabulünü açık bırakıyor.
@@ -35,19 +39,19 @@ Bu bölüm aşağıdaki FAZ 3–7 tablolarının **güncel durumunu** özetler v
 ### Aşama K1 — Teslim bloklayıcıları (P0, hemen)
 | # | Görev | Sahip | Kabul |
 |---|---|---|---|
-| K1-1 | **`codex/efe-visual-realism` dalını ana entegrasyon dalına birleştir** (renderer.js pass sözleşmesi korunarak; `ROUTE_PREFERENCES` costParams tablosu yok, `route/plan-response-state.js` tek konum) | **Alparslan** (entegrasyon sahibi) | Birleşik ağaçta `node --test test/` 527+ yeşil, çıkış kodu 0; `npm run smoke` 38/38; çakışma çözümü bu bölümdeki sözleşmeyle tutarlı. |
-| K1-2 | **Gerçek tarayıcı kabul kaydı** (`Sim/stage29-acceptance.md`'yi madde madde PASS/FAIL + ekran görüntüsü ile tamamla): zıplama/iniş, güneş görünümü, jeoloji HUD, galeri, minimap pan/zoom, 33B rota şeridi yakın-alan okunabilirliği, 36B global↔Jezero yakınlaştırma ve Viking katmanı, rota tercihi değişince bayat plan gösterilmemesi | **Alparslan** | "Kod incelemesi" ifadesi yok; her madde gözlenmiş kanıt veya "NOT-TESTED" + neden. |
+| K1-1 | **Kod birleşimi hazır** (`5d97844`; `db15f8f`/`3e1f570` sonraki UI kesiti). `renderer.js` pass 0–7, `route/plan-response-state.js` tek konum; runtime kabul **açık**. | **Alparslan** (entegrasyon sahibi) | Birleşik kesitte birim ve smoke çıkış kodu 0; gerçek tarayıcıda 2D/WebGL2 fallback, rota ve ufuk davranışı doğrulanır. Önceki Efe test sayıları bu kabulün yerine geçmez. |
+| K1-2 | **Açık — gerçek tarayıcı kabul kaydı** (`Sim/stage29-acceptance.md`'yi madde madde PASS/FAIL + ekran görüntüsü ile tamamla): zıplama/iniş, güneş görünümü, jeoloji HUD, galeri, minimap pan/zoom, 33B rota şeridi yakın-alan okunabilirliği, 36B global↔Jezero yakınlaştırma ve Viking katmanı, rota tercihi değişince bayat plan gösterilmemesi | **Alparslan** | "Kod incelemesi" ifadesi yok; her madde gözlenmiş kanıt veya "NOT-TESTED" + neden. |
 | K1-3 | **README + `DEMO_NOTES.md` + son kabul raporu** (doğru yol `C:\Users\efese\Desktop\Nasaspaceapps\Sim`, çalıştırma, yeni özellikler, bilinen sınırlar, jüri kartı) | **Efe** | Belgelerdeki her sayı depodaki rapora bağlı; lisans uydurulmaz; preflight HAZIR. |
 | K1-4 | **Viking MDIM 2.1 lisans/atıf teyidi:** USGS Astrogeology ürün sayfasını tarayıcıdan açıp lisans/atıf metnini kopyala (otomatik erişim 403 verdi) | **Efe (kullanıcı, elle)** | `Sim/data/viking-mdim/manifest.json` ve `SOURCES.md` güncellenir; metin yoksa "belirtilmemiş" kalır. |
-| K1-5 | **Demo dondurma:** 60–90 sn `?demo=1` akışı, hata durumunda 2D fallback, `demo-freeze` etiketi | **Alparslan** | K1-1 ve K1-2 kapalı; sonrasında yalnız hata düzeltmesi. |
+| K1-5 | **Beklemede — demo dondurma:** 60–90 sn `?demo=1` akışı, hata durumunda 2D fallback, `demo-freeze` etiketi | **Alparslan** | K1-1 çalışma zamanı ve K1-2 ekran görüntülü tarayıcı kabulü kapandıktan sonra; sonrasında yalnız hata düzeltmesi. |
 
 ### Aşama K2 — Son görsel ve davranış cilası (P1)
 | # | Görev | Sahip | Kabul |
 |---|---|---|---|
-| K2-1 | **`view/3d/camera-motion.js` (saf):** yürüme baş salınımı (faz = 2π·gaitDistanceM/stride, hız eşiği 0,04 m/s'de yumuşak sönüm), iniş kamera dip'i (`landingRecoveryFrac`), nefes; üst sınırlar (pitch < 1°, roll < 0,6°), `intensity` çarpanı; test | **Efe** | Deterministik; PAUSED'da donar; ofsetler `camera.js` sonucuna eklenecek biçimde teslim edilir. |
-| K2-2 | **`camera-motion`'ı `camera.js` / `main.js`'e bağla** | **Alparslan** | K2-1 sonrası; yürüme ve iniş ekranda doğal; mevcut head-bob eşiği tutarlı. |
-| K2-3 | **`view/3d/horizon-mesh.js` (saf):** `data/regional-dem/mola-jezero.*` ve Viking rengiyle yerel pencerenin dışında uzak tepe/krater silüeti (Mars eğriliği d²/2R, iç kenarda etek, MOLA ile HiRISE kotları BİRLEŞTİRİLMEZ, `needs_review` etiketi); test | **Efe** | Yerel pencere içinde üçgen yok; ölçülen dikiş farkı `meta`'da; ≤ ~150k vertex. |
-| K2-4 | **Ufuk mesh'ini renderer'a bağla** (+ varsa `server.mjs` vekil/önbellek, kamera far plane) | **Alparslan** | K2-3 sonrası; ufuk "bölgesel bağlam, ~463 m/px, yürünebilirlik puanı yok" etiketli; erişilemezse sessizce kapalı. |
+| K2-1 | **Kodda (`f7ea37b`) —** saf `view/3d/camera-motion.js`: yürüme salınımı, iniş dip'i ve nefes | **Efe** | Bu kesitte bağımsız çalışma zamanı/görsel kabulü K1-2 ile açık. |
+| K2-2 | **Kodda (`f7ea37b`) —** `camera-motion` kamera ve `main.js` bağlantısı | **Alparslan entegrasyon alanı; Efe commit'iyle geldi** | Geçiş ve duraklatma davranışı birleşik kesitte gözlenir. |
+| K2-3 | **Kodda (`bbf75b6`) —** saf `view/3d/horizon-mesh.js`; MOLA bölgesel bağlam, `needs_review`, yerel HiRISE ile kot birleştirmesi yok | **Efe** | Yerel pencere dışı geometri ve no-data koşulları kod/testte var; birleşik çalışma zamanı kabulü açık. |
+| K2-4 | **Kodda (`bbf75b6`, birleşim `5d97844`) —** ufuk renderer pass 7 / `main.js` bağlantısı | **Alparslan entegrasyon alanı; Efe commit'iyle geldi** | Gerçek tarayıcı görünümü, `?horizon=off`, fallback ve etiket K1-2'de gözlenir. |
 | K2-5 | **Opus ile son gerçekçilik turu** (kalan: vizör altın rengi ön/3-4 görünümde doğrulanmadı, astronotun zemine gölgesi, sıçrama pozunun yürüyüşten ayrışması, güneş hale, yakın zemin detayı) | **Efe** (ajan; Opus kullanım limiti sıfırlanınca) | Önce/sonra ekran görüntüleriyle kayıt; iyileştirmeyen değişiklik geri alınır; FPS ölçümü. |
 | K2-6 | **Gerçek cihaz/GPU kare süresi ölçümü** (düşük GPU, 1× ve 3× ölçek, gölge high/low/off) | **Alparslan** | FPS ve cihaz bilgisi kayda geçer; 60 FPS altında gölge kalitesi otomatik düşer. |
 

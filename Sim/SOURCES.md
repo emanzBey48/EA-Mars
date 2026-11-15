@@ -27,15 +27,15 @@ Kaynakta yazılı olmayan her alan **belirtilmemiş** olarak bırakılır; hiçb
 - **Kaynak adresi:** https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl
 - **Lisans:** This work is marked with CC0 1.0 Universal
 - **Lisans kanıtı:** https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic
-- **Uygulamadaki kullanım:** Analiz adayı: kabartma/rota/ortomozaik hizası analizleri ve tarihsel doğrulamalar (data/dtm_subset.f32). Arayüzde GÖSTERİLMEZ: düşey datum kanıtı olmadığı için kayıt sistemi fail-closed reddeder ve legacy yedeğe düşer (K3-7, ürün kararı bekliyor)
-- **Sınır / uyarı:** Düşey datum bu üründe doğrulanmadı (verticalDatumVerified=false); mutlak kot iddiası yok.
+- **Uygulamadaki kullanım:** AKTİF: arayüzde fiilen gösterilen ana arazi (USGS Mars 2020 TRN HiRISE DTM mozaiği 1 m penceresi), zemin kotu, eğim, rota planlama ve 3D arazi mesh'i (K3-7 aktif arazi kararı)
+- **Sınır / uyarı:** belirtilmemiş
 
 ### 2. HiRISE DTEEC DTM (eski yerel yedek pencere)
 
 - **Kaynak adresi:** belirtilmemiş
 - **Lisans:** belirtilmemiş
 - **Lisans kanıtı:** belirtilmemiş
-- **Uygulamadaki kullanım:** AKTİF: arayüzde fiilen gösterilen arazi (fail-closed yedek), zemin kotu, eğim, rota maliyeti, 3D arazi (data/legacy-hirise/); ürün kararı bekliyor (K3-7)
+- **Uygulamadaki kullanım:** Yedek (fallback): çevrimdışı fallback sağlayıcısı (data/legacy-hirise/)
 - **Sınır / uyarı:** PDS veri seti MRO-M-HIRISE-5-DTM-V1.0; etikette lisans alanı yok.
 
 ### 3. NASA JPL Mars Trek WMTS: MRO HiRISE Jezero kontrollü ortomozaik

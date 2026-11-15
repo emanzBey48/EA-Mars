@@ -44,7 +44,7 @@ function layerCard(d) {
     ['Atıf', esc(d.attribution)],
     ['Lisans / kullanım', esc(d.license ?? 'Kaynakta belirtilmemiş')],
     ['Birim', esc(d.unit)],
-    ['Düşey datum', esc(d.verticalDatum) + (d.verticalDatumEvidence ? ` <span class="muted small">(${esc(d.verticalDatumEvidence)})</span>` : '')],
+    ['Düşey datum', esc(d.verticalDatum) + (d.verticalDatumEvidence ? ` <span class="muted small">(${esc(typeof d.verticalDatumEvidence === 'object' ? (d.verticalDatumEvidence.statement || d.verticalDatumEvidence.sourceUrl) : d.verticalDatumEvidence)})</span>` : '')],
     ['CRS', esc(d.crs)],
     ['Piksel ölçeği', d.pixelScaleM ? `${d.pixelScaleM.toFixed(4)} m/piksel (1 m TRN mozaik)` : '—'],
     ['Boyut / piksel kuralı', d.size ? `${d.size.rows} × ${d.size.cols} hücre` + (d.size.loadedWindow ? ` · yüklenen pencere ${d.size.loadedWindow.rows} × ${d.size.loadedWindow.cols}` : '') + (d.size.pixelRegistration ? ` · ${esc(d.size.pixelRegistration)}` : '') : '—'],

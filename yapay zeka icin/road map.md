@@ -37,7 +37,7 @@
 - K3-3 (rig test sınırı onayı, Alparslan), K3-4 (rig `left*` adları, Efe): **bu güncellemede kanıt toplanmadı; önceki durum korunur (açık).**
 - K3-5 (datum): **38A TAMAMLANDI** (`2a2b2c2`), **38B TAMAMLANDI** (Alparslan): `Sim/public/js/config.js` içinde `verticalDatum`, `verticalDatumVerified: false`, `verticalDatumEvidence: null` değerleri `data/dtm_subset.json` ile eşitlendi; `scripts/validate-data-integrity.mjs` 0 hata/çıkış kodu 0 verdi; `npm test` 681/681 geçti.
 - K3-6 (rapor metinleri, Alparslan): **TAMAMLANDI:** `stage39-ortho-diagnosis.md` yazarı ve 0.0 m aritmetik tanımı düzeltildi; `stage34b-minimap-acceptance.md` içindeki `costParams` aktarımı kaldırılıp 1,2 m/s tek hızına bağlandı; `renderer.js:1264` içinde `horizonMs` ayrıştırıldı.
-- K3-7 (aktif arazi kararı): **AÇIK — karar bekliyor** (bkz. K6 bölümü, c).
+- K3-7 (aktif arazi kararı): **TAMAMLANDI (Alparslan / Kullanıcı kararı):** USGS Mars 2020 TRN HiRISE DTM mozaiği (1 m/px, MOLA areoid / DeltaGeoid datumu, PDS3 LBL kanıtı) proje gösterimi için aktif arazi olarak etkinleştirildi; `Sim/public/js/config.js` ve `Sim/data/dtm_subset.json` eşitlendi; `scripts/validate-data-integrity.mjs` 0 hata verdi; `SurfaceProviderRegistry` primary provider (`hirise-jezero-dtm`) doğrudan aktif oldu; `npm test` 681/681 geçti.
 - K3-8 (ortomozaik ↔ aktif DTM hizası): **ÖLÇÜLDÜ, KANITLANAMADI** — `5cca30c`: aktif legacy DTM için high-pass tepe r = 0,021 (`Sim/stage-k3-legacy-analysis.md`). "±1,5 m" değeri yalnız USGS adayı penceresinde ölçüldü (`39A`, `5db4a73`); aktif DTM ile hizalı denmez.
 - K3-9 (analizlerin aktif DTM'de yeniden koşulması): **TAMAMLANDI** — `5cca30c`.
 - K3-10 (legacy DTM çerçeve uyuşmazlığı, yüksek etki): **AÇIK**; bkz. aşağıdaki K3 durum notu.
@@ -70,7 +70,7 @@
 | K5-4 (P0) | 14 kaynaklı atıf listesi; Viking lisans metni elle (K1-4 ile birlikte) | Efe 1,0 + Kullanıcı 0,5 | 1,5 | Tüm kaynak atıflı; uydurma lisans yok |
 | K5-5 (P0) | Proje sayfası metni (özet, sınırlar paragrafı) | Efe 1,0 + Kullanıcı 0,5 | 1,5 | Zorunlu alanlar; her iddia depoya bağlı |
 | K5-6 (P0) | Datum bayrağı: `config.js:56` kanıt yoksa `false` (K3-5/38B) | Alparslan | 0,5 | **TAMAMLANDI:** İki kaynak aynı değer (`false`), `scripts/validate-data-integrity.mjs` 0 hata, testler 681/681 |
-| K5-7 (P0) | Aktif arazi kararı (K3-7) ve uygulaması | Kullanıcı karar 0,2 + Alparslan 2,0 | 2,2 | Karar kayıtlı, UI/doküman tutarlı |
+| K5-7 (P0) | Aktif arazi kararı (K3-7) ve uygulaması | Kullanıcı karar 0,2 + Alparslan 2,0 | 2,2 | **TAMAMLANDI:** USGS Mars 2020 TRN 1 m aktif DTM olarak etkinleştirildi, config ve dtm_subset eşitlendi, 681/681 test |
 | K5-8 (P1) | Impact paragrafı | Efe 0,5 + Kullanıcı 0,2 | 0,7 | Ölçüsüz iddia yok |
 | K5-9 (P1) | Creativity tek slayt | Kullanıcı 0,8 (Efe metin) | 0,8 | Tek slayt, ekran görüntüsü kanıtı |
 | K5-10 (P1) | FPS tek değer (82–88, 54, 23–30 FPS çelişkisi; K2-6 ile) | Alparslan 1,0 | 1,0 | Cihaz ve koşul yazılı, tek değer |

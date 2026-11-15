@@ -55,9 +55,12 @@
     "sampleProjectionOffset": -4577366.5,
     "rasterType": "PixelIsArea",
     "pixelRegistration": "PIXEL_IS_AREA",
-    "verticalDatum": null,
-    "verticalDatumVerified": false,
-    "verticalDatumEvidence": null,
+    "verticalDatum": "Mars equipotential surface (MOLA areoid / DeltaGeoid)",
+    "verticalDatumVerified": true,
+    "verticalDatumEvidence": {
+      "statement": "Mars equipotential surface (MOLA areoid / DeltaGeoid)",
+      "sourceUrl": "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40_pds3.lbl"
+    },
     "minLatDeg": 18.306799449686565,
     "maxLatDeg": 18.669315006877746,
     "westLonDeg": 77.22293307697142,

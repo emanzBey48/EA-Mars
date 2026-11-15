@@ -93,17 +93,17 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 
 - **Yerel düzlem:** x doğu, y kuzey, metre; orijin Sol 120 / WB1. Equirectangular, küre R = 3396,190 km, merkez meridyen 0°, standart enlem 0°, planetosentrik. Ölçek ekvatorda doğrudur; ~18,4°K'da doğu-batı mesafeleri ~%5,4 fazla çıkar.
 - **Piksel dönüşümü (PixelIsArea):** `X = 4577366,5 + col`, `Y = 1106617,5 − row`.
-- **Aktif DTM (karar bekliyor, K3-7):** Ekranda legacy PDS3 DTEEC yedeği (`data/legacy-hirise/dtm_subset.json`) gösterilir. Çerçeve dosyadan: EQUIRECTANGULAR, PLANETOCENTRIC, EAST, rotasyon 0; küre yarıçapı 3394,8398133163 km; merkez meridyen 77,44°E; standart enlem 15° (`crsText`); map scale 1,0096633268711 m/px; line/sample projection offset 1088495,5 / 3210,5. Etiket datumu: "Mars 2000 Datum (martian equipotential surface)". USGS 1 m adayı (`data/dtm_subset.json`) düşey datum kanıtı olmadığı için reddedilir (`surface/registry.js` `resolveActiveProvider`, neden `needs_review_verticalReference`). Legacy'nin kalması mı, USGS'nin `needs_review` etiketiyle etkinleşmesi mi, ürün kararıdır.
-- **Düşey datum (USGS adayı):** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid). `data/dtm_subset.json` ve `config.js` içinde `verticalDatumVerified: false` olarak eşitlenmiştir (Stage 38B / K5-6). Mutlak kot iddiası yapılmaz.
+- **Aktif DTM (K3-7 / K5-7 kararı):** Ekranda USGS Mars 2020 TRN HiRISE DTM mozaiği 1 m penceresi (`data/dtm_subset.json`) gösterilir. Çerçeve: EQUIRECTANGULAR, PLANETOCENTRIC, EAST, rotasyon 0; küre yarıçapı 3396,190 km; merkez meridyen 0°, standart enlem 0° (`MAP_FRAME`); map scale 1,0 m/px; 21488×21400 kaynak mozaik, 1676×1135 yüklenen pencere. Etiket datumu: Mars equipotential surface (MOLA areoid / DeltaGeoid, Fergason vd. 2020, PDS3 LBL kanıtı). Legacy PDS3 DTEEC DTM (`data/legacy-hirise/`) ise çevrimdışı fallback yedeği olarak tutulur.
+- **Düşey datum:** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid). `data/dtm_subset.json` ve `config.js` içinde `verticalDatumVerified: true` ve kanıt URL'siyle eşitlenmiştir (K3-7 / K5-7). Mutlak kot iddiası yapılmaz; eğim ve göreli kabartma doğrudan bu veriden türetilir.
 - **No-data:** `0xFF7FFFFB` tam bit deseni `no_data`; geçerli aralık dışı `invalid`. Asla 0 ile değiştirilmez. Eğim, 3×3 pencerede bir hücre bile geçersizse üretilmez.
 - **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere yüklenir; dışı `out_of_bounds` olarak raporlanır. Aktif legacy penceresi 1 884 301 geçerli hücre, 0 no-data; USGS adayı penceresi 1 902 260 geçerli hücre, 0 no-data.
 - **Rota kökeni:** İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değildir. PLACES kullanılmadı.
 
 ## Değer etiketleri
 
-- **Analiz adayı (UI'de değil):** USGS Mars 2020 TRN HiRISE DTM mozaiği (`JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40`); lisans CC0 1.0 (`SOURCES.md` #1).
-- **Aktif yedek:** Legacy PDS3 DTEEC DTM (`DTEEC_045994_1985_046060_1985_U01`); lisans belirtilmemiş (`SOURCES.md` #2).
-- **Ölçülen [ADAY]:** USGS adayı penceresinde kot aralığı 44,84 m; eğim P50/P90/maks 3,11°/7,54°/35,77° (`stage35-scale-audit.md`). Aktif legacy penceresinde bu eğim dağılımı ölçülmedi.
+- **Aktif DTM:** USGS Mars 2020 TRN HiRISE DTM mozaiği (`JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40`); lisans CC0 1.0 (`SOURCES.md` #1).
+- **Yedek fallback sağlayıcı:** Legacy PDS3 DTEEC DTM (`DTEEC_045994_1985_046060_1985_U01`); lisans belirtilmemiş (`SOURCES.md` #2).
+- **Ölçülen:** Aktif USGS penceresinde kot aralığı 44,84 m; eğim P50/P90/maks 3,11°/7,54°/35,77° (`stage35-scale-audit.md`). Düz hat 687,3 m, ortalama eğim 4,45°, rota boyu 730,5 m.
 - **Senaryo:** hız, zaman hızlandırma, koridor, yürünebilirlik eşikleri (20° vb.), rota tercih ağırlıkları.
 - **Sunum:** gökyüzü ve ton, gölge, ayak izi, şerit, kamera salınımı, giysi malzemesi, abartı seçenekleri.
 

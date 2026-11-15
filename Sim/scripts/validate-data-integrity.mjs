@@ -66,6 +66,7 @@ function toPosix(p) {
 function sameValue(a, b, kind) {
   if (kind === 'num') return typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) <= TOLERANCE;
   if (kind === 'hex') return typeof a === 'string' && typeof b === 'string' && a.toUpperCase() === b.toUpperCase();
+  if (a && b && typeof a === 'object' && typeof b === 'object') return JSON.stringify(a) === JSON.stringify(b);
   return a === b;
 }
 

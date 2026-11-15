@@ -60,7 +60,7 @@ export function buildSourceEntries({ dtm = null, legacyDtm = null, trek = null, 
     licenseEvidence: get(dtmLabel, 'useConstraintsEvidence', 'sourceUrl'),
     attribution: [get(dtmLabel, 'producer'), get(dtmLabel, 'citation')].filter(Boolean).join('. '),
     sourceUrl: get(dtmLabel, 'provenanceEvidence', 'sourceUrl'),
-    usage: 'Analiz adayı: kabartma/rota/ortomozaik hizası analizleri ve tarihsel doğrulamalar (data/dtm_subset.f32). Arayüzde GÖSTERİLMEZ: düşey datum kanıtı olmadığı için kayıt sistemi fail-closed reddeder ve legacy yedeğe düşer (K3-7, ürün kararı bekliyor)',
+    usage: 'AKTİF: arayüzde fiilen gösterilen ana arazi (USGS Mars 2020 TRN HiRISE DTM mozaiği 1 m penceresi), zemin kotu, eğim, rota planlama ve 3D arazi mesh\'i (K3-7 aktif arazi kararı)',
     caveat: get(dtmLabel, 'verticalDatumVerified') === false ? 'Düşey datum bu üründe doğrulanmadı (verticalDatumVerified=false); mutlak kot iddiası yok.' : null,
   }));
 
@@ -74,7 +74,7 @@ export function buildSourceEntries({ dtm = null, legacyDtm = null, trek = null, 
     licenseEvidence: null,
     attribution: get(legacyLabel, 'producer'),
     sourceUrl: null,
-    usage: 'AKTİF: arayüzde fiilen gösterilen arazi (fail-closed yedek), zemin kotu, eğim, rota maliyeti, 3D arazi (data/legacy-hirise/); ürün kararı bekliyor (K3-7)',
+    usage: 'Yedek (fallback): çevrimdışı fallback sağlayıcısı (data/legacy-hirise/)',
     caveat: get(legacyLabel, 'dataSetId') ? `PDS veri seti ${legacyLabel.dataSetId}; etikette lisans alanı yok.` : null,
   }));
 

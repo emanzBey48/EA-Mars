@@ -1,4 +1,5 @@
 data/*
+data-external/
 !data/dtm_subset.f32
 !data/dtm_subset.json
 !data/ortho_inspection.json

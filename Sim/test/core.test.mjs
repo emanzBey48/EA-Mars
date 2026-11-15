@@ -580,6 +580,42 @@ test('Stage 12: Mars low-gravity jump ballistic arc — air time ~1.3 s and apex
   assert.equal(sim.airborne, false);
 });
 
+test('Stage 12 regression: ballistic touchdown time is stable across frame sizes and zero-delta takeoff', () => {
+  const known = { status: STATUS.OK, value: -2500 };
+  const expectedS = 2 * SCENARIO.jumpImpulseMps / SCENARIO.marsGravityMps2;
+  for (const dtWall of [1 / 120, 1 / 60, 1 / 30, 0.05, 0.1]) {
+    const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
+    sim.resolveSurfaceContact(known);
+    const startS = sim.simTimeS;
+    sim.stepFirstPerson(dtWall, { moveX: 1, jump: true }, known);
+    let steps = 0;
+    let impactS = null;
+    while (sim.airborne && steps++ < 100) {
+      const v = sim.verticalSpeedMps;
+      const h = sim.heightAboveReferenceM;
+      const g = SCENARIO.marsGravityMps2;
+      const timeToImpactS = (v + Math.sqrt(v * v + 2 * g * h)) / g;
+      const dtSim = Math.min(0.1, dtWall) * SCENARIO.timeScale;
+      if (timeToImpactS <= dtSim) impactS = sim.simTimeS - startS + timeToImpactS;
+      sim.stepFirstPerson(dtWall, {}, known);
+    }
+    assert.ok(!sim.airborne, `jump should land for dt=${dtWall}`);
+    assert.ok(impactS !== null, `impact should be resolved inside a frame for dt=${dtWall}`);
+    assert.ok(Math.abs(impactS - expectedS) < 1e-9, `dt=${dtWall} produced ${impactS}s, expected ${expectedS}s`);
+    while (sim.landingRecovery && steps++ < 200) sim.stepFirstPerson(dtWall, {}, known);
+    const expectedHorizontalM = SCENARIO.walkSpeedMps * (expectedS + SCENARIO.landingRecoveryDurationS / 2);
+    assert.ok(Math.abs(sim.pos.x - expectedHorizontalM) < 1e-9,
+      `dt=${dtWall} produced ${sim.pos.x}m horizontal travel, expected ${expectedHorizontalM}m`);
+  }
+
+  const zeroDelta = new MarswalkSim({ a: A, b: B }, SCENARIO);
+  zeroDelta.resolveSurfaceContact(known);
+  zeroDelta.stepFirstPerson(0, { jump: true }, known);
+  zeroDelta.stepFirstPerson(1 / 60, {}, known);
+  assert.equal(zeroDelta.airborne, true, 'a zero-delta takeoff must not be mistaken for a landing on the next frame');
+  assert.ok(zeroDelta.heightAboveReferenceM > 0);
+});
+
 test('Stage 12: Mid-air horizontal momentum conservation — ballistic transit without mid-air braking', () => {
   const sim = new MarswalkSim({ a: A, b: B }, SCENARIO);
   const known = { status: STATUS.OK, value: -2500 };

@@ -36,7 +36,7 @@ Bu komutla uygulama doğrudan **Sunum Modu**'nda açılır:
 ## Sunulan Temel Özellikler
 
 1. **HiRISE 1 m DTM Arazi Tabanı:** USGS Mars 2020 TRN 1 m kot modeli ve Horn 3×3 gradyanıyla türetilen anlık eğim.
-2. **HiRISE 25 cm Kontrollü Ortomozaik:** WMTS z17 (0.318 m/px) ve z14 (2.544 m/px) albedo dokuları; Hibrit / Orto / Hillshade kaplama modları.
+2. **HiRISE Kontrollü Ortomozaik:** WMTS z17 (0.318 m/px) ve z14 (2.544 m/px) albedo dokuları; Hibrit / Orto / Hillshade kaplama modları. Bu WMTS örnekleme aralığı 25 cm/piksel değildir.
 3. **A* EVA Yürünebilirlik Planlayıcısı:** Çok kriterli maliyet fonksiyonuyla (eğim, pürüzlülük, veri geçerliliği) insansı EVA rotası ve minimap ısı haritası. (Planlama göstergesi — güvenli rota sertifikası değildir.)
 4. **1× Gerçek Bilimsel Dikey Ölçek:** Varsayılan 1:1 kot farkı, dinamik ölçek seçici (1×, 2×, 3×) ve astronot rig oranlarının 1:1 kilitlenmesi.
 5. **USGS SIM 3464 Jeoloji Haritası:** 1:75.000 ölçekli formasyon sınırları, haritalanmış kontağa olan anlık mesafe ve belirsizlik bildirimleri.

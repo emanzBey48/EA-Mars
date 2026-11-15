@@ -5,6 +5,26 @@
 **Referans Dokümanlar:** `Sim/stage25b-visual-acceptance.md`, `Sim/stage35b-scale-acceptance.md`, `Sim/stage39-ortho-diagnosis.md`, `Sim/scripts/smoke-e2e.mjs`, `Sim/public/js/main.js`  
 **Kapsam:** Stage 25B raporunda açık veya ertelenmiş kalan görsel, kinematik, aydınlatma ve arayüz bileşenlerinin bağımsız kabul incelemesi; Stage 35B ve Stage 39B entegrasyonlarının doğrulanması; jüri sunumuna hazırlık değerlendirmesi.
 
+## K1-2 yeniden kabul turu — 15 Kasım 2026 (güncel karar)
+
+Bu bölüm aşağıdaki eski Stage 29A PASS tablosunun **önündedir**. Eski tablo önceki kod kesitinin kod/hesap incelemesini de PASS sayıyordu; bu turda yalnız gerçek Brave gözlemini PASS saydım. İncelenen kesit: `origin/codex/marswalk-ui-simplification` `3e1f570`, üstüne yalnız `road map.md` güncellemesi `034c15f` (uygulama kodu aynı). Yerel `http://127.0.0.1:8091/?demo=1` açıldı. HiRISE LFS fixture'ının tam 7.537.204 baytlık dosyasıyla sahne yüklendi; tarayıcı açılışı ve etkileşimleri elle gözlendi. Bu turda `npm test`, smoke betiği veya otomatik performans ölçümü çalıştırılmadı. Ekran görüntüleri `Sim/acceptance-evidence/k1-2/` içindedir; dosyalar yeni gözlemdir, eski `test-output/` kanıtı değildir.
+
+| K1-2 maddesi | Durum | Gerçek tarayıcı gözlemi / sınır | Kanıt |
+|---|---|---|---|
+| Sıçrama yayı, iniş pozu ve kamera dip'i | **NOT-TESTED** | Brave üzerinden kısa `W`/`Space` tuş basışları senaryo saatini `T+0` durumundan başlatmadı. Uçuş/iniş karesi yakalanmadı; eski balistik formül ve birim testleri bu görsel kabul yerine geçmez. | `01-demo-3d.png` yalnız başlangıç karesi |
+| Mars güneşi, gökyüzü ve arazi aydınlatmasının görünümü | **PASS** (yalnız görsel) | 3D sahnede açık turuncu gökyüzü, uzak silüet ve aydınlatılmış engebeli yüzey görüldü. Güneş açısı, renk doğruluğu veya GPU kare süresi bu gözlemle doğrulanmadı. | `01-demo-3d.png` |
+| Jeoloji HUD/kontak belirsizliği | **PASS** (başlangıç konumu) | `Katmanlar ve köken` açıldığında haritalanmış Nijf — Jezero floor unit, SIM 3464 (1:75.000), en yakın kontağa yaklaşık 12 m ve 100–200 m konum belirsizliği ile “indikatif” uyarısı görüldü. Başka konumdaki fallback denenmedi. | `03-geology.png` |
+| Rover galerisi — Sol 120 | **PASS** | Galeri açıldığında arşiv fotoğrafı, Sol 120 Sol Navcam, LMST/UTC ve NASA/JPL-Caltech künyesi görüldü; tahmini yönün site çerçevesi varsayımı olduğu da yazılıydı. | `02-gallery.png` |
+| Rover galerisi — Sol 164 ve kamera yönü butonu | **NOT-TESTED** | Oyuncu Sol 164'e götürülmedi; yön butonu çalıştırılmadı. Sol 120 görüntüsü bu iki davranışı doğrulamaz. | — |
+| Minimap pan/zoom | **PASS** | Fare tekerleği ölçeği 1 km'den 500 m'ye değiştirdi; harita sürüklenince başlangıç/bitiş işaretçileri tuval içinde başka ekrana konumuna kaydı. | `05-minimap-zoom.png`, `06-minimap-pan.png` |
+| Gerçek no-data hücresini seçme reddi | **NOT-TESTED** | Bu sahadaki yüklü pencere için katman kartı `0 no-data` hücresi bildiriyor; gerçek no-data tıklaması yapılmadı. Sentetik fixture testi tarayıcı gözlemi değildir. | — |
+| 33B yakın alan rota şeridi | **PASS** (okunabilirlik) | Birinci şahıs başlangıç karesinde parlak turkuaz şerit ayağın önünden uzak rota noktasına kadar belirgin; 2D haritada da kılavuz çizgisi görüldü. Hareket sırasında örtülme incelenmedi. | `01-demo-3d.png`, `07-2d-fallback.png` |
+| 36B Viking global ↔ Jezero | **PASS** | `Mars globali göster` ile Viking renkli global görünüm ve 10.000 km ölçeği, `Kapsama sığdır` ile yerel Jezero/HiRISE ve 1 km ölçeği görüldü. Viking kot/ortogörüntü veya EVA puanı olarak sunulmuyor. | `04-global-viking.png`, `05-minimap-zoom.png` |
+| Rota tercihi değişince bayat plan | **PASS** (gözlenen geçiş) | Başlangıç/bitiş aynıyken `En Kısa Mesafe` → `En Düz / Düşük Eğim` seçildi. Önceki 730 m özetinin yerini “Rota hesaplanıyor” aldı; tamamlanınca 731 m ve yeni çizgi görüldü. Hızlı ardışık istek yarışı ayrıca sınanmadı. | `08-route-replanning.png`, `09-route-flattest.png` |
+| 2D/3D elle geçiş | **PASS** | 3D birinci şahıs sahnesinden `2D` düğmesiyle 2D arazi ve rota haritasına geçildi. WebGL2 tamamen kullanılamadığında otomatik fallback bu turda denenmedi. | `01-demo-3d.png`, `07-2d-fallback.png` |
+
+**Açık bulgular ve karar:** K1-2 **tam PASS değildir**. Hareket/zıplama/iniş, Sol 164 galerisi, gerçek no-data reddi ve hızlı rota istek yarışı için gerçek tarayıcı kanıtı eksik. `Katmanlar ve köken` panelinde DTM kalite satırının “Pencerede gözlenen uç kotlar undefined…undefined m” göstermesi ayrıca gözlendi; sayısal kalite aralığına dair eski PASS iddiası bu UI metniyle desteklenmez. Bu bulgu için uygulama kodu değiştirilmedi. K1-1 birleşik kesitinin bağımsız birim/smoke kabulü de açık olduğu için K1-5 demo dondurma/etiket koşulu sağlanmadı.
+
 ---
 
 ## 1. Yönetici Özeti ve Kabul Durum Tablosu

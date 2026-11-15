@@ -1,7 +1,7 @@
 # Efe → Alparslan devir notu (güncel, 15 Kasım 2026)
 
-**Dal:** `codex/efe-visual-realism` @ `53068e6` (bu oturumda çalışılan worktree: `C:\Users\efese\Desktop\Nasaspaceapps-efe`). Önceki sürüm (`190e133` ve `codex/efe-stage13-eva-kinematics` dalı) bu notta yerini bu sürüme bırakmıştır.
-**Test durumu (bu oturum):** `cd Sim; node --test test/` → **612/612, çıkış kodu 0** (mevcut çalışma ağacı). `node scripts/preflight.mjs` → **HAZIR**. Tarayıcı kabulü: `Sim/stage-final-acceptance.md` (PASS/FAIL/NOT-TESTED). `npm run smoke` bu oturumda çalıştırılmadı.
+**Dal:** `codex/efe-realism` (Alparslan'ın `c6ab77d` aktif DTM güncellemesi üzerine; `codex/efe-visual-realism` geçmiş iş dalıdır).
+**Bu görsel turunun doğrulaması:** Yerel Edge/WebGL2 görüntü kontrolü yapıldı; otomatik test, preflight ve smoke bu turda çalıştırılmadı. Önceki 612/612 birim testi ve preflight kaydı tarihsel doğrulamadır; bu değişiklik için kabul sayılmaz.
 
 ## 1. Ortak çalışma klasörü uyarısı
 
@@ -68,7 +68,7 @@ Bu tablo, USGS DTM etkinleştirme commit'i `c6ab77d` öncesindeki legacy-aktif �
 - Rota süresi tutarsızlığı: `route-service.js:301` (0,8 m/s) ile `config.js:5` (1,2 m/s). `main.js:348` sabit metni de bunu yazıyor.
 
 **Efe:**
-- K2-5 son gerçekçilik turu (önce/sonra ekran görüntüleri).
+- K2-5 yüzey sunum ayarı kısmen işlendi: sentetik pebble/rock/crater yoğunluğu azaltıldı; yerel Edge/WebGL2'de panorama ve aşağı bakış kontrol edildi (`stage-visual-a-scene-audit.md`). Görsel mikrodetay veri değildir. Astronotun birinci şahıs kadrajı ve tarayıcı kabulü hâlâ açık.
 
 **Efe tamamladı (ayrı dalda, bu dalın ancestor'ı değil):**
 - K1-4 ve K3-4: `codex/efe-k1-4` dalı, commit `740e316` push edildi. Viking MDIM için USGS Astropedia metadata alanları ve kaynak URL'si kaydedildi. Rig taraf denetiminde renderer/main kullanıcıya `side` etiketi üretmiyor; geriye uyum için `left*` kimlikleri korunmalı.

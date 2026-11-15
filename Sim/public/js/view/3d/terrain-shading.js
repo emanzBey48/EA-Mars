@@ -81,6 +81,16 @@ export const TERRAIN_SHADING_PARAMS = Object.freeze({
   ]),
   craterSlopeMax: 0.55,
   craterOrthoToneReduction: 0.75,
+
+  // Surface dust mantle (gorsel detay, veri degildir):
+  // Warm ferric oxide aeolian dust layer that settles on gentle slopes and hollows,
+  // softening underlying texture pixels, mesh facets, and contrast seams.
+  dustSrgb: Object.freeze([0.84, 0.52, 0.30]),
+  dustBaseAmount: 0.36,
+  dustDriftAmp: 0.20,
+  dustSlopeCutoff: 0.70,
+  dustWavelengthM: 8.5,
+
   // Hard cap on the total micro slope perturbation (|dh/dx,dh/dy| vector length).
   microSlopeMax: 0.45,
   // Ortho coverage tone detail already resolves ~0.32 m texels: micro tone is reduced by this fraction there.
@@ -116,6 +126,7 @@ export const PALETTE_LINEAR = Object.freeze({
   delta: Object.freeze(paletteLinear(P.deltaSrgb)),
   ridge: Object.freeze(paletteLinear(P.ridgeSrgb)),
   bedrock: Object.freeze(paletteLinear(P.bedrockSrgb)),
+  dust: Object.freeze(paletteLinear(P.dustSrgb)),
 });
 const lumaOf = (c) => c[0] * LUMA[0] + c[1] * LUMA[1] + c[2] * LUMA[2];
 /** Palette luminance the ortho gain is centred on (the delta/regolith mid tone). */
@@ -362,6 +373,24 @@ export function combineAlbedo(paletteRgb, coverage, gain, monochrome = false) {
   return [chroma[0] * k, chroma[1] * k, chroma[2] * k];
 }
 /**
+ * Applies a surface aeolian dust mantle to the diffuse albedo (JS mirror of terrainApplyDust).
+ * Warm ferric oxide dust settles on gentle slopes and hollows, softening underlying
+ * texture pixelation, tile seams, and contrast artifacts.
+ */
+export function applyDust(albedo, xM, yM, slopeW, distM, coverage = 0) {
+  const slopeFactor = 1 - smoothstep(0.15, P.dustSlopeCutoff, slopeW);
+  const driftUvX = xM / P.dustWavelengthM + 17.3;
+  const driftUvY = yM / P.dustWavelengthM + 41.9;
+  const nDrift = valueNoiseD(driftUvX, driftUvY);
+  const nFine = valueNoiseD(xM / 0.45 + 83.1, yM / 0.45 + 19.7);
+  const fineGrain = (nFine.value - 0.5) * 0.10 * (1 - smoothstep(4.0, 22.0, distM));
+  const drift = (nDrift.value - 0.5) * 2.0;
+  let dustFraction = clamp(P.dustBaseAmount + P.dustDriftAmp * drift, 0.0, 0.85);
+  dustFraction = clamp(dustFraction * slopeFactor + fineGrain, 0.0, 0.90);
+  const dust = PALETTE_LINEAR.dust;
+  return albedo.map((c, i) => c * (1 - dustFraction) + dust[i] * dustFraction);
+}
+/**
  * Fraction of the haze colour mixed in at distance `edgeDistM` from the mesh border (1 at the border),
  * only for fragments viewed from far away (`viewDistM`). Interior no-data gaps are never affected.
  */
@@ -476,6 +505,7 @@ const vec3 TERRAIN_BASIN = ${v3(PALETTE_LINEAR.basin)};
 const vec3 TERRAIN_DELTA = ${v3(PALETTE_LINEAR.delta)};
 const vec3 TERRAIN_RIDGE = ${v3(PALETTE_LINEAR.ridge)};
 const vec3 TERRAIN_BEDROCK = ${v3(PALETTE_LINEAR.bedrock)};
+const vec3 TERRAIN_DUST = ${v3(PALETTE_LINEAR.dust)};
 const float ORTHO_MID_LUMA = ${f(ORTHO_MID_LUMA)};
 
 uint terrainHash(ivec2 cell) {
@@ -556,6 +586,18 @@ vec3 terrainCombineAlbedo(vec3 paletteRgb, float coverage, float gain, bool mono
   float target = mix(lp, ORTHO_MID_LUMA * gain, clamp(coverage, 0.0, 1.0));
   vec3 chroma = monochrome ? vec3(lp) : paletteRgb;
   return chroma * (target / max(dot(chroma, LUMA709), 0.00001));
+}
+// Surface dust mantle (görsel detay, veri değildir): aeolian dust drifts that soften texture imperfections.
+vec3 terrainApplyDust(vec3 albedo, vec2 xy, float slopeW, float dist, float coverage) {
+  float slopeFactor = 1.0 - smoothstep(0.15, ${f(P.dustSlopeCutoff)}, slopeW);
+  vec2 driftUv = xy / ${f(P.dustWavelengthM)};
+  vec3 nDrift = terrainValueNoiseD(driftUv + vec2(17.3, 41.9));
+  vec3 nFine = terrainValueNoiseD(xy / 0.45 + vec2(83.1, 19.7));
+  float fineGrain = (nFine.x - 0.5) * 0.10 * (1.0 - smoothstep(4.0, 22.0, dist));
+  float drift = (nDrift.x - 0.5) * 2.0;
+  float dustFraction = clamp(${f(P.dustBaseAmount)} + ${f(P.dustDriftAmp)} * drift, 0.0, 0.85);
+  dustFraction = clamp(dustFraction * slopeFactor + fineGrain, 0.0, 0.90);
+  return mix(albedo, TERRAIN_DUST, dustFraction);
 }
 float terrainMeshEdgeFade(float edgeDistM, float viewDistM) {
   return (1.0 - smoothstep(0.0, ${f(P.meshEdgeFadeM)}, edgeDistM)) *

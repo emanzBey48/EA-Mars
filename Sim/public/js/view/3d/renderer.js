@@ -201,6 +201,9 @@ void main() {
     float coverage = wf + (1.0 - wf) * wc;
     float gain = coverage > 0.0001 ? (wf * gF + (1.0 - wf) * wc * gC) / coverage : 1.0;
     vec3 albedo = terrainCombineAlbedo(palette, coverage, gain, uOrthoMode == 2);
+    // Surface aeolian dust mantle (görsel detay, veri değildir):
+    // Softens underlying texture pixelation, tile seams, and harsh contrast flaws
+    albedo = terrainApplyDust(albedo, vWorldPos.xy, slopeW, dist, coverage);
 
     // Procedural micro detail (visual detail, not data): world-fixed, deterministic, faded with distance.
     vec2 microSlope = vec2(0.0);
@@ -240,6 +243,11 @@ void main() {
     vec3 lit = albedo * (direct + ambient);
 
     lit = applyAerialPerspective(lit, dist, rayV, skySunDir, HAZE_DENSITY, HAZE_MAX);
+    // Ground-layer atmospheric dust haze (yer seviyesini saran hafif toz sisi):
+    // Softens distant mesh triangles and tile boundaries along the ground
+    float groundProximity = clamp(1.0 - abs(rayV.z) / (dist + 1e-4), 0.0, 1.0);
+    float groundDust = pow(groundProximity, 3.0) * (1.0 - exp(-dist * 0.0016)) * 0.28;
+    lit = mix(lit, marsHazeColor(rayV, skySunDir), clamp(groundDust, 0.0, 0.35));
     if (uTerrainBounds.z > uTerrainBounds.x) {
       float edgeM = min(min(vWorldPos.x - uTerrainBounds.x, uTerrainBounds.z - vWorldPos.x),
                         min(vWorldPos.y - uTerrainBounds.y, uTerrainBounds.w - vWorldPos.y));

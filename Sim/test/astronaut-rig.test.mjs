@@ -11,6 +11,9 @@ import {
   froudeNumber,
   walkRunTransitionSpeedMps,
   resolvePartMaterial,
+  RIG_GEOMETRY_NAMES,
+  createRigUnitGeometry,
+  createRigGeometryAtlas,
 } from '../public/js/view/3d/astronaut-rig.js';
 
 const STATUS = Object.freeze({ OK: 'ok', NO_DATA: 'no_data', OUT_OF_BOUNDS: 'out_of_bounds', UNAVAILABLE: 'unavailable' });
@@ -1145,4 +1148,70 @@ test('Stage B: presentation stride is preserved and strideLengthForSpeedM is fin
   }
   assert.throws(() => strideLengthForSpeedM(-1), TypeError);
   assert.throws(() => strideLengthForSpeedM(Number.NaN), TypeError);
+});
+
+test('rig unit geometries: closed outward-wound meshes inside the unit cube with unit normals', () => {
+  for (const name of RIG_GEOMETRY_NAMES) {
+    const g = createRigUnitGeometry(name);
+    const { positions: p, normals: n, indices: ix } = g;
+    assert.equal(p.length, n.length, `${name} normals align`);
+    assert.equal(ix.length % 3, 0);
+    for (let i = 0; i < p.length; i++) assert.ok(Math.abs(p[i]) <= 0.5 + 1e-9, `${name} inside unit cube`);
+    for (let i = 0; i < n.length; i += 3) assert.ok(Math.abs(Math.hypot(n[i], n[i + 1], n[i + 2]) - 1) < 1e-9, `${name} unit normal`);
+    for (const index of ix) assert.ok(index >= 0 && index < p.length / 3);
+    // Signed volume (divergence theorem) must be positive for outward winding, and the mesh must be watertight-ish
+    // in the sense that every geometric face normal agrees with the vertex normals on average.
+    let volume = 0, agreement = 0, count = 0;
+    for (let t = 0; t < ix.length; t += 3) {
+      const a = ix[t] * 3, b = ix[t + 1] * 3, c = ix[t + 2] * 3;
+      const A = [p[a], p[a + 1], p[a + 2]], B = [p[b], p[b + 1], p[b + 2]], C = [p[c], p[c + 1], p[c + 2]];
+      volume += (A[0] * (B[1] * C[2] - B[2] * C[1]) - A[1] * (B[0] * C[2] - B[2] * C[0]) + A[2] * (B[0] * C[1] - B[1] * C[0])) / 6;
+      const e1 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], e2 = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+      const fn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      const vn = [n[a] + n[b] + n[c], n[a + 1] + n[b + 1] + n[c + 1], n[a + 2] + n[b + 2] + n[c + 2]];
+      if (Math.hypot(...fn) > 1e-12) { count++; if (fn[0] * vn[0] + fn[1] * vn[1] + fn[2] * vn[2] > 0) agreement++; }
+    }
+    assert.ok(volume > 0.3 && volume <= 1 + 1e-9, `${name} signed volume ${volume}`);
+    assert.equal(agreement, count, `${name} winding agrees with normals`);
+  }
+});
+
+test('rig geometry atlas: ranges tile the shared index buffer, are Uint16-safe, and every part names a known unit mesh', () => {
+  const atlas = createRigGeometryAtlas();
+  assert.ok(atlas.positions.length / 3 < 65536);
+  let cursor = 0;
+  for (const name of RIG_GEOMETRY_NAMES) {
+    const r = atlas.ranges[name];
+    assert.equal(r.indexStart, cursor, `${name} start`);
+    cursor += r.indexCount;
+  }
+  assert.equal(cursor, atlas.indices.length);
+  for (const [id, part] of Object.entries(ASTRONAUT_RIG.parts)) assert.ok(RIG_GEOMETRY_NAMES.includes(part.geometry), `${id} geometry`);
+  assert.equal(ASTRONAUT_RIG.parts.helmet.geometry, 'sphere');
+  assert.equal(ASTRONAUT_RIG.parts.visor.geometry, 'sphere');
+  assert.ok(Object.values(ASTRONAUT_RIG.parts).filter((p) => p.geometry !== 'unitBox').length >= 20, 'silhouette is no longer all boxes');
+  assert.throws(() => createRigUnitGeometry('nope'), TypeError);
+});
+
+test('rig visor: gold ellipsoid fronting the helmet (helmet front is the -Y face) and clear of the first-person list', () => {
+  const { helmet, visor } = ASTRONAUT_RIG.parts;
+  const helmetFrontY = helmet.center[1] - helmet.size[1] / 2;
+  const visorFrontY = visor.center[1] - visor.size[1] / 2;
+  assert.ok(visorFrontY <= helmetFrontY && visorFrontY >= helmetFrontY - 0.03, 'visor just proud of the helmet shell');
+  assert.ok(visor.size[0] < helmet.size[0] && visor.size[2] < helmet.size[2]);
+  assert.equal(resolvePartMaterial(visor).metallic, 1);
+  assert.ok(!FIRST_PERSON_RIG_PARTS.includes('helmet') && !FIRST_PERSON_RIG_PARTS.includes('visor'));
+});
+test('jump flight poses are clearly distinct from the walking gait (apex wings, ascent reach, descent brace)', () => {
+  const base = { timeS: 3, horizontalSpeedMps: 0, grounded: false, airborne: true, phase: 'airborne' };
+  const walk = poseAstronautRig({ timeS: 3, horizontalSpeedMps: 1.2, verticalSpeedMps: 0, grounded: true, phase: 'walk' });
+  const ascent = poseAstronautRig({ ...base, verticalSpeedMps: 1.2 });
+  const apex = poseAstronautRig({ ...base, verticalSpeedMps: 0 });
+  const descent = poseAstronautRig({ ...base, verticalSpeedMps: -1.2 });
+  assert.ok(Math.abs(walk.parts.leftArm.rotationRad[1]) < 0.15, 'walking arms hang close to the body');
+  assert.ok(apex.parts.leftArm.rotationRad[1] > 0.45, 'apex arms are flared wide for balance');
+  assert.ok(apex.parts.leftLeg.rotationRad[0] * apex.parts.rightLeg.rotationRad[0] < 0, 'apex legs are split (one forward, one back)');
+  assert.ok(ascent.parts.leftArm.rotationRad[0] < -0.7, 'ascent arms reach well forward/up');
+  assert.ok(descent.parts.leftLeg.rotationRad[0] < -0.3, 'descent legs reach forward to brace');
+  assert.ok(descent.parts.leftArm.rotationRad[1] > 0.3, 'descent arms stay out for balance');
 });

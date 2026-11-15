@@ -63,8 +63,8 @@ export const SKY_PARAMS = Object.freeze({
   // Forward-scattering aureole: Henyey–Greenstein lobes normalised to 1 at the sun. Presentation.
   // Narrow lobes (g close to 1) and modest strength: a thin dust-scatter ring around the disc, not a broad glare.
   haloWarmColor: Object.freeze([0.90, 0.62, 0.40]),
-  haloWarmG: 0.92,
-  haloWarmIntensity: 0.18,
+  haloWarmG: 0.94,
+  haloWarmIntensity: 0.15,
   // Tight bluish lobe that strengthens as the sun lowers (PIA19400 qualitative behaviour). Presentation.
   haloBlueColor: Object.freeze([0.30, 0.48, 0.85]),
   haloBlueG: 0.97,

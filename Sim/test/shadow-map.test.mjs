@@ -35,9 +35,9 @@ test('quality presets: off/low/high, unknown names and auto fall back to the def
 
 test('coverage radius: first person uses the preset; orbit grows only when the orbit distance needs it', () => {
   assert.equal(chooseShadowRadiusM({ mode: 'first-person' }, SHADOW_QUALITY.high), SHADOW_QUALITY.high.radiusM);
-  assert.equal(chooseShadowRadiusM({ mode: 'orbit', distanceM: 10 }, SHADOW_QUALITY.high), 90);
+  assert.equal(chooseShadowRadiusM({ mode: 'orbit', distanceM: 10 }, SHADOW_QUALITY.high), SHADOW_QUALITY.high.radiusM);
   const far = chooseShadowRadiusM({ mode: 'orbit', distanceM: 1000 }, SHADOW_QUALITY.high);
-  assert.ok(far > 90 && far <= 90 * 8, `radius ${far} should grow but stay within 2^3`);
+  assert.ok(far > SHADOW_QUALITY.high.radiusM && far <= SHADOW_QUALITY.high.radiusM * 8, `radius ${far} should grow but stay within 2^3`);
   assert.equal(chooseShadowRadiusM({ mode: 'orbit', distanceM: 1000 }, SHADOW_QUALITY.off), 0, 'off has no radius');
 });
 

@@ -10,7 +10,7 @@
 // changes elevation, slope, no-data cells, routes or mesh geometry.
 
 import { firstPersonLookDownFraction, getCameraPosition, getViewProjectionMatrix } from './camera.js';
-import { ASTRONAUT_RIG, FIRST_PERSON_LOWER_BODY_PARTS, FIRST_PERSON_RIG_PARTS, poseAstronautRig, resolvePartMaterial } from './astronaut-rig.js';
+import { ASTRONAUT_RIG, FIRST_PERSON_LOWER_BODY_PARTS, FIRST_PERSON_RIG_PARTS, createRigGeometryAtlas, poseAstronautRig, resolvePartMaterial } from './astronaut-rig.js';
 import { MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, SKY_PARAMS, luminance, marsSunIrradiance } from './sky-model.js';
 import { TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS } from './terrain-shading.js';
 import {
@@ -147,8 +147,12 @@ void main() {
     float pulseDelta = abs(vRouteUv.x - uRoutePulseUM);
     float pulse = exp(-pulseDelta * pulseDelta / 30.0);
     // vColor is an sRGB score colour; go through the shared linear -> ACES -> sRGB output so the ribbon matches the scene.
-    vec3 glow = srgbToLinear(clamp(vColor, 0.0, 1.0)) * (0.72 + 0.32 * flow + 1.25 * pulse) * EMISSIVE_GAIN;
-    outColor = finishColor(glow, 0.68 + 0.22 * pulse);
+    vec3 routeBase = srgbToLinear(clamp(vColor, 0.0, 1.0));
+    // Saturation boost (presentation): ACES + the warm haze washed the score colours out to pastel. Same hue ramp.
+    float routeLuma = dot(routeBase, LUMA709);
+    routeBase = max(mix(vec3(routeLuma), routeBase, 1.3), vec3(0.0));
+    vec3 glow = routeBase * (0.36 + 0.26 * flow + 1.10 * pulse) * EMISSIVE_GAIN;
+    outColor = finishColor(glow, 0.78 + 0.18 * pulse);
     return;
   }
 
@@ -187,6 +191,13 @@ void main() {
     float microTone = 0.0;
     if (dist < ${(TERRAIN_SHADING_PARAMS.octaves[3].wavelengthM * TERRAIN_SHADING_PARAMS.fadeEndPerWavelength).toFixed(1)}) {
       terrainMicro(vWorldPos.xy, dist, 1.0 + ${TERRAIN_SHADING_PARAMS.slopeRoughnessGain.toFixed(4)} * slopeW, microSlope, microTone);
+    }
+    // Pebble/gravel scatter (visual detail, not data): kept weak where HiRISE ortho luminance exists.
+    if (dist < ${TERRAIN_SHADING_PARAMS.pebbles[1].fadeEndM.toFixed(1)}) {
+      vec2 pebSlope; float pebTone;
+      terrainPebbles(vWorldPos.xy, dist, pebSlope, pebTone);
+      microSlope += pebSlope;
+      albedo *= 1.0 + pebTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.pebbleOrthoToneReduction.toFixed(4)});
     }
     albedo *= (1.0 + microTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.microToneOrthoReduction.toFixed(4)}));
     albedo *= 1.0 - ${TERRAIN_SHADING_PARAMS.slopeDarkening.toFixed(4)} * slopeW;
@@ -369,7 +380,7 @@ export function getMarkerDrawPlan(markerMesh, camera) {
 }
 
 function createAstronautBuffers(gl, locations) {
-  const geometry = ASTRONAUT_RIG.geometry;
+  const geometry = createRigGeometryAtlas();
   const positions = new Float32Array(geometry.positions);
   const normals = new Float32Array(geometry.normals);
   const indices = new Uint16Array(geometry.indices);
@@ -391,7 +402,13 @@ function createAstronautBuffers(gl, locations) {
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: indices.length };
+  return { vao, positionBuffer, normalBuffer, indexBuffer, indexCount: indices.length, ranges: geometry.ranges };
+}
+
+// Draws one rig part from the shared geometry atlas (falls back to the unit box range).
+function drawRigPart(gl, astronaut, part) {
+  const range = astronaut.ranges[part.geometry] ?? astronaut.ranges.unitBox;
+  gl.drawElements(gl.TRIANGLES, range.indexCount, gl.UNSIGNED_SHORT, range.indexStart * 2);
 }
 
 // Per-part material uniforms, resolved once from the frozen rig template (linear albedo, roughness, metallic).
@@ -1020,7 +1037,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
               gl.uniform3fv(locations.partCenter, part.center);
               gl.uniform3fv(locations.partOffset, partPose.offset);
               gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
-              gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+              drawRigPart(gl, astronaut, part);
             }
           }
           gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -1294,7 +1311,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           gl.uniform3fv(locations.rootRotationRad, presentedRootPose.rootRotationRad);
           setRigMaterialUniforms(gl, locations, id);
           gl.vertexAttrib3fv(locations.color, part.colorRgb);
-          gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+          drawRigPart(gl, astronaut, part);
           rigPartsDrawn.push(id);
           const worldCenter = rigPartWorldCenter(presentedPart, presentedPartPose, presentedRootPose, objectOffset, headingRad, rigVerticalScale);
           if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
@@ -1321,7 +1338,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
               gl.uniform3fv(locations.rootRotationRad, rigPose.rootRotationRad);
               setRigMaterialUniforms(gl, locations, id);
               gl.vertexAttrib3fv(locations.color, part.colorRgb);
-              gl.drawElements(gl.TRIANGLES, astronaut.indexCount, gl.UNSIGNED_SHORT, 0);
+              drawRigPart(gl, astronaut, part);
               rigPartsDrawn.push(id);
               const worldCenter = rigPartWorldCenter(part, partPose, rigPose, lowerBodyOffset, headingRad, rigVerticalScale);
               if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);

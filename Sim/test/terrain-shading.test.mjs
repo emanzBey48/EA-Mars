@@ -12,7 +12,7 @@ import {
   MICRO_DERIVATIVE_BOUND, ORTHO_MID_LUMA, PALETTE_LINEAR, TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS,
   combineAlbedo, hash2, hashUnit, meshEdgeFade, microDetail, octaveFade, orthoCoverage, orthoGain,
   paletteAlbedo, perturbNormal, slopeAlbedoFactor, slopeRoughness, tanSlopeFromNormalZ, terrainSlopeWeight,
-  valueNoiseD,
+  valueNoiseD, pebbleDetail,
 } from '../public/js/view/3d/terrain-shading.js';
 
 const P = TERRAIN_SHADING_PARAMS;
@@ -207,4 +207,34 @@ test('GLSL terrain block carries the same palette and ortho mid constants as the
 test('shading module does not alter geometry-facing data: it exports no sampling or elevation functions', async () => {
   const src = fs.readFileSync(new URL('../public/js/view/3d/terrain-shading.js', import.meta.url), 'utf8');
   assert.ok(!/elevation|sampleElevation|zM\b|sourceElevations/.test(src.replace(/\/\/.*$/gm, '')), 'terrain shading must not touch elevation data');
+});
+
+test('pebble scatter: deterministic, world-fixed, bounded, fades to zero with distance, sparse', () => {
+  const far = P.pebbles[1].fadeEndM + 1;
+  let nonZero = 0, total = 0, maxTone = 0, maxSlope = 0;
+  for (const [x, y] of samples(2000)) {
+    const a = pebbleDetail(x, y, 2), b = pebbleDetail(x, y, 2);
+    assert.deepEqual(a, b, 'deterministic');
+    assert.ok(finite([a.slopeX, a.slopeY, a.tone]));
+    assert.ok(Math.hypot(a.slopeX, a.slopeY) <= P.pebbleSlopeMax + 1e-9, 'slope capped');
+    maxSlope = Math.max(maxSlope, Math.hypot(a.slopeX, a.slopeY));
+    maxTone = Math.max(maxTone, Math.abs(a.tone));
+    total++; if (a.tone !== 0 || a.slopeX !== 0) nonZero++;
+    const f = pebbleDetail(x, y, far);
+    assert.ok(f.tone === 0 && f.slopeX === 0 && f.slopeY === 0, 'no pebbles beyond the fade range');
+  }
+  assert.ok(maxTone <= 0.6, `tone amplitude stays modest (${maxTone})`);
+  assert.ok(nonZero / total > 0.03 && nonZero / total < 0.7, `pebbles are sparse but present (${nonZero / total})`);
+});
+
+test('pebble scatter: pebbles sit inside their cell so only the own cell has to be evaluated', () => {
+  for (const L of P.pebbles) assert.ok(L.radiusM <= 0.22 * L.cellM + 1e-12, 'pebble radius <= 0.22 cell');
+  assert.ok(P.pebbleOrthoToneReduction > P.microToneOrthoReduction, 'ortho luminance is protected more from pebbles');
+});
+
+test('pebble scatter: GLSL block mirrors the JS constants and the renderer wires it in', () => {
+  assert.match(TERRAIN_SHADING_GLSL, /void terrainPebbles\(/);
+  assert.match(TERRAIN_SHADING_GLSL, /7919 \* k/);
+  const renderer = fs.readFileSync(new URL('../public/js/view/3d/renderer.js', import.meta.url), 'utf8');
+  assert.match(renderer, /terrainPebbles\(vWorldPos\.xy/);
 });

@@ -14,7 +14,8 @@ import {
   ASTRONAUT_RIG, RIG_SHADOW_CASTER_PARTS, createRigGeometryAtlas, firstPersonDrawPlan, firstPersonHandParts,
   firstPersonRootPose, poseAstronautRig, resolvePartMaterial,
 } from './astronaut-rig.js';
-import { MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, SKY_PARAMS, luminance, marsSunIrradiance } from './sky-model.js';
+import { MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, SKY_PARAMS, glslFloat, luminance, marsSunIrradiance } from './sky-model.js';
+import { HORIZON_FAR_M, HORIZON_HAZE, HORIZON_NEAR_M } from './horizon-mesh.js';
 import { TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS } from './terrain-shading.js';
 import {
   SHADOW_QUALITY_NAMES, SHADOW_RECEIVER_GLSL, chooseShadowRadiusM, computeShadowLightSpace,
@@ -73,7 +74,8 @@ void main() {
 }`;
 
 // Render passes: 0 terrain, 1 guides/lines/beacons (emissive), 2 astronaut rig (material-lit), 3 sky dome,
-// 4 shadow depth only, 5 footprint decal (terrain-lit, no emissive).
+// 4 shadow depth only, 5 footprint decal (terrain-lit, no emissive), 6 planned route ribbon,
+// 7 distant regional-context horizon (MOLA-class; own projection, no shadows, strong aerial perspective).
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
@@ -156,6 +158,16 @@ void main() {
     routeBase = max(mix(vec3(routeLuma), routeBase, 1.3), vec3(0.0));
     vec3 glow = routeBase * (0.36 + 0.26 * flow + 1.10 * pulse) * EMISSIVE_GAIN;
     outColor = finishColor(glow, 0.78 + 0.18 * pulse);
+    return;
+  }
+
+  // Pass 7: distant regional-context horizon. Vertex colour is linear albedo precomputed in horizon-mesh.js with the
+  // pass-0 palette and slope rules. Lit like the terrain but without shadows, then strongly hazed into the sky.
+  if (uRenderPass == 7) {
+    vec3 nH = normalize(vec3(normal.xy, normal.z * uTerrainExaggeration));
+    vec3 litH = vColor * (marsSunIrradiance(sunDir) * max(dot(nH, sunDir), 0.0) + marsSkyAmbient(nH, sunDir));
+    litH = applyAerialPerspective(litH, dist, rayV, skySunDir, ${glslFloat(HORIZON_HAZE.densityPerM)}, ${glslFloat(HORIZON_HAZE.maxAmount)});
+    outColor = finishColor(litH, 1.0);
     return;
   }
 
@@ -354,6 +366,30 @@ function assertMarkerMeshAsset(mesh) {
   }
 }
 
+// Body anchor for the first-person body draw. It is the unshifted body position from setFirstPersonPose
+// (bodyAnchorZDisplay), so the eye's dip/bob and the lateral head sway never move the torso and legs.
+// Falls back to the eye minus eye height only for cameras that were never posed from a body anchor.
+export function firstPersonBodyOrigin(camera) {
+  const bodyZ = Number.isFinite(camera.bodyAnchorZDisplay) ? camera.bodyAnchorZDisplay : camera.zDisplay - camera.eyeHeightM;
+  return [camera.bodyAnchorXM ?? camera.xM, camera.bodyAnchorYM ?? camera.yM, bodyZ];
+}
+
+function assertHorizonMeshAsset(mesh) {
+  if (!mesh || !(mesh.positions instanceof Float32Array) || !(mesh.normals instanceof Float32Array) ||
+      !(mesh.colorsRgb instanceof Float32Array) || !(mesh.indices instanceof Uint32Array)) {
+    throw new TypeError('horizonMesh must provide Float32Array positions/normals/colorsRgb and Uint32Array indices');
+  }
+  if (mesh.positions.length % 3 !== 0 || mesh.normals.length !== mesh.positions.length ||
+      mesh.colorsRgb.length !== mesh.positions.length || mesh.indices.length % 3 !== 0) {
+    throw new RangeError('horizonMesh arrays are misaligned');
+  }
+  if (!mesh.meta || mesh.meta.layer !== 'regional-context' || mesh.meta.walkability !== false) {
+    throw new TypeError('horizonMesh must carry regional-context metadata with walkability false');
+  }
+  const vertexCount = mesh.positions.length / 3;
+  for (const index of mesh.indices) if (index >= vertexCount) throw new RangeError('horizonMesh.indices contains an out-of-range vertex');
+}
+
 // Presentation-only clearance so the first-person camera does not render the beacon mast it starts inside.
 export const FIRST_PERSON_BEACON_HIDE_RADIUS_M = 2.5;
 
@@ -474,7 +510,7 @@ function pointNdc(point, viewProjection) {
  * immutable snapshot movement state; world Z comes from bodyWorldZM, while sampled zM remains the
  * current-contact validity signal. The first-person arms/torso are a view model, not another body.
  */
-export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075], lightDirection = [-0.45, -0.35, 1], collectDiagnostics = false, shadows = 'auto' } = {}) {
+export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075], lightDirection = [-0.45, -0.35, 1], collectDiagnostics = false, shadows = 'auto', horizon = true } = {}) {
   if (!canvas || typeof canvas.getContext !== 'function') throw new TypeError('A canvas element is required');
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: true, depth: true, powerPreference: 'high-performance' });
   if (!gl) throw new Error('WebGL2 is unavailable in this browser');
@@ -554,6 +590,16 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
   let uploadedRouteRibbon = null;
   let disposed = false;
   let lastFrameDiagnostics = null;
+  // Regional horizon (pass 7). Off by option or by ?horizon=off; a failed upload silently leaves it unavailable.
+  const horizonRequested = (() => {
+    if (horizon === false) return false;
+    try {
+      const fromUrl = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('horizon') : null;
+      return fromUrl !== 'off';
+    } catch { return true; }
+  })();
+  let uploadedHorizonMesh = null;
+  let horizonError = null;
 
   let orthoTexFine = null;
   let orthoTexCoarse = null;
@@ -918,6 +964,44 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     uploadedRouteRibbon = { source: mesh, vao, positionBuffer, normalBuffer, colorBuffer, uvBuffer, indexBuffer, indexCount: mesh.indices.length };
   }
 
+  function releaseHorizonMesh() {
+    if (!uploadedHorizonMesh) return;
+    gl.deleteVertexArray(uploadedHorizonMesh.vao);
+    gl.deleteBuffer(uploadedHorizonMesh.positionBuffer);
+    gl.deleteBuffer(uploadedHorizonMesh.normalBuffer);
+    gl.deleteBuffer(uploadedHorizonMesh.colorBuffer);
+    gl.deleteBuffer(uploadedHorizonMesh.indexBuffer);
+    uploadedHorizonMesh = null;
+  }
+
+  function uploadHorizonMesh(mesh) {
+    if (mesh === uploadedHorizonMesh?.source) return;
+    assertHorizonMeshAsset(mesh);
+    releaseHorizonMesh();
+    const vao = gl.createVertexArray();
+    const positionBuffer = gl.createBuffer();
+    const normalBuffer = gl.createBuffer();
+    const colorBuffer = gl.createBuffer();
+    const indexBuffer = gl.createBuffer();
+    if (!vao || !positionBuffer || !normalBuffer || !colorBuffer || !indexBuffer) throw new Error('WebGL2 horizon buffer allocation failed');
+    gl.bindVertexArray(vao);
+    for (const [buffer, data, location] of [
+      [positionBuffer, mesh.positions, locations.position],
+      [normalBuffer, mesh.normals, locations.normal],
+      [colorBuffer, mesh.colorsRgb, locations.color],
+    ]) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(location);
+      gl.vertexAttribPointer(location, 3, gl.FLOAT, false, 0, 0);
+    }
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    uploadedHorizonMesh = { source: mesh, vao, positionBuffer, normalBuffer, colorBuffer, indexBuffer, indexCount: mesh.indices.length };
+  }
+
   return {
     /** Sets the drawing buffer to CSS dimensions multiplied by device pixel ratio. */
     resize(width, height, pixelRatio = 1) {
@@ -933,7 +1017,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null, plannedRouteRibbon = null, plannedRoutePulseUM = 0, footprintTrail = null }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null, plannedRouteRibbon = null, plannedRoutePulseUM = 0, footprintTrail = null, horizonMesh = null }) {
       const frameStartedAt = collectDiagnostics ? now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -1101,6 +1185,35 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       gl.drawElements(gl.TRIANGLES, skyDome.indexCount, gl.UNSIGNED_SHORT, 0);
       gl.depthMask(true);
       gl.enable(gl.DEPTH_TEST);
+      lap('skyMs');
+
+      // Pass 7: regional-context horizon. Drawn after the sky and before the local terrain, with its own projection
+      // (near 60 m, far 200 km). Depth is cleared afterwards, so the local terrain, guides and rig keep the normal
+      // precision of the local projection. The horizon is outside the local window by construction, so nothing
+      // overlaps it. It neither casts nor receives shadows (the shadow pass never draws it).
+      let horizonDrawn = false;
+      if (horizonRequested && horizonMesh) {
+        try {
+          uploadHorizonMesh(horizonMesh);
+          horizonError = null;
+        } catch (error) {
+          horizonError = error?.message ?? 'horizon upload failed';
+          releaseHorizonMesh();
+        }
+      }
+      if (horizonRequested && uploadedHorizonMesh) {
+        const horizonViewProjection = getViewProjectionMatrix({ ...camera, nearM: HORIZON_NEAR_M, farM: HORIZON_FAR_M }, canvas.width / canvas.height);
+        gl.uniformMatrix4fv(locations.viewProjection, false, horizonViewProjection);
+        setIdentityObject(7);
+        gl.uniform1f(locations.receiveShadow, 0);
+        gl.uniform1f(locations.alpha, 1);
+        gl.bindVertexArray(uploadedHorizonMesh.vao);
+        gl.drawElements(gl.TRIANGLES, uploadedHorizonMesh.indexCount, gl.UNSIGNED_INT, 0);
+        gl.bindVertexArray(null);
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.uniformMatrix4fv(locations.viewProjection, false, viewProjection);
+        horizonDrawn = true;
+      }
       lap('skyMs');
 
       // Pass 0: Jezero Crater Terrain Mesh
@@ -1298,7 +1411,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
 
         if (firstPerson) {
           // Physical body anchor: torso and legs stand here in world space; the camera does not own them.
-          const bodyOrigin = [camera.xM, camera.yM, camera.zDisplay - camera.eyeHeightM];
+          const bodyOrigin = firstPersonBodyOrigin(camera);
           const lowerBody = ASTRONAUT_RIG.metadata.firstPersonLowerBody;
           const lookDown = firstPersonLookDownFraction(camera, lowerBody.minLookDownPitchRad, lowerBody.fullLookDownPitchRad);
           // Torso and legs require current valid DTM contact; a retained airborne anchor is never treated as ground.
@@ -1376,6 +1489,12 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           orthoMode: orthoMode === 2 ? 'ortho' : (orthoMode === 1 ? 'hybrid' : 'hillshade'),
           orthoFineLoaded: Boolean(hasOrthoFine),
           orthoCoarseLoaded: Boolean(hasOrthoCoarse),
+          // Regional-context horizon (K2-3/K2-4). 'off' = disabled by option or ?horizon=off; 'unavailable' = no mesh or upload failed.
+          horizon: {
+            status: !horizonRequested ? 'off' : (horizonDrawn ? 'ready' : 'unavailable'),
+            triangles: uploadedHorizonMesh ? uploadedHorizonMesh.indexCount / 3 : 0,
+            label: horizonMesh?.meta?.label ?? null,
+          },
           // Stage Visual A additions (existing keys above are unchanged).
           renderTimingMs: { total: now() - frameStartedAt, ...timings, note: 'CPU command-submission time; GPU time not measured' },
           shadowResolution: shadowMode > 0 ? shadowPreset.resolution : 0,
@@ -1490,6 +1609,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       releaseShadowTargets();
       if (dummyShadowTexture) gl.deleteTexture(dummyShadowTexture);
       releaseRouteRibbon();
+      releaseHorizonMesh();
       if (orthoTexFine) { gl.deleteTexture(orthoTexFine); orthoTexFine = null; }
       if (orthoTexCoarse) { gl.deleteTexture(orthoTexCoarse); orthoTexCoarse = null; }
       if (dummyTexture) { gl.deleteTexture(dummyTexture); }

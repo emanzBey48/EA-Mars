@@ -9,7 +9,7 @@ import {
   GEOLOGY_POSITIONAL_UNCERTAINTY_M, GEOLOGY_LICENSE_NOT_STATED,
 } from './geo/geology.js';
 import { createGeologyRegistry, lookupBestGeologicUnit } from './geo/geology-registry.js';
-import { UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
+import { STATUS, UnavailableLayer, dtmBaseDescriptor, loadOrthoDescriptor } from './surface/layers.js';
 import { createDefaultSurfaceRegistry } from './surface/registry.js';
 import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
 import { Camera, buildTerrainImage, render } from './view/render.js';
@@ -19,6 +19,7 @@ import {
 import { createCameraMotion } from './view/3d/camera-motion.js';
 import { createTerrainRenderer } from './view/3d/renderer.js';
 import { buildTerrainMesh } from './view/3d/terrain-mesh.js';
+import { buildHorizonMesh, regionalGridFromBinary } from './view/3d/horizon-mesh.js';
 import { buildMarkerMeshes } from './view/3d/marker-mesh.js';
 import { buildRouteRibbon } from './view/3d/route-ribbon.js';
 import { bindControls } from './input/input.js';
@@ -67,6 +68,9 @@ let renderer3d = null;
 let renderer3dError = null;
 let terrainMeshError = null;
 let terrainMeshBuildMs = null;
+let horizonGrid = null; // MOLA-class regional grid (K2-3); regional context only
+let horizonMesh = null; // rebuilt for the current terrain display config
+let horizonStatus = 'loading';
 let geologyIndex = null;
 let geologyRegistry = null;
 let geologyContactField = null;
@@ -709,6 +713,7 @@ function rebuildTerrainMeshForScale(newScale) {
   }
   if (!prepared.indices.length) throw new Error('DTM penceresinde çizilebilir geçerli terrain quad’ı bulunamadı.');
   terrainMesh = prepared;
+  buildHorizonForTerrain();
   renderer3d?.setTerrainMesh?.(terrainMesh);
   archiveTraverse3d = null;
   combinedArchiveMarkers = null;
@@ -719,6 +724,47 @@ function rebuildTerrainMeshForScale(newScale) {
   build3dMarkersOnce();
   preparePlannedRouteGuide();
   updateScaleUi();
+}
+
+// Regional-context horizon (K2-3/K2-4). Distant MOLA-class context only: the local DTM heights are never changed,
+// the seam difference is measured inside buildHorizonMesh, and the horizon never feeds route height or walkability.
+function buildHorizonForTerrain() {
+  horizonMesh = null;
+  if (!horizonGrid || !terrainMesh || !layers.dtm.available) return;
+  const localWindowBounds = layers.dtm.descriptor?.coverage?.localBoundsM;
+  try {
+    horizonMesh = buildHorizonMesh({
+      regionalGrid: horizonGrid,
+      localWindowBounds,
+      localFrame: { adapter },
+      displayConfig: terrainMesh.displayConfig,
+      localElevationAt: (x, y) => {
+        const sample = layers.dtm.sampleElevation(x, y);
+        return sample?.status === STATUS.OK ? sample.value : null;
+      },
+    });
+    horizonStatus = 'ready';
+  } catch (error) {
+    horizonMesh = null;
+    horizonStatus = `unavailable: ${error.message}`;
+  }
+}
+
+async function loadHorizonGrid() {
+  try {
+    const [metaRes, binRes] = await Promise.all([
+      fetch('data/regional-dem/mola-jezero.json'),
+      fetch('data/regional-dem/mola-jezero.f32'),
+    ]);
+    if (!metaRes.ok || !binRes.ok) throw new Error(`HTTP ${metaRes.status}/${binRes.status}`);
+    horizonGrid = regionalGridFromBinary(await metaRes.json(), await binRes.arrayBuffer());
+    horizonStatus = 'loaded';
+    if (terrainMesh) buildHorizonForTerrain();
+  } catch (error) {
+    horizonGrid = null;
+    horizonMesh = null;
+    horizonStatus = `unavailable: ${error.message}`;
+  }
 }
 
 function build3dTerrainOnce() {
@@ -744,6 +790,7 @@ function build3dTerrainOnce() {
   }
   if (!prepared.indices.length) throw new Error('DTM penceresinde çizilebilir geçerli terrain quad’ı bulunamadı.');
   terrainMesh = prepared;
+  buildHorizonForTerrain();
   prepareArchiveDisplay();
   geologyLinePositions = buildGeologyLinePositions();
   build3dMarkersOnce();
@@ -1329,6 +1376,7 @@ geologyToggle?.addEventListener('change', () => {
 });
 $('toggle-archive-traverse').addEventListener('change', refreshMinimapOverlays);
 void loadGeology();
+void loadHorizonGrid();
 void loadArchiveTraverse();
 void loadOrthoMosaics();
 
@@ -1549,6 +1597,7 @@ function frame(now) {
         plannedRouteRibbon,
         plannedRoutePulseUM: plannedRoutePulseDistance(player),
         footprintTrail: footprintTrailSnapshot,
+        horizonMesh,
       });
       if (!hasElevation) {
         viewStatus.textContent = `DTM yüzey kotu bilinmiyor (${player.elevationStatus}); zemin teması doğrulanamıyor. Kamera yalnız saklanan hareket dünya-Z referansını kullanır; bu güncel yüzey kotu değildir.`;
@@ -1605,6 +1654,7 @@ if (debugEnabled) {
       terrainMeshBuildMs,
       terrainMeshCellCount: layers.dtm?.rows * layers.dtm?.cols || null,
       terrainMeshProvenance: terrainMesh ? { ...terrainMesh.provenance } : null,
+      horizonStatus,
       markerMeshReady: Boolean(markerMesh),
       markerMeshError: markerMeshError?.message ?? null,
       markerTriangles: markerMesh ? markerMesh.indices.length / 3 : 0,

@@ -35,7 +35,7 @@
 - K3-1 (no-data üzerinde yerçekimi kararı, `sim.js`): **bu güncellemede kanıt toplanmadı; önceki durum korunur (doğrulanmadı).**
 - K3-2 (minimap EDGE_UNKNOWN reddi): **KOD TAMAMLANDI** — Alparslan `c8e2d09` (birleşme `4f741a5`), uyumluluk `b86d58a`. Tarayıcıda hücre reddi kanıtı **NOT-TESTED** (`Sim/stage-final-acceptance.md`).
 - K3-3 (rig test sınırı onayı, Alparslan), K3-4 (rig `left*` adları, Efe): **bu güncellemede kanıt toplanmadı; önceki durum korunur (açık).**
-- K3-5 (datum): **38A TAMAMLANDI** — `2a2b2c2`. **38B AÇIK** (commit yok): `Sim/public/js/config.js:56` hâlâ `verticalDatumVerified: true`, `:57` doğrulanmamış "CTX LVS tie" ifadesini taşıyor (doğrulandı); `data/dtm_subset.json` tarafında `false`.
+- K3-5 (datum): **38A TAMAMLANDI** (`2a2b2c2`), **38B TAMAMLANDI** (Alparslan): `Sim/public/js/config.js` içinde `verticalDatum`, `verticalDatumVerified: false`, `verticalDatumEvidence: null` değerleri `data/dtm_subset.json` ile eşitlendi; `scripts/validate-data-integrity.mjs` 0 hata/çıkış kodu 0 verdi; `npm test` 681/681 geçti.
 - K3-6 (rapor metinleri, Alparslan): **bu güncellemede kanıt toplanmadı; önceki durum korunur.** Not: ROUTE_PREFERENCES costParams tablosu `main.js` içinden kaldırılmış; ağırlıklar yalnız `route/route-compare.js` içinde.
 - K3-7 (aktif arazi kararı): **AÇIK — karar bekliyor** (bkz. K6 bölümü, c).
 - K3-8 (ortomozaik ↔ aktif DTM hizası): **ÖLÇÜLDÜ, KANITLANAMADI** — `5cca30c`: aktif legacy DTM için high-pass tepe r = 0,021 (`Sim/stage-k3-legacy-analysis.md`). "±1,5 m" değeri yalnız USGS adayı penceresinde ölçüldü (`39A`, `5db4a73`); aktif DTM ile hizalı denmez.
@@ -69,7 +69,7 @@
 | K5-3 (P0) | Yedek demo kaydı (60–90 sn `?demo=1`) ve 2D fallback görüntüsü | Kullanıcı 0,5 + Alparslan 0,5 | 1,0 | Tek dosya, kaynak sürümü yazılı |
 | K5-4 (P0) | 14 kaynaklı atıf listesi; Viking lisans metni elle (K1-4 ile birlikte) | Efe 1,0 + Kullanıcı 0,5 | 1,5 | Tüm kaynak atıflı; uydurma lisans yok |
 | K5-5 (P0) | Proje sayfası metni (özet, sınırlar paragrafı) | Efe 1,0 + Kullanıcı 0,5 | 1,5 | Zorunlu alanlar; her iddia depoya bağlı |
-| K5-6 (P0) | Datum bayrağı: `config.js:56` kanıt yoksa `false` (K3-5 ile) | Alparslan 0,5 | 0,5 | İki kaynak aynı değer |
+| K5-6 (P0) | Datum bayrağı: `config.js:56` kanıt yoksa `false` (K3-5/38B) | Alparslan | 0,5 | **TAMAMLANDI:** İki kaynak aynı değer (`false`), `scripts/validate-data-integrity.mjs` 0 hata, testler 681/681 |
 | K5-7 (P0) | Aktif arazi kararı (K3-7) ve uygulaması | Kullanıcı karar 0,2 + Alparslan 2,0 | 2,2 | Karar kayıtlı, UI/doküman tutarlı |
 | K5-8 (P1) | Impact paragrafı | Efe 0,5 + Kullanıcı 0,2 | 0,7 | Ölçüsüz iddia yok |
 | K5-9 (P1) | Creativity tek slayt | Kullanıcı 0,8 (Efe metin) | 0,8 | Tek slayt, ekran görüntüsü kanıtı |
@@ -155,7 +155,7 @@ Saat dilimi İstanbul (UTC+3) kullanıcı bildirimidir; 09:00 itibarıyla ~14 sa
 
 1. K1-1 entegrasyon PR'ı (12:00–15:00).
 2. K3-7 uygulaması (kullanıcı kararından sonra; K5-7).
-3. 38B datum bayrağı: `Sim/public/js/config.js:56` `true` → `false`; `:57` doğrulanmamış "CTX LVS tie" ifadesi kaldırılır veya "doğrulanmadı" diye etiketlenir (K5-6). İki kaynağın aynı değeri göstermesi gerekir.
+3. 38B datum bayrağı: **TAMAMLANDI.** `Sim/public/js/config.js` içinde `verticalDatum`, `verticalDatumVerified: false`, `verticalDatumEvidence: null` eşitlendi (K5-6 / K3-5). İki kaynak da `false` gösteriyor; `validate-data-integrity.mjs` çıkış kodu 0.
 4. K3-10 entegrasyonu: planlayıcı, minimap ve örnekleyici tek yerel-metre ızgarasını kullanır (K5-10/11 ile ölçüm sırası 18:00 öncesi).
 5. Feragatlerin varsayılan görünürlüğü: "Planlama göstergesi — güvenli rota sertifikası değildir" metni sadeleştirmeden sonra ana görünümde değil, yan panelde (karar onayı).
 6. `idleBreathing: false` (`Sim/public/js/main.js:50`) değerinin onayı.

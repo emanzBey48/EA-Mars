@@ -27,6 +27,7 @@ import { createHud } from './view/hud.js';
 import { buildPlannedRouteLinePositions, derivePlannedRouteGuidance } from './view/route-guidance.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 import { createMinimap } from './view/minimap/minimap.js';
+import { classifyPlanResponse } from './route/plan-response-state.js';
 
 const $ = (id) => document.getElementById(id);
 const urlParams = new URLSearchParams(window.location.search);
@@ -322,8 +323,22 @@ function handleRouteWorkerMessage({ data }) {
     return;
   }
   if (pending.kind === 'plan') {
-    if (data.id !== pendingPlanId || pending.endpointRevision !== endpointRevision) return;
+    const preference = minimapRoutePreference?.value ?? 'balanced';
+    const responseState = classifyPlanResponse({
+      responseId: data.id,
+      pendingPlanId,
+      pendingEndpointRevision: pending.endpointRevision,
+      endpointRevision,
+      pendingPreference: pending.preference,
+      currentPreference: preference,
+    });
+    if (responseState === 'stale') return;
     pendingPlanId = null;
+    if (responseState === 'superseded') {
+      updateRouteButton();
+      planMinimapRoute();
+      return;
+    }
   } else if (pending.kind === 'explain' && data.id !== latestExplainId) {
     return;
   }
@@ -427,11 +442,11 @@ function planMinimapRoute() {
   minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
   renderRouteSummary({ status: 'pending', reason: 'Rota hesaplanıyor' });
   pendingPlanId = id;
-  routeWorkerRequests.set(id, { kind: 'plan', endpointRevision });
+  const prefKey = minimapRoutePreference?.value ?? 'balanced';
+  routeWorkerRequests.set(id, { kind: 'plan', endpointRevision, preference: prefKey });
   minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi — güvenli rota sertifikası değildir.';
   updateRouteButton();
 
-  const prefKey = minimapRoutePreference?.value ?? 'balanced';
   const pref = ROUTE_PREFERENCES[prefKey] ?? ROUTE_PREFERENCES.balanced;
   const selectedCostParams = pref.costParams;
 

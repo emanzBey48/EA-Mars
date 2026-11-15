@@ -1,15 +1,15 @@
 # Marswalk — Tam Proje Yol Haritası
 
-**Son güncelleme:** 15 Kasım 2026 (K1 entegrasyon durumu ve sonraki rota/veri denetimi; taban `origin/codex/marswalk-ui-simplification` @ `3e1f570`)
+**Son güncelleme:** 15 Kasım 2026 (sabah)
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Bu belge:** Kodlama planı ve karar kaydıdır; uygulama/test çalıştırma kaydı değildir.
 
 ## Proje kapanış durumu (15 Kasım 2026)
 
-**Kaynak:** dal `codex/efe-visual-realism` @ `53068e6` (çalışma klasörü `C:\Users\efese\Desktop\Nasaspaceapps-efe`; bu bölüm `Nasaspaceapps` ana klasöründeki dal bilgisini değiştirmez). Bu bölümün doğrulaması Efe'nin bu oturumdaki komut çıktılarıdır; bağımsız kabul değildir.
-- `node --test test/` → **612/612, çıkış kodu 0** (mevcut çalışma ağacı; ara çalıştırmada 573/573). `node scripts/preflight.mjs` → **HAZIR** (hata 0, uyarı 0).
-- Başsız tarayıcı kabulü (8291 portu): `Sim/stage-final-acceptance.md`. Demo açılışı, 3D birinci şahıs ve eller, rota tercihi değişimi, minimap global/Jezero ve Viking, `?scale=3`, `?horizon=off`, 2D ve WebGL2 fallback **PASS**; no-data hücre reddi, sıçrama/iniş, varış rozeti, Sol 164 galerisi, ortomozaik hizası **NOT-TESTED**.
-- `npm run smoke` bu oturumda **çalıştırılmadı** (Ajan R'nin portları).
+**Kaynak:** dal `codex/efe-visual-realism` @ `143a0be` (çalışma klasörü `C:\Users\efese\Desktop\Nasaspaceapps-efe`; bu bölüm `Nasaspaceapps` ana klasöründeki dal bilgisini değiştirmez). Bu bölümün doğrulaması Efe'nin komut çıktılarıdır; bağımsız kabul değildir.
+- `node --test test/` → **612/612, çıkış kodu 0** (15 Kasım sabah güncellemesinde `143a0be` ağacında koşuldu). Aynı turda, başka ajanların commit'siz yeni dosyaları çalışma ağacına girdikten sonra koşu **640/640, çıkış kodu 0** verdi; bu yeni testler commit'te yoktur.
+- `npm run smoke` → **38/38** ve `node scripts/preflight.mjs` → **HAZIR**: bu iki sonuç son tam koşuya aittir (birleşme `32bbeb5` sonrası); bu güncelleme turunda **çalıştırılmadı**.
+- Başsız tarayıcı kabulü (8291 portu, `53068e6` dönemi): `Sim/stage-final-acceptance.md`. Demo açılışı, 3D birinci şahıs ve eller, rota tercihi değişimi, minimap global/Jezero ve Viking, `?scale=3`, `?horizon=off`, 2D ve WebGL2 fallback **PASS**; no-data hücre reddi, sıçrama/iniş, varış rozeti, Sol 164 galerisi, ortomozaik hizası **NOT-TESTED**.
 
 **Tamamlanan aşamalar (commit ile):**
 - Rota ve planlama: 23A `c5c5612`, 23B `e6105b9`, 23D `9cd0fd4`, 34A `4e2279e`, 34B `8e955e0` (birleşme `fa5a491`, worker uyumu `52c75aa`), 622f526 (bayat plan düzeltmesi), K3-2 minimap seçim reddi `c8e2d09` (birleşme `4f741a5`).
@@ -22,18 +22,28 @@
 - Veri katmanları: 19A `c5d0e51`, 20 `48e330b`, 21A `d1abe35`, 22 `4d6bd10`.
 - K1 takip: HUD gözlem düzeltmesi `b69eb2b`; belge kayıtları `1d48600`, `034c15f`, `53068e6`.
 
-**Açık kalanlar:**
-- K1-1 (entegrasyon): kod birleşik; bu oturumda smoke yok. Kabul kısmen (yukarıdaki PASS/NOT-TESTED).
-- K1-2 (tarayıcı kanıtı): tam PASS değil. Açık: sıçrama/iniş pozu, Sol 164 galerisi ve yön düğmesi, gerçek no-data reddi, varış rozeti, hızlı rota yarışı, ortomozaik hizası.
-- K1-3 (belgeler, Efe): bu oturumda tamamlandı: `Sim/DEMO_NOTES.md`, `Sim/README.md`, `Sim/stage-final-acceptance.md`, `Sim/stage-handoff-efe-to-alparslan.md`, bu bölüm.
-- K1-4 (Viking lisans/atıf teyidi, elle, Efe): açık. Manifest hâlâ "belirtilmemiş".
-- K1-5 (demo dondurma, Alparslan): açık; `demo-freeze` etiketi konmadı.
-- K2-5 (son gerçekçilik turu) ve K2-6 (GPU/FPS ölçümü, Alparslan): açık.
-- K3-1 (no-data üzerinde yerçekimi kararı, `sim.js`): açık; bu oturumda kod doğrulanmadı.
-- K3-2 (tarayıcı kanıtı): kod var (`c8e2d09`), tarayıcıda hücre reddi NOT-TESTED.
-- K3-3 (rig test sınırı onayı, Alparslan), K3-4 (rig `left*` adları, Efe): açık.
-- K3-5 (datum): açık. `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` `false`.
-- K3-6 (rapor metinleri): açık. `stage39-ortho-diagnosis.md` "Yazar: Efe" ifadesi ve r≈0,40 zayıf korelasyon; `stage34b` "costParams iletilir" ifadesi. Not: ROUTE_PREFERENCES costParams tablosu `main.js` içinden kaldırılmış; ağırlıklar yalnız `route/route-compare.js` içinde.
+**Açık kalanlar — güncel durum (15 Kasım 2026 sabah; her madde commit hash'ine bağlı):**
+- K1-1 (entegrasyon): **HENÜZ YAPILMADI — entegrasyon PR'ı bekliyor.** Efe dalı `codex/efe-visual-realism` (`143a0be`), Alparslan'ın uzak dalı `codex/stage25b-acceptance-update` içinde `32bbeb5`'e kadar olan commit'leri içeriyor (ancestor doğrulandı); varsayılan dal `docs/ai-commit-policy` üzerine birleşme ve PR henüz yok. Kabul kısmen (yukarıdaki PASS/NOT-TESTED).
+- K1-2 (tarayıcı kanıtı): **KISMEN.** Tam PASS değil. Açık: sıçrama/iniş pozu, Sol 164 galerisi ve yön düğmesi, gerçek no-data reddi, varış rozeti, hızlı rota yarışı, ortomozaik hizası.
+- K1-3 (belgeler, Efe): **TAMAMLANDI** — K1-3 commit'i `7e88380` (`Sim/DEMO_NOTES.md`, README, `Sim/stage-final-acceptance.md`, `Sim/stage-handoff-efe-to-alparslan.md`); sonraki belge güncellemeleri `10ddb28`, `4f818ab`, `57361da`.
+- K1-4 (Viking lisans/atıf teyidi, elle, kullanıcı): **AÇIK.** `Sim/data/viking-mdim/manifest.json` içinde `"license": "belirtilmemiş"` (doğrulandı; `licenseEvidence: null`).
+- K1-5 (demo dondurma, Alparslan): **AÇIK.** `demo-freeze` etiketi yok (`git tag -l demo-freeze` boş); K1-1 ve K1-2 kapanmadan konmaz.
+- K2-1/K2-2 (kamera hareketi): **TAMAMLANDI** — `f7ea37b` (`camera-motion` modülü ve kamera bağlantısı). Görsel kabul K1-2'ye bağlı.
+- K2-3/K2-4 (ufuk ve gövde ankrajı): **TAMAMLANDI** — `bbf75b6` (MOLA ufuk, `?horizon=off`, gövde ankrajı), birleşme `5d97844`. Çalışma zamanı görsel kabul K1-2'ye bağlı.
+- K2-5 (son gerçekçilik turu): **KISMEN.** Yapılanlar: görsel gerçekçilik turları `0d212dc`, `db54ff5`, `ad6ae13`, `f49e838`; Antigravity procedural kayalar/kraterler `89f0e7b` (birleşme `02f1b7b`); toz örtüsü ve pus `32bbeb5` (birleşme `78d2d16`). Açık: vizör altın rengi ön/3-4 görünümde doğrulanmadı, rig zemin gölgesi. Turların hangi modelle yapıldığı commit mesajlarından doğrulanmadı.
+- K2-6 (cihaz/GPU kare süresi, Alparslan): **AÇIK.** Demo FPS düzeltmesi `9a9dce6` (commit mesajı: ~28 → ~70); `57361da` mesajında yüklü geliştirici makinesinde ~54 FPS. Gerçek cihaz ve GPU tablosu yok; "82–88 FPS" gibi değerler tekrar ölçülmeden kullanılmaz.
+- K3-1 (no-data üzerinde yerçekimi kararı, `sim.js`): **bu güncellemede kanıt toplanmadı; önceki durum korunur (doğrulanmadı).**
+- K3-2 (minimap EDGE_UNKNOWN reddi): **KOD TAMAMLANDI** — Alparslan `c8e2d09` (birleşme `4f741a5`), uyumluluk `b86d58a`. Tarayıcıda hücre reddi kanıtı **NOT-TESTED** (`Sim/stage-final-acceptance.md`).
+- K3-3 (rig test sınırı onayı, Alparslan), K3-4 (rig `left*` adları, Efe): **bu güncellemede kanıt toplanmadı; önceki durum korunur (açık).**
+- K3-5 (datum): **38A TAMAMLANDI** — `2a2b2c2`. **38B AÇIK** (commit yok): `Sim/public/js/config.js:56` hâlâ `verticalDatumVerified: true`, `:57` doğrulanmamış "CTX LVS tie" ifadesini taşıyor (doğrulandı); `data/dtm_subset.json` tarafında `false`.
+- K3-6 (rapor metinleri, Alparslan): **bu güncellemede kanıt toplanmadı; önceki durum korunur.** Not: ROUTE_PREFERENCES costParams tablosu `main.js` içinden kaldırılmış; ağırlıklar yalnız `route/route-compare.js` içinde.
+- K3-7 (aktif arazi kararı): **AÇIK — karar bekliyor** (bkz. K6 bölümü, c).
+- K3-8 (ortomozaik ↔ aktif DTM hizası): **ÖLÇÜLDÜ, KANITLANAMADI** — `5cca30c`: aktif legacy DTM için high-pass tepe r = 0,021 (`Sim/stage-k3-legacy-analysis.md`). "±1,5 m" değeri yalnız USGS adayı penceresinde ölçüldü (`39A`, `5db4a73`); aktif DTM ile hizalı denmez.
+- K3-9 (analizlerin aktif DTM'de yeniden koşulması): **TAMAMLANDI** — `5cca30c`.
+- K3-10 (legacy DTM çerçeve uyuşmazlığı, yüksek etki): **AÇIK**; bkz. aşağıdaki K3 durum notu.
+- 29B no-data fixture: **TAMAMLANDI** `0bc0772`. 29C preflight ve 31A SOURCES: **TAMAMLANDI** `b5be052`; SOURCES üretici aktif DTM'yi doğru yazıyor `c1dece7`.
+- 32A ayak izi motoru `932a0da`, 32B ayak izi render `aa32139` (birleşme `e9dcf5c`); 33A şerit geometrisi `872c547`, 33B parlak şerit `4d41a27` (birleşme `3a79d33`); 34A tercihler `4e2279e`, 34B minimap `8e955e0` (birleşme `fa5a491`), worker uyumluluğu `52c75aa`; 35A kabartma ölçümü `a38e5aa`, 35B 1× ölçek `3dd5ff2`; 36A Viking alımı `aa589b3`, 36B Viking minimap `f438f8e` (birleşme `b159db3`); 37A MOLA bölgesel kot `190e133`, **37B vekil/önbellek ve ufuk renderı için commit yok (AÇIK)**; 39A ortomozaik teşhisi v2 `5db4a73`, 39B ortomozaik kaplaması `89b7f17` (hizası kanıtlanmadı, bkz. K3-8).
+- Gerçek 1. şahıs kamera: `ab426ee`. Rota kurulum penceresi ve 3D HUD minimap: `4368dca`, `8f010a9`, `330ba24` (birleşme). Demo FPS: `9a9dce6`.
 - K4 (yarışma sonrası: 41–45): kapsam dışı.
 
 **Bilinen sınırlar ve tutarsızlıklar (ayrıntı `Sim/DEMO_NOTES.md` §3–4):**
@@ -74,6 +84,95 @@
 **Toplam tahmini:** P0 ≈ 10,5 sa (Efe 3,5; Alparslan 3,0; Kullanıcı 4,0 — kişi toplamı, paralel çalışılırsa takvim kısalır). P1 ≈ 9,4 sa.
 **Sınır:** Puan için iddia şişirilmez; "güvenli rota", "canlı telemetri", "kanıtlı hizalama", "Viking arazi rengi" iddiaları kullanılmaz.
 
+## K6 — TESLİM GERİ SAYIMI (15 Kasım 2026)
+
+Bu bölüm K5 derece planının **zaman ve sahiplik** katmanıdır. İş tanımları ve kabul ölçütleri `Sim/stage-judging-plan.md` içinde K5-x kimlikleriyledir; burada yalnız eşleme verilir (çoğaltma yoktur, K6-g).
+
+### K6-a. Resmî kurallar özeti
+
+**Doğrulama durumu:** Aşağıdakiler resmî 2026 kılavuzlarından arama alıntılarıyla alındı. Resmî sayfalar bu ortamda TLS sertifika hatasıyla açılamadı. **Kullanıcı bu maddeleri resmî sayfadan teyit etmelidir.**
+
+- **Teslim:** 15 Kasım, 23:59 yerel saat; Proje sekmesinde "Submit to Global Judging". (Arama özeti; kesin saat ve saat dilimi teyit edilmeli.)
+- **Demo:** en fazla 30 saniyelik video VEYA en fazla 7 slayt.
+- **Dil:** İngilizce.
+- **Kaynak atfı:** tüm veri ve araç kaynakları atıflı.
+- **Barındırma:** herkese açık harici barındırma (kod deposu ve/veya canlı demo bağlantısı).
+- **Takım:** en fazla 6 kişi.
+- **Jüri ölçütleri (1–5):** Impact, Creativity, Validity, Relevance, Presentation.
+- **Resmî kaynaklar (İngilizce ad ve URL'ler olduğu gibi):**
+  - <https://www.spaceappschallenge.org/resources/judging-awards-guide/>
+  - <https://www.spaceappschallenge.org/resources/project-submission-guide/>
+  - <https://www.spaceappschallenge.org/2026/>
+
+### K6-b. Saatli plan
+
+Saat dilimi İstanbul (UTC+3) kullanıcı bildirimidir; 09:00 itibarıyla ~14 saat kalmıştır. Resmî son saatin dilimi K6-c'de teyit edilecek.
+
+| Zaman | İş | Sahip | Çıkış ölçütü |
+|---|---|---|---|
+| 09:15–12:00 | Paralel hazırlık: slayt metinleri (K5-2, K5-5, K5-8), kaynak atfı (K5-4), kök README taslağı, İngilizce altyazı metni | Efe (metin, README); Kullanıcı (slayt tasarımı) | Metin ve atıf taslağı hazır; her sayı `Sim/DEMO_NOTES.md`'ye bağlı |
+| 12:00–15:00 | Entegrasyon PR'ı (K1-1); tam test `node --test test/`; `npm run smoke`; LFS'siz sıfırdan klon testi | Alparslan (PR, smoke); Efe (klon testi) | PR açık; test çıkış kodu 0; klon belgesindeki adımlar çalışır |
+| 15:00–18:00 | Video ve slayt üretimi (K5-2, K5-3); bağlantı testi (repo, canlı demo, video) | Kullanıcı; Efe kontrol | Video en fazla 30 sn; tüm bağlantılar dışarıdan açılır |
+| 18:00 | **KOD DONDURMA** | Alparslan (karar); herkes | Bundan sonra yalnız belge ve bağlantı değişikliği |
+| 18:00–22:00 | Yalnız belge, bağlantı ve son kontrol listesi | Herkes | Kontrol listesi tamam |
+| 22:00 | **Hedef teslim** | Kullanıcı | Gönderim tamam |
+| 22:00–23:59 | Tampon; yalnız kritik hata düzeltmesi | — | — |
+
+### K6-c. Karar bekleyenler (kullanıcı)
+
+- **K3-7 — aktif arazi kararı.** Öneri: USGS 1 m DTM adayını (`data/dtm_subset.json`) "düşey datum doğrulanmadı; yalnızca göreli kabartma ve eğim" uyarısıyla etkinleştirmek. Gerekçeler:
+  - Eğim ve rota göreli yükseklik farkı kullanır; mutlak datum bu hesaplara doğrudan girmez.
+  - K3-10 çerçeve uyuşmazlığı bu seçenekle ortadan kalkar; ancak bu bulgu legacy DTM'e özgüdür, USGS adayında aynı köprü tutarlılığı ayrıca doğrulanmalıdır.
+  - Ortomozaik hizası ±1,5 m olarak yalnız USGS adayı penceresinde ölçüldü (`39A`, `5db4a73`); aktif legacy DTM için ölçülmedi (K3-8).
+  - Analizler (35A, 23C, 34A, 37A) zaten bu veride koşuldu (K3-9, `5cca30c`).
+  - Kayıt: kullanıcı 14 Kasım'da eski IMG DTM ve JP2 ortolarını geçersiz bildirmişti (bu belgede "ÜRÜN HEDEFİ" bölümü). Aktif legacy DTEEC için böyle bir bildirim bu belgede yok; USGS adayının kaynak ve lisans kaydı da ayrıca doğrulanmalı. Kullanıcı teyit etmeli.
+- **Saat dilimi:** UTC+3 (İstanbul) teyidi; resmî son saat yerel saat dilimiyle eşlenir.
+- **Depo ve varsayılan dal (YÜKSEK, 15 Kasım sabahı doğrulandı):** (1) **Depo ÖZEL (private).** Kimlik bilgisi kapalı, istem kapalı anonim `git ls-remote` denemesi "could not read Username for 'https://github.com'" hatasıyla başarısız oldu; jüri depoya erişemez. Açmak yalnız hesap sahibinin işlemidir: GitHub → Settings → General → Danger Zone → Change visibility → Public. Açmadan önce lisansı belirtilmemiş 13/14 kaynaktaki verinin herkese açık depoda yeniden dağıtımı konusunda karar verilmeli (`Sim/SOURCES.md`; lisans onayı yok). (2) **Varsayılan dal `docs/ai-commit-policy`** (`git remote show origin`) eski bir belge dalıdır; çalışma `codex/efe-visual-realism` (ve Alparslan'ın `codex/stage25b-acceptance-update` dalı) üzerindedir ve henüz varsayılan dala birleşmedi (K1-1). Çözüm: K1-1 PR'ı veya Settings → Branches → Default branch değişikliği.
+- **Canlı demo barındırma:** GitHub Pages veya Netlify (statik demo derlemesi devam ediyor, K6-e). Hesap ve seçim kullanıcıya ait.
+- **İsteğe bağlı İngilizce arayüz:** öneri: yapılmasın; İngilizce altyazılı video yeterli. Karar kullanıcıya ait.
+
+### K6-d. Riskler ve azaltımlar
+
+| # | Risk | Azaltım | Sahip |
+|---|---|---|---|
+| R1 | Jüri çalıştıramaz: Node gereksinimi, Git LFS işaretçisi (klonda `dtm_subset.f32` 132 baytlık pointer olabilir), Türkçe arayüz, canlı bağlantı yok | Canlı statik demo; LFS'siz klon testi (12:00–15:00); İngilizce README bölümü; İngilizce altyazılı video | Efe (README, klon testi); Kullanıcı (canlı bağlantı); Alparslan (demo) |
+| R2 | İş varsayılan dalda değil | K1-1 PR'ı 12:00–15:00 arasında; PR bağlantısı teslim metnine konur | Alparslan |
+| R3 | Sunum materyali yok (video ve slayt) | Kullanıcı 15:00–18:00 (K5-2, K5-9) | Kullanıcı |
+| R4 | Validity tutarsızlıkları: K3-5 datum, K3-8 hizası, K3-10 çerçeve, rota hızı 0,8 ve 1,2 m/s, rota uzunluğu 730 ve 731 m | Tek değer veya açık etiket (K5-10, K5-11); "bilinen sınırlar" slaytı; kanıtlanamayan iddia yazılmaz | Alparslan (K5-10/11); Efe (K5-12 metni) |
+| R5 | Tek tarayıcı/GPU testi; FPS ölçümleri geliştirici makinesinde | Cihaz ve koşul yazılı; 2D fallback yedeği; yedek kayıt (K5-3) | Alparslan (K2-6); Kullanıcı (K5-3) |
+| R6 | Demo FPS ~54 (`57361da` notu) ve son eklemelerle hafif düşüş riski | 18:00 dondurmasından sonra görsel ekleme yok; ölçümün tekrarı (K2-6) | Alparslan |
+
+### K6-e. Bu turda Efe tarafında yürüyen işler
+
+**Durum: devam ediyor — hiçbiri tamamlandı değildir.** Bu turun başında `codex/efe-visual-realism` çalışma ağacı temizdi (`git status` boş). Sonradan başka ajanların çalışması sırasında şu commit'siz dosyalar göründü: `Sim/.gitignore`, `Sim/package.json`, `Sim/public/js/geo/local-grid.js`, `Sim/scripts/build-static-demo.mjs`, `Sim/submission/img/`, `Sim/submission/marswalk-slides.pptx`, `Sim/test/build-static-demo.test.mjs`, `Sim/test/local-grid.test.mjs`. Bunların içerikleri bu turda doğrulanmadı.
+
+- Statik demo derlemesi: `Sim/scripts/build-static-demo.mjs` ve kök `README.md` (başka ajan üzerinde; kök README bu listede görünmüyor).
+- 7 slaytlık `.pptx` taslağı: `Sim/submission/marswalk-slides.pptx` — **TAMAMLANDI, `9211856`** (7 slayt, konuşmacı notları, gerçek ekran görüntüleri, İngilizce; `python-pptx` ile üretildi; PowerPoint COM ile görsel kontrol edildi; takım/üye/bağlantı yer tutucuları kullanıcıda; K5-2 taslak, teslim kabulü değil).
+- K3-10 yeniden örnekleme yardımcısı: `Sim/public/js/geo/local-grid.js` görünüyor (Efe; `geo/regional-dem.js` içindeki `resampleToLocalGrid` kullanımı eşleşmesi doğrulanmadı).
+- İki 7 MB `.f32` dosyasının Git LFS'ten çıkarılması (orkestra şefi): **TAMAMLANDI, `5c8090c`.** `Sim/data/dtm_subset.f32` (7.609.040 bayt) ve `Sim/data/legacy-hirise/dtm_subset.f32` (7.537.204 bayt) normal Git blob'u olarak saklanır (`.gitattributes` satırları kaldırıldı; kökteki eski IMG/JP2 LFS satırları durur). **Doğrulama:** GitHub'dan `GIT_LFS_SKIP_SMUDGE=1` ile alınan sıfırdan klonda iki dosya tam boyutlu geldi ve `node scripts/preflight.mjs` "HAZIR" (hata 0, uyarı 0) verdi. R1 riskinin LFS bileşeni kapandı.
+
+### K6-f. Alparslan'a atanan işler
+
+1. K1-1 entegrasyon PR'ı (12:00–15:00).
+2. K3-7 uygulaması (kullanıcı kararından sonra; K5-7).
+3. 38B datum bayrağı: `Sim/public/js/config.js:56` `true` → `false`; `:57` doğrulanmamış "CTX LVS tie" ifadesi kaldırılır veya "doğrulanmadı" diye etiketlenir (K5-6). İki kaynağın aynı değeri göstermesi gerekir.
+4. K3-10 entegrasyonu: planlayıcı, minimap ve örnekleyici tek yerel-metre ızgarasını kullanır (K5-10/11 ile ölçüm sırası 18:00 öncesi).
+5. Feragatlerin varsayılan görünürlüğü: "Planlama göstergesi — güvenli rota sertifikası değildir" metni sadeleştirmeden sonra ana görünümde değil, yan panelde (karar onayı).
+6. `idleBreathing: false` (`Sim/public/js/main.js:50`) değerinin onayı.
+
+### K6-g. K5 ile eşleme (çoğaltma yok)
+
+| K6 satırı | K5 kimliği |
+|---|---|
+| 09:15–12:00 slayt metni ve atıf | K5-2, K5-4, K5-5, K5-8 |
+| 12:00–15:00 entegrasyon PR'ı | K1-1 (K5 dışı; kapanış koşulu) |
+| 12:00–15:00 datum ve K3-7 kararı | K5-6, K5-7 |
+| 15:00–18:00 video, yedek kayıt, Creativity | K5-2, K5-3, K5-9 |
+| 18:00 öncesi ölçüm ve karar | K5-10, K5-11, K5-12, K5-13 |
+| 18:00 sonrası yalnız belge | K5-14, K5-15 |
+
+K5-16 (P2) teslim kapsamı dışındadır.
+
 ## Durum etiketleri ve bilgi kaynağı
 
 - **TAMAMLANDI — dosya/kaynakla:** Güncel dosyalar veya birincil kaynak bunu destekliyor.
@@ -103,7 +202,8 @@ Bu bölüm aşağıdaki FAZ 3–7 tablolarının **güncel durumunu** özetler v
 ### Bugüne kadar kodda bulunanlar (test tarihleri ve dalları ayrıca belirtilir)
 - **Efe tarafı:** 35A (kabartma ölçümü), 32A (ayak izi motoru), 33A (rota şeridi geometrisi), 34A + uyumluluk (rota tercihleri, worker), 36A (Viking karoları), 37A (MOLA bölgesel kot), 29B (no-data fixture ve testler), 29C (`scripts/preflight.mjs`), 31A (`SOURCES.md` üretici), görsel gerçekçilik dalı (ton eşleme, gökyüzü modeli, gölge haritası, arazi gölgelendirmesi, kapsül hatlı beyaz astronot, malzeme bağlama).
 - **Alparslan tarafı (birleştirildi):** 32B, 33B, 34B, 35B, 36B, 622f526, 39A/39B, 25, 27, 29A (rapor), 30 (demo modu).
-- **Doğrulama durumu (15 Kasım 2026, `codex/efe-visual-realism` @ `b5be052`):** `node --test test/` **527/527**, `npm run smoke` **38/38**, `node scripts/preflight.mjs` HAZIR. Ekran görüntüleriyle gözlem yalnızca Efe tarafı ajanlarınca yapıldı; Alparslan'ın raporları 33B/36B/622f526 için tarayıcı kabulünü açık bırakıyor.
+- **Güncel doğrulama (15 Kasım 2026 sabah, `codex/efe-visual-realism` @ `143a0be`):** `node --test test/` **612/612**, çıkış kodu 0 (bu güncelleme turunda, commit'li ağaçta); sonra çalışma ağacında commit'siz yeni testlerle **640/640**, çıkış kodu 0. `npm run smoke` **38/38** ve `node scripts/preflight.mjs` **HAZIR**: son tam koşu birleşme `32bbeb5` sonrasıdır; bu tur çalıştırmadı.
+- **Doğrulama durumu (tarihsel; 15 Kasım 2026, `codex/efe-visual-realism` @ `b5be052`):** `node --test test/` **527/527**, `npm run smoke` **38/38**, `node scripts/preflight.mjs` HAZIR. Ekran görüntüleriyle gözlem yalnızca Efe tarafı ajanlarınca yapıldı; Alparslan'ın raporları 33B/36B/622f526 için tarayıcı kabulünü açık bırakıyor.
 - **Render pass sözleşmesi (bozulmamalı):** 0 arazi, 1 beacon/çizgi, 2 rig, 3 gökyüzü, 4 gölge derinliği (erken return), 5 ayak izi, 6 rota şeridi; yeni pass 7+.
 
 ### Aşama K1 — Teslim bloklayıcıları (P0, hemen)
@@ -138,6 +238,8 @@ Bu bölüm aşağıdaki FAZ 3–7 tablolarının **güncel durumunu** özetler v
 | K3-8 | **Ortomozaik ↔ AKTİF (legacy) DTM kayıt ölçümü yok.** `stage39`/`stage21b` ölçümleri USGS adayı penceresinde (`data/dtm_subset.*`). Legacy DTEEC farklı çerçeve: yarıçap 3394,84 km, merkez meridyen 77,44°E, standart enlem 15° (`data/legacy-hirise/dtm_subset.json`); USGS: 3396,19 km, 0°E, 0°. "Ortak TRN tabanı" argümanı yalnız JEZ DTM için geçerlidir. | **Efe** | `scripts/validate-ortho-registration.mjs` legacy DTM'e uyarlanır (PDS3 çerçeve köprüsüyle; mevcut köprü `surface/registry.js` `makeLegacyCoordinateBridge`). Sonuç: ölçülmüş öteleme ± belirsizlik veya "kanıtlanamadı". Bu bitene kadar aktif DTM ile hizalı denmez. |
 | K3-9 | **Efe analizlerinin aktif DTM'de yeniden koşulmaması.** Kabartma (35A), rota doğrulama (23C), tercih tablosu (34A/worker), `relief-report` ve ufuk dikiş ölçümü (37A) USGS adayında yapıldı; UI aktif legacy üzerinde. Örnek fark: en kısa rota maks. eğimi UI 14,1°, USGS adayı 10,64°. | **Efe** | Aynı analizler legacy DTM üzerinde yeniden koşulur ve farklar raporlanır (`DEMO_NOTES.md` §4 tablosu). |
 | K3-10 | **Legacy DTM çerçeve uyuşmazlığı (YÜKSEK ETKİ, bulgu: `Sim/stage-k3-legacy-analysis.md`).** Minimap, ısı haritası ve rota planlayıcı legacy DTM'i *düzenli ızgara* (1,00966 m/hücre) olarak işliyor; yükseklik örnekleyici (3D, sim, ayak izi, şerit) ise *coğrafi köprüyü* (doğu-batı ~1,0457 m/hücre) kullanıyor. Aynı yerel (x,y) için iki farklı hücre: WB1'de Δx ≈ 18,7 m, Roubion'da ≈ 23,4 m, pencere doğu kenarında ≈ 40,7 m; Roubion eğimi planlayıcıda 8,59°, örnekleyicide 3,82°. Yerler: `view/render.js:75-80`, `main.js:813-817`, `surface/registry.js:22-36`. Maliyet haritası ile gezilen arazi arasında 20–40 m kayma = Validity riski. **Öneri:** legacy DTM'i köprüyle BİR KEZ yerel-metre düzenli ızgaraya yeniden örnekle (`geo/regional-dem.js` `resampleToLocalGrid` bu iş için kullanılabilir) ve planlayıcı, minimap ve örnekleyicinin hepsi aynı ızgarayı kullansın. | Alparslan (entegrasyon) + Efe (yeniden örnekleme yardımcısı) | Planlayıcı hücresi = örnekleyici hücresi (sapma < 1 hücre) WB1, Roubion ve doğu kenarında; mevcut testler ve smoke yeşil; K3-9 tablosu yeniden koşulup UI ile tutarlı |
+
+**K3 durum notu (15 Kasım 2026 sabah):** K3-10 satırı yukarıda değiştirilmeden tutuldu ve **AÇIK / yüksek etki**dir. Bulgu legacy DTM'e özgüdür: minimap, ısı haritası ve planlayıcı düzenli ızgarayı, 3D/sim/ayak izi/şerit örnekleyicisi coğrafi köprüyü kullanıyor (`5cca30c` ve `Sim/stage-k3-legacy-analysis.md`). Yeniden örnekleme yardımcısı (Efe) devam ediyor; entegrasyon (Alparslan) K6 takvimine göre yapılır ve henüz commit'te yok. K3-10 kapanmadan "planlayıcı ile örnekleyici hizalı" denmez.
 
 ### Aşama K4 — Yarışma sonrası genişleme (P2; K1–K3 bittikten sonra)
 | Görev | Efe | Alparslan |

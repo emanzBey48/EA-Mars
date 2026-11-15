@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMinimap } from '../public/js/view/minimap/minimap.js';
+import { STATUS as ROUTE_CELL_STATUS } from '../public/js/route/cost-model.js';
 
 const CANVAS_PX = 400;
 const NODATA_RGB = [255, 0, 255];
@@ -87,7 +88,7 @@ function clickWorld(mini, canvas, xM, yM) {
   canvas.dispatch('pointerup', p);
 }
 
-function setupMinimap({ terrain }) {
+function setupMinimap({ terrain, planStatus = new Uint8Array(GRID * GRID) }) {
   const previousWindow = globalThis.window;
   globalThis.window = { devicePixelRatio: 1 };
   const { canvas, ctx } = fakeCanvas();
@@ -98,6 +99,10 @@ function setupMinimap({ terrain }) {
     selectionMode: 'start',
     onPointSelected: (point) => picks.push(point),
   });
+  mini.setPlanning({ heatmap: {
+    status: planStatus, rows: GRID, cols: GRID, nwXM: BOUNDS.nwXM, nwYM: BOUNDS.nwYM,
+    cellSizeM: 1,
+  } });
   const restore = () => {
     mini.destroy();
     if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
@@ -151,6 +156,22 @@ test('minimap selection: valid cell inside coverage is accepted and reported in 
     assert.equal(picks[0].kind, 'start');
     assert.ok(Math.abs(picks[0].xM - -9.5) < 1e-6);
     assert.ok(Math.abs(picks[0].yM - 9.5) < 1e-6);
+  } finally { restore(); }
+});
+
+test('minimap selection: EDGE_UNKNOWN is rejected before sending an endpoint to the planner', () => {
+  const planStatus = new Uint8Array(GRID * GRID);
+  planStatus[10 * GRID + 10] = ROUTE_CELL_STATUS.EDGE_UNKNOWN;
+  planStatus[11 * GRID + 10] = ROUTE_CELL_STATUS.TOO_STEEP;
+  const { mini, canvas, ctx, picks, restore } = setupMinimap({ terrain: fakeTerrain(), planStatus });
+  try {
+    clickWorld(mini, canvas, 0.5, -0.5);
+    assert.deepEqual(picks, []);
+    assert.ok(ctx.texts.includes('Bu hücrenin komşu yüzey durumu bilinmiyor; başka bir nokta seçin.'));
+    clickWorld(mini, canvas, 0.5, -1.5);
+    assert.deepEqual(picks, [], 'other blocked planning statuses are rejected too');
+    clickWorld(mini, canvas, -9.5, 9.5);
+    assert.equal(picks.length, 1, 'known cell stays selectable');
   } finally { restore(); }
 });
 

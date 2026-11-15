@@ -1,5 +1,6 @@
 // Interactive 2D minimap presentation for an already-prepared terrain image.
 // This view never samples a provider or computes route costs. Missing/outside coverage stays blank.
+import { STATUS as ROUTE_CELL_STATUS } from '../../route/cost-model.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -157,6 +158,23 @@ export function createMinimap({
     const offset = (row * width + col) * 4;
     // buildTerrainImage paints non-OK cells as (255,0,255) or (90,0,90).
     if (data[offset + 1] === 0 && data[offset] === data[offset + 2]) return 'Bu hücre no-data veya geçersiz; başka bir nokta seçin.';
+    const heatmap = state.planning.heatmap;
+    if (!(heatmap?.status instanceof Uint8Array) || !Number.isSafeInteger(heatmap.rows) ||
+        !Number.isSafeInteger(heatmap.cols) || heatmap.status.length !== heatmap.rows * heatmap.cols ||
+        !Number.isFinite(heatmap.nwXM) || !Number.isFinite(heatmap.nwYM) ||
+        !Number.isFinite(heatmap.cellSizeM) || heatmap.cellSizeM <= 0) {
+      return 'Planlama hücreleri henüz hazır değil; nokta seçilemez.';
+    }
+    const planCol = Math.floor((xM - heatmap.nwXM) / heatmap.cellSizeM);
+    const planRow = Math.floor((heatmap.nwYM - yM) / heatmap.cellSizeM);
+    if (planCol < 0 || planCol >= heatmap.cols || planRow < 0 || planRow >= heatmap.rows) {
+      return 'Nokta planlama ızgarasının dışında.';
+    }
+    const planCellStatus = heatmap.status[planRow * heatmap.cols + planCol];
+    if (planCellStatus === ROUTE_CELL_STATUS.EDGE_UNKNOWN) {
+      return 'Bu hücrenin komşu yüzey durumu bilinmiyor; başka bir nokta seçin.';
+    }
+    if (planCellStatus !== ROUTE_CELL_STATUS.OK) return 'Bu hücre EVA planlaması için kapalı; başka bir nokta seçin.';
     return '';
   }
 
@@ -294,12 +312,12 @@ export function createMinimap({
     const attribution = state.globalBase?.attribution ?? d?.attribution ?? 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona';
     const text = `${title} · ${attribution}`;
     ctx.font = '11px system-ui, sans-serif';
-    const maxWidth = Math.max(40, state.width - 20);
+    const maxWidth = Math.max(40, state.width - 80); // Leave room for the north arrow.
     const shown = ctx.measureText(text).width > maxWidth ? `${title} · kaynak atfı` : text;
     ctx.fillStyle = 'rgba(10, 12, 16, .78)';
     ctx.fillRect(10, 10, Math.min(maxWidth, ctx.measureText(shown).width + 12), 23);
     ctx.fillStyle = '#eee';
-    ctx.fillText(shown, 16, 26);
+    ctx.fillText(shown, 16, 26, maxWidth - 12);
   }
 
   function drawGlobalKey() {
@@ -310,7 +328,7 @@ export function createMinimap({
     const text = mPerPx < base.nativeMPerPx
       ? `Viking ${Math.round(base.nativeMPerPx)} m/px: yerel ayrıntı yok${localAvailable ? '; HiRISE DTM üstte' : ''}. Orto/kot verisi değildir.`
       : `Viking MDIM renk mozaiği: bağlam katmanı, orto/kot verisi değildir.${localAvailable ? ' HiRISE DTM yerel ayrıntı verir.' : ''}`;
-    const maxWidth = Math.max(40, state.width - 20);
+    const maxWidth = Math.max(40, state.width - 80);
     ctx.font = '10px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(10, 12, 16, .78)';
     ctx.fillRect(10, 37, Math.min(maxWidth, 410), 20);
@@ -475,14 +493,15 @@ export function createMinimap({
     drawGlobalKey();
 
     if (state.selectionMode) {
+      const y = state.globalBase ? 64 : 39;
       ctx.fillStyle = 'rgba(0,0,0,.72)';
-      ctx.fillRect(10, 39, Math.min(state.width - 20, 280), 23);
+      ctx.fillRect(10, y, Math.min(state.width - 20, 280), 23);
       ctx.fillStyle = '#fff';
       ctx.font = '12px system-ui, sans-serif';
-      ctx.fillText(`${state.selectionMode === 'start' ? 'Başlangıç' : 'Bitiş'} noktasını seçin`, 16, 55);
+      ctx.fillText(`${state.selectionMode === 'start' ? 'Başlangıç' : 'Bitiş'} noktasını seçin`, 16, y + 16);
     }
     if (state.selectionMessage) {
-      const y = state.selectionMode ? 86 : (state.globalBase ? 66 : 39);
+      const y = state.selectionMode ? (state.globalBase ? 91 : 66) : (state.globalBase ? 64 : 39);
       ctx.font = '12px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(70, 22, 20, .92)';
       ctx.fillRect(10, y, Math.min(state.width - 20, ctx.measureText(state.selectionMessage).width + 14), 24);
@@ -492,10 +511,10 @@ export function createMinimap({
     if (state.planning.route?.length) {
       const legend = 'Renk: yürünebilirlik puanı • planlama göstergesi; güvenli rota sertifikası değildir';
       ctx.fillStyle = 'rgba(7, 16, 22, .78)';
-      ctx.fillRect(10, state.height - 31, Math.min(state.width - 20, 420), 21);
+      ctx.fillRect(10, state.height - 61, Math.min(state.width - 20, 420), 21);
       ctx.fillStyle = '#e9fbff';
       ctx.font = '9px system-ui, sans-serif';
-      ctx.fillText(legend, 16, state.height - 17, Math.max(1, state.width - 32));
+      ctx.fillText(legend, 16, state.height - 47, Math.max(1, state.width - 32));
       if (routeAnimationFrame === null && typeof requestAnimationFrame === 'function') {
         routeAnimationFrame = requestAnimationFrame(() => { routeAnimationFrame = null; draw(); });
       }

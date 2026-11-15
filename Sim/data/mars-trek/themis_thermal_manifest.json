@@ -1,0 +1,53 @@
+{
+  "datasetId": "THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018",
+  "title": "NASA JPL Mars Trek — 2001 Mars Odyssey THEMIS Global Infrared Mosaics (100m)",
+  "source": "NASA / JPL-Caltech / Arizona State University (ASU) / USGS Astrogeology Science Center",
+  "instrument": "Thermal Emission Imaging System (THEMIS)",
+  "platform": "2001 Mars Odyssey",
+  "resolutionM": 100,
+  "coverage": {
+    "jezeroTileZoom": 8,
+    "tileRow": 101,
+    "tileCol": 366,
+    "tileMatrixSet": "default028mm",
+    "latBoundsDeg": {
+      "south": 18.28125,
+      "north": 18.984375
+    },
+    "lonBoundsDeg": {
+      "west": 76.640625,
+      "east": 77.34375
+    }
+  },
+  "tiles": {
+    "nightIrPng": "data/mars-trek/themis_night_ir_z8_101_366.png",
+    "dayIrPng": "data/mars-trek/themis_day_ir_z8_101_366.png",
+    "nightIrBytes": 62702,
+    "dayIrBytes": 50695
+  },
+  "thermalPropertiesJezero": {
+    "nightBrightnessTempRangeK": [
+      175,
+      196
+    ],
+    "nightBrightnessTempRangeC": [
+      -98.15,
+      -77.15
+    ],
+    "thermalInertiaRangeSI": [
+      260,
+      430
+    ],
+    "surfaceInterpretation": {
+      "highThermalInertia": "Delta ve krater tabanı sert kayaç/parke yapılar (gece daha ılık: ~190-196 K)",
+      "lowThermalInertia": "Rüzgâr kaynaklı kumullar ve regolit tozu (gece daha soğuk: ~175-182 K)"
+    }
+  },
+  "attribution": "NASA/JPL/ASU/USGS",
+  "sourceUrls": [
+    "https://trek.nasa.gov/tiles/Mars/EQ/THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018/1.0.0/default/default028mm/8/101/366.png",
+    "https://trek.nasa.gov/tiles/Mars/EQ/THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018/1.0.0/default/default028mm/8/101/366.png",
+    "https://trek.nasa.gov/mars/TrekWS/rest/cat/metadata/fgdc/html?label=THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018",
+    "https://trek.nasa.gov/mars/TrekWS/rest/cat/metadata/fgdc/html?label=THEMIS_DayIR_ControlledMosaics_100m_v2_oct2018"
+  ]
+}

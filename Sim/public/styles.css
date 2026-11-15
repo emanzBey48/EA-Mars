@@ -55,6 +55,9 @@ main { display: flex; height: calc(100% - 58px); }
 .minimap-cell-explanation p { margin: 3px 0; }
 .card { background: linear-gradient(180deg, #1e1e25 0%, #19191f 100%); border: 1px solid #2f2f38; border-radius: 7px; padding: 9px 11px; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); }
 .card h2 { margin: 0 0 6px; font-size: 14px; }
+.sources-limits { padding-left: 19px; margin: 6px 0; }
+.sources-limits li { margin: 4px 0; }
+.sources-card h3 { font-size: 12px; margin: 8px 0 4px; }
 dl { margin: 0; display: grid; grid-template-columns: 1fr; }
 dt { font-size: 11px; color: #9a948f; margin-top: 4px; }
 dd { margin: 0; font-variant-numeric: tabular-nums; }

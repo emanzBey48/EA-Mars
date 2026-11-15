@@ -231,8 +231,16 @@
         <p class="muted small">Mars Trek HiRISE ortomozaik katmanı, etkin DTM ile piksel hizası doğrulanınca açılabilir. Kaynak: USGS Astrogeology / NASA MRO HiRISE, NASA JPL Mars Trek. Lisans kaynakta belirtilmemiş.</p>
       </section>
 
-      <section class="card">
-        <h2>Kaynaklar ve atıf</h2>
+      <section class="card sources-card" aria-labelledby="sources-title">
+        <h2 id="sources-title">Kaynaklar ve sınırlar</h2>
+        <p class="muted small">Kaynak, ürün kimliği, çözünürlük, lisans ve kullanım sınırları için <a href="/SOURCES.md" target="_blank" rel="noopener">tam kaynak dökümünü açın</a>. Kaynakta lisans yazmıyorsa “belirtilmemiş” olarak gösterilir.</p>
+        <ul class="small sources-limits">
+          <li><b>Yüzey:</b> Yerel HiRISE DTM yaklaşık 1 m/piksel kot ve türetilmiş eğim sağlar. USGS veri yayımında CC0 beyanı vardır; ürün özel düşey datum doğrulaması hâlâ açıktır.</li>
+          <li><b>Görünüm:</b> HiRISE WMTS ortomozaik görsel kaplamadır; lisansı kaynakta belirtilmemiştir ve kayıt belirsizliği saklanmaz. Viking MDIM 2.1 işlenmiş renkli bölgesel bağlamdır, kot veya yerel ortogörüntü değildir.</li>
+          <li><b>Rota:</b> EVA yürünebilirlik puanı ve kılavuz çizgi planlama göstergesidir; güvenli rota sertifikası değildir. MMGIS rover izi arşiv kaydıdır, insan rotası veya canlı telemetri değildir.</li>
+          <li><b>Fizik:</b> 3,71 m/s² Mars yerçekimi genel referanstır. Görsel giysi hareketi ve gökyüzü sunum modelidir; Jezero anlık atmosfer ölçümü veya gerçek suit fiziği değildir.</li>
+        </ul>
+        <h3>Birincil bağlantılar</h3>
         <ul id="sources" class="small"></ul>
       </section>
       <section class="card archive" id="rover-gallery" aria-label="Perseverance arşiv fotoğrafları"></section>

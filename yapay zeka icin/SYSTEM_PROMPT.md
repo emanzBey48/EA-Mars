@@ -126,7 +126,7 @@ Kullanıcı 12 Kasım 2026’da tüm regresyon kontrollerinin geçtiğini bildir
 
 - Simülasyon hareket hızı/saat hızlandırması ve 10 m koridor senaryo/UI değerleridir.
 - DTM kotu arşiv product value; slope DTM’den hesaplanan derived value; oyuncu konumu/saat live UI state’tir.
-- Eğim tek başına geçilebilirlik/safety kanıtı değildir; hiçbir skor veya güvenli rota iddiası üretme.
+- Eğim tek başına geçilebilirlik/safety kanıtı değildir. Doğrulanmış yerel DTM ve açık senaryo ağırlıklarıyla şeffaf EVA yürünebilirlik puanı üretilebilir; kaynak, çözünürlük ve belirsizlik gösterilir. Bu puan güvenlik skoru veya güvenli rota sertifikası değildir; kaba bölgesel/küresel katmanlardan yerel EVA puanı üretme.
 - MEDA/başka lokal ölçümleri yalnız kendi ölçüm sahası/zamanı için sun; küresel veya başka bölgenin canlı havası gibi gösterme.
 - “Gerçek zamanlı” ifadesini yalnız simulation clock’un ilerlemesi kastediliyorsa açıkla; NASA canlı telemetrisi ima etme.
 - 3D’ye geçerken datum/vertical exaggeration/display offset kaynak kotundan ayrılmalı; no-data yüzeyler görünür boş/unknown kalmalı.

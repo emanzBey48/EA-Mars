@@ -54,7 +54,12 @@ function layerCard(d) {
   ];
   if (d.quality?.windowStats) {
     const s = d.quality.windowStats;
-    rows.push(['Kalite', `Pencerede gözlenen uç kotlar ${d.quality.observedMin}…${d.quality.observedMax} m (ürün geçerlilik sınırı değil) · ${s.valid} finite, ${s.noData} no-data, ${s.invalid} geçersiz hücre`]);
+    const min = Number.isFinite(d.quality.observedMin) ? d.quality.observedMin : s.min;
+    const max = Number.isFinite(d.quality.observedMax) ? d.quality.observedMax : s.max;
+    const extrema = Number.isFinite(min) && Number.isFinite(max)
+      ? `${min}…${max} m (ürün geçerlilik sınırı değil)`
+      : 'bilinmiyor';
+    rows.push(['Kalite', `Pencerede gözlenen uç kotlar ${extrema} · ${s.valid} finite, ${s.noData} no-data, ${s.invalid} geçersiz hücre`]);
   }
   if (d.quality?.registration?.note) rows.push(['Hizalama', esc(d.quality.registration.note)]);
   return `<div class="layer"><b>${esc(d.title)}</b><table>${rows.map(([k, vRow]) => `<tr><td>${k}</td><td>${vRow}</td></tr>`).join('')}</table></div>`;

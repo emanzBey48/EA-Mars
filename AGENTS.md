@@ -8,6 +8,8 @@ Nihai ürün hedefi HiRISE DTM üzerinde kullanıcı kontrollü birinci şahıs 
 
 İki AI paralel çalışıyorsa görevleri ayır ve aynı dosyaları eşzamanlı düzenleme. Kullanıcı bildirimiyle bağımsız doğrulamayı açıkça ayır.
 
+Güncel ürün kararında DTM ve açık senaryo ağırlıklarıyla hesaplanan **EVA yürünebilirlik puanı** kullanılabilir. Puanın girdilerini, çözünürlüğünü ve belirsizliğini göster; bunu güvenlik skoru, güvenli rota sertifikası veya NASA operasyon eşiği olarak sunma. Kaba bölgesel/küresel katmanlardan yerel EVA puanı üretme.
+
 ## Kod sınırları ve dosya sahipliği
 
 Uygulama vanilla ES module mimarisindedir. `Sim/public/js/main.js` composition root'tur: bağımlılıkları kurar, veriyi yükler, her karede snapshot üretir ve HUD/render katmanlarına verir. Yeni özelliklerin iş mantığını `main.js` içine yığma; modül sorumluluklarını ve mevcut parametre tabanlı bağımlılık enjeksiyonunu koru.

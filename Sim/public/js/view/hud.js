@@ -42,7 +42,7 @@ function layerCard(d) {
     ['Gövde', esc(d.body ?? 'MARS')],
     ['Kaynak', esc(d.source)],
     ['Atıf', esc(d.attribution)],
-    ['Lisans / kullanım', esc(d.license ?? 'USGS / Public Domain (Please cite authors)')],
+    ['Lisans / kullanım', esc(d.license ?? 'Kaynakta belirtilmemiş')],
     ['Birim', esc(d.unit)],
     ['Düşey datum', esc(d.verticalDatum) + (d.verticalDatumEvidence ? ` <span class="muted small">(${esc(d.verticalDatumEvidence)})</span>` : '')],
     ['CRS', esc(d.crs)],

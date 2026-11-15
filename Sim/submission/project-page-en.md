@@ -130,11 +130,11 @@ The challenge asks for tools that help people understand and plan surface activi
 
 - **Stack:** Vanilla JavaScript ES modules, WebGL2 rendering, a Canvas 2D fallback, and a Web Worker for the A* planner. There are no runtime dependencies.
 - **Server:** A small Node.js static server (`server.mjs`) on 127.0.0.1. It needs Node.js 20 or newer.
-- **Tests:** 601 unit tests run with `node --test test/`, all passing (exit code 0, last run on 15 November 2026). The data preflight script reported READY in the last recorded run.
+- **Tests:** 612 unit tests run with `node --test test/`, all passing (exit code 0, last run on 15 November 2026). The data preflight script reported READY in the last recorded run.
 - **Browser checks:** 38 of 38 browser smoke checks passed on the last recorded run (merge review of the team's repository). These were not re-run for this submission.
 - **AI-assisted development:** AI coding assistants were used during development. The commit history names OpenAI Codex, Anthropic Claude and Antigravity. The team reviewed the changes. [TEAM TO CONFIRM this wording]
 
-<!-- source: Sim/package.json (no dependencies, engines node >=20); Sim/server.mjs line 2 and 11; test run on 15 Nov 2026 (601/601, exit 0); Sim/stage-merge-review.md section 7 (38/38) -->
+<!-- source: Sim/package.json (no dependencies, engines node >=20); Sim/server.mjs line 2 and 11; test run on 15 Nov 2026 (612/612, exit 0); Sim/stage-merge-review.md section 7 (38/38) -->
 <!-- source: git log author fields in the repository (AI assistant names) -->
 
 ---

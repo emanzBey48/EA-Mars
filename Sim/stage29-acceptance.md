@@ -5,7 +5,13 @@
 **Referans Dokümanlar:** `Sim/stage25b-visual-acceptance.md`, `Sim/stage35b-scale-acceptance.md`, `Sim/stage39-ortho-diagnosis.md`, `Sim/scripts/smoke-e2e.mjs`, `Sim/public/js/main.js`  
 **Kapsam:** Stage 25B raporunda açık veya ertelenmiş kalan görsel, kinematik, aydınlatma ve arayüz bileşenlerinin bağımsız kabul incelemesi; Stage 35B ve Stage 39B entegrasyonlarının doğrulanması; jüri sunumuna hazırlık değerlendirmesi.
 
-## K1-2 yeniden kabul turu — 15 Kasım 2026 (güncel karar)
+## K1-2 takip turu — 15 Kasım 2026 (en güncel gözlem)
+
+`codex/k1-dtm-quality-hud` dalındaki `b69eb2b` ile HUD kalite satırı, legacy HiRISE descriptor'ında bulunmayan `observedMin/observedMax` için gerçek `windowStats.min/max` değerlerini okuyor; sonlu uç kot yoksa `bilinmiyor` gösteriyor. Brave'de açılan `Katmanlar ve köken` paneli **PASS**: `-2592.83154296875…-2546.7431640625 m`, `1884301 finite, 0 no-data, 0 geçersiz hücre`; önceki `undefined…undefined m` kusuru bu kesitte tekrar görülmedi. Bu sayılar yüklenen pencerenin gözlenen extrema'sıdır, ürün geçerlilik sınırı değildir.
+
+Sol 120 Navcam görselindeki **“Rover kamerasının tahmini yönüne bak”** düğmesi Brave'de tıklandı; 3D bakış yönü değişti (**PASS**, yalnız Sol 120). Panel, yönün doğrulanmamış site çerçevesi varsayımına dayandığını belirtmeye devam ediyor. Sol 164 galerisi hâlâ **NOT-TESTED**. Kısa klavye basışları senaryo saatini `Hazır` durumundan çıkarmadığı için sıçrama/iniş **NOT-TESTED**; yüklü pencerede `0 no-data` olduğundan gerçek no-data reddi **NOT-TESTED**; hızlı ardışık rota istek yarışı da **NOT-TESTED**. Böylece K1-2 tam PASS ve K1-5 demo dondurma kararı verilmedi. Bu takip turunda da otomatik test/smoke çalıştırılmadı.
+
+## K1-2 yeniden kabul turu — 15 Kasım 2026 (ilk tur)
 
 Bu bölüm aşağıdaki eski Stage 29A PASS tablosunun **önündedir**. Eski tablo önceki kod kesitinin kod/hesap incelemesini de PASS sayıyordu; bu turda yalnız gerçek Brave gözlemini PASS saydım. İncelenen kesit: `origin/codex/marswalk-ui-simplification` `3e1f570`, üstüne yalnız `road map.md` güncellemesi `034c15f` (uygulama kodu aynı). Yerel `http://127.0.0.1:8091/?demo=1` açıldı. HiRISE LFS fixture'ının tam 7.537.204 baytlık dosyasıyla sahne yüklendi; tarayıcı açılışı ve etkileşimleri elle gözlendi. Bu turda `npm test`, smoke betiği veya otomatik performans ölçümü çalıştırılmadı. Ekran görüntüleri `Sim/acceptance-evidence/k1-2/` içindedir; dosyalar yeni gözlemdir, eski `test-output/` kanıtı değildir.
 

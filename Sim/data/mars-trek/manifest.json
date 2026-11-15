@@ -1,0 +1,241 @@
+{
+  "manifest_version": "1.0.0",
+  "dataset_title": "NASA JPL Mars Trek & Mars 2020 Perseverance Terrain / Imagery / Traverse Dataset",
+  "project": "Marswalk - NASA Space Apps 2026",
+  "generated_at": "2026-11-14T12:29:44.627192+00:00",
+  "purpose": "Authoritative HiRISE 25cm orthomosaic tiles, 1m DTM metadata, and Perseverance traverse/waypoint data for Sol 120 (WB1) to Sol 164 (Roubion) Jezero Crater exploration.",
+  "target_region": {
+    "description": "Jezero Crater, Mars - Perseverance Rover Sol 120 to Sol 164 Traverse",
+    "key_waypoints": {
+      "Sol_120_WB1": {
+        "latitude_deg": 18.4386299,
+        "longitude_deg": 77.4494015,
+        "description": "Sol 120 Waypoint 1 (Start of corridor)"
+      },
+      "Sol_164_Roubion": {
+        "latitude_deg": 18.4328406,
+        "longitude_deg": 77.451742,
+        "description": "Sol 164 Roubion (First drill attempt site)"
+      }
+    },
+    "corridor_bounds": {
+      "west_lon_deg": 77.4474015,
+      "east_lon_deg": 77.453742,
+      "south_lat_deg": 18.4308406,
+      "north_lat_deg": 18.4406299
+    }
+  },
+  "files": {
+    "metadata_and_vectors": [
+      {
+        "file": "hirise_dtm_1m_fgdc.html",
+        "size_bytes": 5659,
+        "sha256": "802b8f77e85a2d87eff261423f89e89d73a4176a0f66872376b2fd932c0d3619",
+        "source_url": "https://trek.nasa.gov/mars/TrekWS/rest/cat/metadata/fgdc/html?label=JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40",
+        "description": "FGDC metadata for USGS/NASA MRO HiRISE Controlled DTM mosaic (1m resolution) over Jezero crater TRN basemap",
+        "crs": "Equirectangular (latTs0=0°, lon0=0°, Mars Sphere R=3396190m)",
+        "datum": "MOLA Topography, Delta Geoid",
+        "geographic_bounds": {
+          "west": 77.22293,
+          "east": 77.58396,
+          "south": 18.3068,
+          "north": 18.66931
+        }
+      },
+      {
+        "file": "hirise_ortho_25cm_fgdc.html",
+        "size_bytes": 5641,
+        "sha256": "dc19e73f42de53dabfb4273af060105b59ced5547e136d8eb78dcf0ca064ef67",
+        "source_url": "https://trek.nasa.gov/mars/TrekWS/rest/cat/metadata/fgdc/html?label=JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd",
+        "description": "FGDC metadata for USGS/NASA MRO HiRISE Controlled Orthomosaic (25cm resolution) over Jezero crater TRN basemap",
+        "crs": "Equirectangular (latTs0=0°, lon0=0°, Mars Sphere R=3396190m)",
+        "datum": "Mars 2000 Equipotential / IAU 2000 Mars",
+        "geographic_bounds": {
+          "west": 77.22293,
+          "east": 77.58396,
+          "south": 18.3068,
+          "north": 18.66931
+        }
+      },
+      {
+        "file": "hirise_ortho_25cm_WMTSCapabilities.xml",
+        "size_bytes": 10037,
+        "sha256": "6a67af4f3e79ed8bf5e625b60d4b9250533f38a8f61e98758410ff8ad9213693",
+        "source_url": "https://trek.nasa.gov/tiles/Mars/EQ/JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd/1.0.0/WMTSCapabilities.xml",
+        "description": "OGC WMTS Capabilities specification for HiRISE 25cm Orthomosaic (TileMatrixSet: default028mm, Zoom levels 0 to 17)",
+        "crs": "urn:ogc:def:crs:EPSG::104905",
+        "datum": "Mars Equirectangular (latTs0, lon0)",
+        "geographic_bounds": {
+          "west": 77.2229331,
+          "east": 77.583964,
+          "south": 18.3067994,
+          "north": 18.669315
+        }
+      },
+      {
+        "file": "perseverance_traverse_fgdc.html",
+        "size_bytes": 4726,
+        "sha256": "0f7e8558bbfff61710baf261ae402daf7403a8804d70b5e4d76ae655ffcdf138",
+        "source_url": "https://trek.nasa.gov/mars/TrekWS/rest/cat/metadata/fgdc/html?label=Perseverance_Traverse_Path",
+        "description": "FGDC metadata for NASA Mars 2020 Perseverance Rover Traverse Path feature layer on JPL Mars Trek",
+        "crs": "Mars Planetocentric / Equirectangular",
+        "datum": "Mars 2000 Datum",
+        "geographic_bounds": {
+          "west": 77.303808,
+          "east": 77.463133,
+          "south": 18.427253,
+          "north": 18.499663
+        }
+      },
+      {
+        "file": "M20_waypoints.json",
+        "size_bytes": 603126,
+        "sha256": "bd143ee69241229926abd373e6305b8bbb326d6b5a7b4a8d6935262696f93dc4",
+        "source_url": "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json",
+        "description": "Official NASA Mars 2020 mission waypoints GeoJSON (708 waypoints including Sol 120-164 stops with elevation and site/drive IDs)",
+        "crs": "EPSG:4326 / Mars Planetocentric Longitude-Latitude [Lon, Lat, Elevation_m]",
+        "datum": "Martian equipotential datum (MOLA/DeltaGeoid elevation in meters)"
+      },
+      {
+        "file": "M20_traverse.json",
+        "size_bytes": 1723218,
+        "sha256": "6ddd0ece913d75b45d105946082f95ed84e68f4718b68d32a4421dc30877e7e6",
+        "source_url": "https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json",
+        "description": "Official NASA Mars 2020 mission drive traverse GeoJSON (559 segments, 521 vertices in Sol 120-164 corridor)",
+        "crs": "EPSG:4326 / Mars Planetocentric Longitude-Latitude [Lon, Lat, Elevation_m]",
+        "datum": "Martian equipotential datum (MOLA/DeltaGeoid elevation in meters)"
+      }
+    ],
+    "ortho_tiles": {
+      "root_directory": "ortho-tiles",
+      "tile_format": "PNG",
+      "tile_size_px": [
+        256,
+        256
+      ],
+      "wmts_service_url_template": "https://trek.nasa.gov/tiles/Mars/EQ/JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd/1.0.0/default/default028mm/{TileMatrix}/{TileRow}/{TileCol}.png",
+      "local_path_pattern": "ortho-tiles/{zoom}/{row}/{col}.png",
+      "total_tiles": 91,
+      "total_size_bytes": 3950436,
+      "all_png_headers_verified": true,
+      "levels": [
+        {
+          "zoom": 13,
+          "resolution_m_per_px": 5.088,
+          "tile_count": 4,
+          "total_bytes": 231890,
+          "row_range": [
+            3256,
+            3257
+          ],
+          "col_range": [
+            11716,
+            11717
+          ],
+          "lat_range": [
+            18.4130859375,
+            18.45703125
+          ],
+          "lon_range": [
+            77.431640625,
+            77.4755859375
+          ]
+        },
+        {
+          "zoom": 14,
+          "resolution_m_per_px": 2.544,
+          "tile_count": 4,
+          "total_bytes": 238971,
+          "row_range": [
+            6513,
+            6514
+          ],
+          "col_range": [
+            23433,
+            23434
+          ],
+          "lat_range": [
+            18.424072265625,
+            18.446044921875
+          ],
+          "lon_range": [
+            77.442626953125,
+            77.464599609375
+          ]
+        },
+        {
+          "zoom": 15,
+          "resolution_m_per_px": 1.272,
+          "tile_count": 9,
+          "total_bytes": 516419,
+          "row_range": [
+            13026,
+            13028
+          ],
+          "col_range": [
+            46866,
+            46868
+          ],
+          "lat_range": [
+            18.4295654296875,
+            18.446044921875
+          ],
+          "lon_range": [
+            77.442626953125,
+            77.4591064453125
+          ]
+        },
+        {
+          "zoom": 16,
+          "resolution_m_per_px": 0.636,
+          "tile_count": 20,
+          "total_bytes": 981816,
+          "row_range": [
+            26053,
+            26057
+          ],
+          "col_range": [
+            93733,
+            93736
+          ],
+          "lat_range": [
+            18.4295654296875,
+            18.44329833984375
+          ],
+          "lon_range": [
+            77.44537353515625,
+            77.45635986328125
+          ]
+        },
+        {
+          "zoom": 17,
+          "resolution_m_per_px": 0.318,
+          "tile_count": 54,
+          "total_bytes": 1981340,
+          "row_range": [
+            52107,
+            52115
+          ],
+          "col_range": [
+            187467,
+            187472
+          ],
+          "lat_range": [
+            18.4295654296875,
+            18.441925048828125
+          ],
+          "lon_range": [
+            77.44674682617188,
+            77.45498657226562
+          ]
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_files": 97,
+    "total_size_bytes": 6302843,
+    "integrity_check": "ALL_PASS",
+    "scientific_provenance_verified": true
+  }
+}

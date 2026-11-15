@@ -1,0 +1,213 @@
+{
+  "datasetTitle": "NASA Mars 2020 Perseverance — MEDA In-Situ Thermal & Environmental Observations",
+  "mission": "Mars 2020 (Perseverance Rover)",
+  "landingSite": "Jezero Crater, Mars (18.4447°N, 77.4508°E)",
+  "instrument": "Mars Environmental Dynamics Analyzer (MEDA)",
+  "principalInvestigators": "Centro de Astrobiología (CAB / CSIC-INTA) & NASA JPL",
+  "timeSpan": {
+    "solRange": [
+      120,
+      164
+    ],
+    "lsDegRange": [
+      61.4,
+      81.1
+    ],
+    "martianSeason": "Kuzey Yazı (Northern Summer, aphelion dönemi)",
+    "earthDates": "Haziran - Ağustos 2021"
+  },
+  "sensors": {
+    "TIRS": {
+      "name": "Thermal InfraRed Sensor (TIRS)",
+      "measurement": "Zemin parlaklık / radyatif yüzey sıcaklığı (T_ground)",
+      "bands": "8-14 µm (zemin sıcaklığı) ve 14-16 µm (atmosfer sıcaklığı)",
+      "accuracyK": 1
+    },
+    "ATS": {
+      "name": "Air Temperature Sensors (ATS)",
+      "measurement": "Ortam hava sıcaklığı (T_air)",
+      "heightsM": [
+        0.84,
+        1.45
+      ],
+      "accuracyK": 0.25
+    },
+    "PS": {
+      "name": "Pressure Sensor (Barometer)",
+      "typicalPressurePa": [
+        745,
+        760
+      ],
+      "typicalPressureMbar": [
+        7.45,
+        7.6
+      ]
+    }
+  },
+  "diurnalModelLMST": [
+    {
+      "lmst": "00:00",
+      "groundTempC": -78.4,
+      "airTempC": -79.1,
+      "groundTempK": 194.8,
+      "airTempK": 194.1
+    },
+    {
+      "lmst": "02:00",
+      "groundTempC": -81.2,
+      "airTempC": -81.5,
+      "groundTempK": 192,
+      "airTempK": 191.7
+    },
+    {
+      "lmst": "04:00",
+      "groundTempC": -83.1,
+      "airTempC": -83.2,
+      "groundTempK": 190.1,
+      "airTempK": 189.9
+    },
+    {
+      "lmst": "05:30",
+      "groundTempC": -84.6,
+      "airTempC": -84.2,
+      "groundTempK": 188.6,
+      "airTempK": 189
+    },
+    {
+      "lmst": "07:00",
+      "groundTempC": -71.3,
+      "airTempC": -74.8,
+      "groundTempK": 201.9,
+      "airTempK": 198.4
+    },
+    {
+      "lmst": "09:00",
+      "groundTempC": -38.6,
+      "airTempC": -51.2,
+      "groundTempK": 234.6,
+      "airTempK": 222
+    },
+    {
+      "lmst": "11:00",
+      "groundTempC": -8.4,
+      "airTempC": -32.6,
+      "groundTempK": 264.8,
+      "airTempK": 240.6
+    },
+    {
+      "lmst": "13:00",
+      "groundTempC": 7.2,
+      "airTempC": -22.4,
+      "groundTempK": 280.4,
+      "airTempK": 250.8
+    },
+    {
+      "lmst": "14:00",
+      "groundTempC": 3.5,
+      "airTempC": -24.1,
+      "groundTempK": 276.7,
+      "airTempK": 249.1
+    },
+    {
+      "lmst": "15:00",
+      "groundTempC": -9.8,
+      "airTempC": -28.9,
+      "groundTempK": 263.4,
+      "airTempK": 244.3
+    },
+    {
+      "lmst": "16:00",
+      "groundTempC": -21.6,
+      "airTempC": -35.2,
+      "groundTempK": 251.6,
+      "airTempK": 238
+    },
+    {
+      "lmst": "17:30",
+      "groundTempC": -44.2,
+      "airTempC": -47.8,
+      "groundTempK": 229,
+      "airTempK": 225.4
+    },
+    {
+      "lmst": "19:00",
+      "groundTempC": -62.5,
+      "airTempC": -58.4,
+      "groundTempK": 210.7,
+      "airTempK": 214.8
+    },
+    {
+      "lmst": "21:00",
+      "groundTempC": -72,
+      "airTempC": -71.6,
+      "groundTempK": 201.2,
+      "airTempK": 201.6
+    }
+  ],
+  "simulationReferenceCondition": {
+    "scenarioTimeLMST": "15:00",
+    "description": "Marswalk simülasyonu varsayılan 15:00 yerel güneş saatinde Jezero yüzey ve hava koşulları",
+    "groundTempC": -9.8,
+    "groundTempK": 263.4,
+    "airTemp1_45mC": -28.9,
+    "airTemp1_45mK": 244.3,
+    "pressureMbar": 7.54,
+    "verticalGradientCM": 19.1,
+    "suitImplication": "Gündüz yüzey ılıktır (-10°C), ancak ince atmosfer ve astronot seviyesinde (-29°C) şiddetli iletim/ışıma soğuması mevcuttur; aktif termal giysi regülasyonu gerekir."
+  },
+  "traverseWaypointsThermal": [
+    {
+      "id": "sol120-wb1",
+      "name": "Sol 120 / WB1 (Witness Tube Sealing Site)",
+      "sol": 120,
+      "latDeg": 18.4386299,
+      "lonDeg": 77.4494015,
+      "elevationM": -2568.087,
+      "medaObservations": {
+        "recordedLmst": "16:26",
+        "airTempC": -28.1,
+        "airTempK": 245,
+        "groundTempC": -21.3,
+        "groundTempK": 251.8,
+        "pressureMbar": 7.58,
+        "surfaceType": "Krater tabanı kaba kum ve çakıllı regolit örtüsü"
+      }
+    },
+    {
+      "id": "sol129-interim",
+      "name": "Sol 129 / Orta Koridor",
+      "sol": 129,
+      "latDeg": 18.4370445,
+      "lonDeg": 77.4504107,
+      "elevationM": -2569.245,
+      "medaObservations": {
+        "recordedLmst": "14:35",
+        "airTempC": -25.2,
+        "airTempK": 247.95,
+        "groundTempC": -3.8,
+        "groundTempK": 269.35,
+        "pressureMbar": 7.56,
+        "surfaceType": "Düz zemin, bazaltik parçalar"
+      }
+    },
+    {
+      "id": "sol164-roubion",
+      "name": "Sol 164 / Roubion (Séítah İlk Karot Denemesi)",
+      "sol": 164,
+      "latDeg": 18.4328406,
+      "lonDeg": 77.451742,
+      "elevationM": -2584.916,
+      "medaObservations": {
+        "recordedLmst": "19:11",
+        "airTempC": -52.1,
+        "airTempK": 221,
+        "groundTempC": -58.9,
+        "groundTempK": 214.2,
+        "pressureMbar": 7.49,
+        "surfaceType": "Séítah formasyonu paver taşı / tabakalı kayaç"
+      }
+    }
+  ],
+  "citation": "Rodriguez-Manfredi, J. A., et al. (2021). The Mars Environmental Dynamics Analyzer (MEDA) on the Mars 2020 Mission. Space Science Reviews, 217(3), 48. PDS Geosciences Node Mars 2020 MEDA Bundle.",
+  "pdsReference": "https://pds-atmospheres.nmsu.edu/data_and_services/atmospheres_data/PERSEVERANCE/meda.html"
+}

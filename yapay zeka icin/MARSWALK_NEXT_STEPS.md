@@ -1,7 +1,15 @@
 # NASA Space Apps 2026 — Martian Map devir notu
 
-**Güncelleme:** 12 Kasım 2026  
+**Güncelleme:** 14 Kasım 2026
 **Proje bağlamı:** Kullanıcı kontrollü Marswalk; uygulama kodu bu klasöre eklenmez.
+
+**Güncel durum (14 Kasım 2026):** `7df26df` ve `1bc85f6`, `codex/usgs-dtm-fail-closed` dalına push edildi; önceki kod engelleri için statik tekrar incelemesi PASS olarak kaydedildi. USGS adayı ürün-özel düşey datum doğrulanmadığı için `needs_review`; HiRISE fallback etkin. Test, `prepare-data` veya runtime çalıştırılmadı; Stage 6 kabulü açık. JP2 decoder yok. `c2f3008` ve `c10e885` birleştirmeleri 19B jeoloji, 20B arşiv izi, 22B fotoğraf/kamera ve 1,48 m kask hizası iyileştirmelerini ekledi; yeni ham veri getirmedi ve bu turda test edilmedi.
+
+**Ürün yönü (14 Kasım 2026):** Nihai hedef, HiRISE DTM üzerinde birinci şahıs kullanıcı kontrollü Mars keşfidir. “FPS” first-person kamera/keşif demektir; shooter değildir. Stage 8–12’nin geçmiş doğrulama kayıtları migration kabulü sayılmaz. `eb385ea` USGS migration'ı ilk statik incelemede **FAIL** aldı; `7df26df`/`1bc85f6` sonrasındaki statik tekrar incelemede önceki kod engelleri kapalı bulundu. Yeni USGS adayının ürün-özel datum kanıtı ve Stage 6 runtime kabulü hâlâ açık; HiRISE fallback korunur. Stage 13 rig kodu ile Stage 19B/20B/22B entegrasyonları kaynakta mevcut; Stage 15–18 görsel kabulü ile 19–22 ürün/runtime kabulü sürer. JPEG 2000 decoder/alignment ayrı iştir.
+
+**Bağımsız inceleme engelleri (14 Kasım 2026):** `extract-dtm.mjs` eksik TIFF tags’a rağmen product identity, boyut, tiepoint/radius, no-data, valid range, datum ve lisans varsayıyor/sabitliyor; strip layout/compression doğrulanmıyor. Registry boolean/text flags ve `frameMatchesConfig` bağımsız transform/residual kanıtı olmadan supported duruma izin veriyor; örnek kontrolü yalnız finite değer test ediyor. Resmî ürün etiketi/SIS, provenance, datum, lisans/kullanım ve sayısal coverage/transform QC tamamlanmadı; bu migration için bağımsız kabul/test çalıştırması yapılmadı. USGS release `Rights` alanı tam olarak **“This work is marked with CC0 1.0 Universal”** ifadesini verir ([USGS data release](https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic)); bunu kaynakla ilişkilendir, yerel ürün kimliği ve validator uygunluğu yerine koyma.
+
+**Sıradaki işin kabul ölçütü:** extractor beklenmeyen/eksik tag, strip layout veya compression karşısında fail-closed olmalı; manifestte kimlik/provenance, datum ve lisans/kullanım şartları birincil kaynakla bağlanmalı; expected frame zorunlu olmalı ve dönüşüm/footprint piksel testleri sayısal tolerans/rezidüel kanıtı sunmalı. Sonra bağımsız review ve kullanıcı tarafından istenen kabul çalıştırması yapılır. İnceleme anındaki uncommitted legacy raster silme, camera/renderer/test/screenshot düzenlemeleri ve TIFF/`.crdownload` not commit’inin kapsamı değildir.
 
 **Durum notu:** Bu devir belgesi araştırma ve eski iş planı içerir. Güncel kod durumu için önce `Sim/README.md`, `Sim/public/js/` ve `Sim/İkinci Beyin İlerleme Notları.md` dosyalarını kontrol et. Ortak ürün/ajan kuralları `SYSTEM_PROMPT.md`, teknik plan ise `road map.md` içindedir.
 
@@ -53,16 +61,27 @@ Eğim ve yükseklik tehlike/safety skoru değildir. DTM’den kaya, regolit, gev
 |---|---|---|
 | Kaynakta mevcut | HiRISE DTM penceresi, PDS grid dönüşümü, kullanıcı hareketi, saat, rota sapması/koridoru, DTM kotu ve Horn eğimi | Çalışan kod ve kabul davranışı için `Sim/README.md` ile kaynak/testleri esas al. DTM yoksa oyun açılmalı, katman unavailable kalmalı. |
 | Kaynakta mevcut | `SurfaceProvider`, manifest validator/registry, HiRISE default ve fallback, immutable `WorldSnapshot` | Registry genel yeni format parser’ı değildir. Stage 6 validator boşlukları aşağıda açıkça listelenmiştir. |
-| Açık | Stage 6 manifest doğrulamasını fail-closed tamamla | Lisans/usage, sayısal footprint ve route intersection, doğrulanmış vertical datum, zorunlu expectedFrame ve dönüşüm kanıtı; sentetik testler. |
-| Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; koordinat frame ve DTM kapsamı doğrulanmalı. Erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
-| Kuruldu; push bekliyor | Git ile iki kişilik paylaşım | Yerel `main`, `origin` ve başlangıç commit’i `54747f7` kurulu. Push sırasında LFS S3 sertifika doğrulaması başarısız oldu. IMG/JP2/F32 LFS’te; AI belgeleri ile kod aynı repoda. |
+| Kaynakta mevcut | Modül ayrımı ve snapshot/provider sözleşmesi | Dosya yolları için `Sim/README.md` ve `Sim/public/js/` esas alınır; registry ve `WorldSnapshot` kaynakta vardır. |
+| Stage 9 — runtime kabulü | İlk kabul `d471d6a` üzerinde, birleşik optimizasyon sonrası regresyon da kapandı | `fbc623f` kod HEAD’i bağımsız `npm test` 18/18 ve `npm run smoke` 32/32 geçti. |
+| Stage 10 — first-person keşif ve rig entegrasyonu | Tamamlandı (`fbc623f`) | Alparslan: movement/camera/surface-contact ve renderer entegrasyonu. Efe: bağımsız `astronaut-rig.js` geometri/poz modülü. Bağımsız doğrulama 18/18 unit, 32/32 smoke. |
+| Stage 11 — 3D marker-mesh kılavuzları | Tamamlandı (`8054b1a`) | Efe: `marker-mesh.js`. Alparslan: renderer entegrasyonu. Sol 120/164 beacon ve rota kılavuzları. |
+| Stage 8 — first-person demo akışı ve HUD | Tamamlandı (`f5259d2`, `9819da2`) | 3D doğrudan URL açılışı (`?view=3d`), Sol 164 hedef kilidi, nişangah, kontrol kapsülü, varış rozeti; Efe QA merge (`7ed695e`). |
+| Stage 12 — Mars zıplama fiziği ve kamera dinamikleri | Tamamlandı (`58660f0`) | Alparslan: Mars 3.71 m/s² yerçekimi (~1.3s hang-time, ~0.78m apex), havada yatay momentum korunumu, landingRecovery (0.25s), head-bobbing ve landing dip. Bağımsız 29/29 unit, 32/32 smoke test. |
+| Stage 13 — EVA loping ve iniş kinematiği | Sonraki ayrı kodlama görevi (Efe; Stage 6 kabulinden sonra) | Efe `astronaut-rig.js` içinde snapshot hareket girdilerini (`landingRecovery`, `airborne`, `phase`) tüketerek deterministik loping gait, apex balance ve landing squash pozlarını kodlar. |
+| Ayrı görsel işi | JP2 ortogörüntü çözme ve hizalama | Mevcut uyarı bilinen sınırlama; DTM hillshade orto değildir. Decoder/lisans ve yarım-piksel PDS/GeoTIFF kaydı doğrulanmadan orto bindirmesi iddia edilmemeli. Stage 12/13 önkoşulu değildir. |
+| Yarışma verisi gelince | Stage 6 manifest doğrulaması | License/usage, sayısal footprint+kesişim, açıkça doğrulanmış vertical datum, zorunlu `expectedFrame` ve dönüşüm kanıtıyla fail-closed intake. |
+| Dış erişime bağlı | PLACES gerçek traverse verisini indirip doğrula | Aynı PDS ürünü ve label/SIS kullanılmalı; erişim yoksa sadeleştirilmiş rota caveat’ı korunur. |
+| Kaydedilmiş Git durumu | İki kişilik paylaşım | `alparslan/stage8-demo-orchestration` dalında Stage 12 (`58660f0`) ve Efe QA merge (`9819da2`) push edildi. |
 
 ## Sıradaki somut işler
 
-1. **Önce Stage 6 validator boşlukları:** `registry.js` ve `SurfaceProviderRegistry` zaten mevcut; iskeleti yeniden yazma. License/usage zorunluluğu, sayısal coverage ve rota/kullanım alanı kesişimi, `verticalDatumVerified === true`, zorunlu `expectedFrame` ve doğrulanabilir dönüşüm kanıtı için küçük bir kod görevi ve sentetik kabul testleri hazırla. Gerçek veriye özel adapter üretme.
-2. **PLACES dış veri işi ayrı kalsın:** PDS tarafından doğrulanan aynı `best_interp.csv` ile label/SIS edinilebilirse Sol 120–164 izini koordinat çerçevesine göre dönüştürüp DTM footprint/no-data ile kesiştir. Erişim yoksa gerçek rota iddiasında bulunma.
-3. **Git paylaşımını kur:** Aşağıdaki adımları takım arkadaşınla repo sahibi/visibility ve fixture saklama kararı verdikten sonra uygula.
+1. **Önce Stage 6/TIFF migration kabulü:** Alparslan extractor/manifest/frame doğrulamasındaki fail-closed açıkları kapatıp bağımsız review alır. Yeni migration için kabul sonucu yoktur.
+2. **Sonraki ayrı iş — Stage 13 EVA loping ve sıçrama/iniş kinematiği:** Bu kabulden sonra Efe `Sim/public/js/view/3d/astronaut-rig.js` ve birim testlerinde düşük yerçekimi EVA sıçramalı loping gait, apex balance pose ve landing squash & recover kinematiğini uygular.
+2. **JP2 ortogörüntü decode/alignment — ayrı, bloke etmeyen iş:** Decoder ve lisansını araştır; `PixelIsArea` ile PDS piksel merkezi arasındaki yarım-piksel kayıt farkını kanıtla doğrulamadan overlay ekleme. Hillshade’i orto diye adlandırma.
+3. **Gerçek PLACES izi — dış erişime bağlı:** PDS’nin aynı birincil ürünü ve label/SIS’i engelsiz ortamdan edinilebilirse koordinat çerçevesini doğrula ve Sol 120–164’i DTM kapsam/no-data ile karşılaştır. Erişim yoksa basitleştirilmiş rota caveat’ı korunur.
+4. **Stage 6 yarışma verisi intake — açık:** TIFF migration review’ındaki extractor, metadata, lisans, koordinat dönüşümü ve sayısal coverage bloklarını kaynağa dayalı kapat; veri/kanıt yokken adapter veya format uydurma. HiRISE fallback korunur.
+5. **Atmosferi ölçülü modelle:** NASA basınç/yoğunluk değerlerini kaynaklı genel/ortalama referans veya açık senaryo girdisi olarak etiketle; Jezero anlık hava ya da gerçek suit fiziği gibi sunma. İnsan/giysi ve aerodinamik parametreleri kaynaklandırılmadan atmosferik kuvvet ekleme.
 
-### Git başlangıç durumu
+### Git güncel durumu
 
-Workspace kökünde `emanzBey48/EA-Mars` remote’u ayarlanmış, ilk AI commit’i `54747f7` yerelde oluşmuş durumda. LFS objeleri sertifika doğrulaması yüzünden GitHub’a ulaşmadı; bağlantı güvenli biçimde düzeldikten sonra push edilmeli. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin. Push olmazsa local commit ile remote paylaşımı birbirinden ayrı raporlansın; SSL doğrulaması kapatılmasın.
+`alparslan/stage8-demo-orchestration` üzerinde Stage 12 commit'i `58660f0` ve Efe QA merge commit'i `9819da2` remote'a push edilmiş durumdadır. AI her önemli ve gözden geçirilebilir aşamada ilgili dosyaları ayrı commit etsin, commit öncesi staged diff’i denetlesin ve paylaşım için branch’ini push etsin.

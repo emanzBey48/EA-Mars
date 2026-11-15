@@ -1,0 +1,190 @@
+{
+  "schema": "marswalk.regional-dem.v1",
+  "product": {
+    "serviceDescription": "mola128_mola64_merge_90Nto90S_SimpleC_clon0",
+    "layer": "mola128_mola64_merge_90Nto90S_SimpleC_clon0",
+    "serviceUrl": "https://trek.nasa.gov/mars/trekarcgis/rest/services/mola128_mola64_merge_90Nto90S_SimpleC_clon0/ImageServer",
+    "serviceCrsWkid": 104905,
+    "nativePixelDeg": 0.00781224569558698,
+    "nominalPixelM": 463,
+    "serviceCopyrightText": ""
+  },
+  "attribution": "NASA Mars Trek / MOLA (mola128_mola64_merge_90Nto90S_SimpleC_clon0)",
+  "license": "belirtilmemiş",
+  "status": "needs_review",
+  "accessedAt": "2026-11-14T22:13:54.434Z",
+  "request": {
+    "userAgent": "marswalk-research-script",
+    "requestCount": 3,
+    "minGapMs": 1100,
+    "totalElapsedMs": 2786,
+    "totalBytes": 298030,
+    "urlTemplates": {
+      "metadata": "https://trek.nasa.gov/mars/trekarcgis/rest/services/mola128_mola64_merge_90Nto90S_SimpleC_clon0/ImageServer?f=json",
+      "exportImage": "https://trek.nasa.gov/mars/trekarcgis/rest/services/mola128_mola64_merge_90Nto90S_SimpleC_clon0/ImageServer/exportImage?bbox={west},{south},{east},{north}&bboxSR=104905&imageSR=104905&size={n},{n}&format=tiff&pixelType=S16&interpolation=RSP_NearestNeighbor&f=image",
+      "identify": "https://trek.nasa.gov/mars/trekarcgis/rest/services/mola128_mola64_merge_90Nto90S_SimpleC_clon0/ImageServer/identify?geometry={x,y,wkid:104905}&geometryType=esriGeometryPoint&returnGeometry=false&returnCatalogItems=false&f=json"
+    },
+    "log": [
+      {
+        "name": "imageserver-metadata",
+        "url": "https://trek.nasa.gov/mars/trekarcgis/rest/services/mola128_mola64_merge_90Nto90S_SimpleC_clon0/ImageServer?f=json",
+        "status": 200,
+        "contentType": "application/json;charset=UTF-8",
+        "bytes": 1989,
+        "sha256": "158befcdc12d1965e75411c4e7bc90fc7f44ff2b141e76d8c97f04012ee6e233",
+        "elapsedMs": 659
+      },
+      {
+        "name": "exportImage",
+        "url": "https://trek.nasa.gov/mars/trekarcgis/rest/services/mola128_mola64_merge_90Nto90S_SimpleC_clon0/ImageServer/exportImage?bbox=75.949000%2C16.939000%2C78.949000%2C19.939000&bboxSR=104905&imageSR=104905&size=384%2C384&format=tiff&pixelType=S16&interpolation=RSP_NearestNeighbor&f=image",
+        "status": 200,
+        "contentType": "image/tiff",
+        "bytes": 295828,
+        "sha256": "41367561d362c4cc150d97cda58fdc5ef200c8500b356258d4f41c015a109f7c",
+        "elapsedMs": 1449
+      },
+      {
+        "name": "identify",
+        "url": "https://trek.nasa.gov/mars/trekarcgis/rest/services/mola128_mola64_merge_90Nto90S_SimpleC_clon0/ImageServer/identify?geometry=%7B%22x%22%3A77.45%2C%22y%22%3A18.43%2C%22spatialReference%22%3A%7B%22wkid%22%3A104905%7D%7D&geometryType=esriGeometryPoint&returnGeometry=false&returnCatalogItems=false&f=json",
+        "status": 200,
+        "contentType": "application/json;charset=UTF-8",
+        "bytes": 213,
+        "sha256": "27b8d8d6986ce377a524bdefd173ddcaf65c0c5bbf9fe100e0684c8d3a64010c",
+        "elapsedMs": 212
+      }
+    ]
+  },
+  "exportParams": {
+    "bbox": [
+      75.949,
+      16.939,
+      78.949,
+      19.939
+    ],
+    "bboxSR": 104905,
+    "imageSR": 104905,
+    "size": [
+      384,
+      384
+    ],
+    "pixelType": "S16"
+  },
+  "rawResponse": {
+    "sha256": "41367561d362c4cc150d97cda58fdc5ef200c8500b356258d4f41c015a109f7c",
+    "bytes": 295828,
+    "contentType": "image/tiff",
+    "headerHex": "49492a00080000001200000103000100",
+    "byteOrder": "LE",
+    "width": 384,
+    "height": 384,
+    "bitsPerSample": 16,
+    "stripCount": 9,
+    "rasterType": "PixelIsArea",
+    "tiepoint": {
+      "lonDeg": 75.949,
+      "latDeg": 19.939
+    },
+    "geo": {
+      "geographicType": 32767,
+      "angularUnit": "degree",
+      "semiMajorAxisM": 3396190,
+      "inverseFlattening": 169.8944472236118,
+      "geoText": [
+        "GCS Name = GCS_Mars_2000",
+        "Datum = D_Mars_2000",
+        "Ellipsoid = Mars_2000_IAU_IAG",
+        "Primem = Reference_Meridian",
+        "ESRI PE String = GEOGCS[\"GCS_Mars_2000\",DATUM[\"D_Mars_2000\",SPHEROID[\"Mars_2000_IAU_IAG\",3396190.0,169.8944472236118]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]]"
+      ]
+    }
+  },
+  "noData": {
+    "declaredInTiff": false,
+    "noDataText": null,
+    "policy": "GDAL_NODATA etiketi yok; hiçbir değer no-data sayılmadı, sıfır 0 olarak bırakıldı. Sayaçlar aşağıda.",
+    "counts": {
+      "total": 147456,
+      "valid": 147456,
+      "invalid": 0,
+      "noDataMatches": 0,
+      "nanCount": 0,
+      "zeroCount": 2,
+      "suspiciousFillCount": 0,
+      "validMinValue": -3777,
+      "validMaxValue": 199
+    }
+  },
+  "grid": {
+    "file": "mola-jezero.f32",
+    "encoding": "float32 little-endian, satır-majör, row 0 = kuzey",
+    "width": 384,
+    "height": 384,
+    "pixelSizeDeg": 0.0078125,
+    "bounds": {
+      "west": 75.949,
+      "east": 78.949,
+      "south": 16.939,
+      "north": 19.939
+    },
+    "cellConvention": "row 0 = north edge; centre lon = west + (col + 0.5) * pixelSizeDeg; lat = north - (row + 0.5) * pixelSizeDeg",
+    "byteLength": 589824,
+    "validCount": 147456,
+    "invalidCount": 0,
+    "valueStats": {
+      "min": -3777,
+      "max": 199,
+      "mean": -2124.1787855360244
+    }
+  },
+  "datum": {
+    "status": "needs_review",
+    "declaredInTiff": {
+      "geographicType": 32767,
+      "semiMajorAxisM": 3396190,
+      "inverseFlattening": 169.8944472236118,
+      "geoText": [
+        "GCS Name = GCS_Mars_2000",
+        "Datum = D_Mars_2000",
+        "Ellipsoid = Mars_2000_IAU_IAG",
+        "Primem = Reference_Meridian",
+        "ESRI PE String = GEOGCS[\"GCS_Mars_2000\",DATUM[\"D_Mars_2000\",SPHEROID[\"Mars_2000_IAU_IAG\",3396190.0,169.8944472236118]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]]"
+      ]
+    },
+    "note": "GeoTIFF elipsoid tanımlıyor (a, 1/f). Izgara enleminin küre (planetosentrik) mi jeodetik mi olduğu yerel DTM ile ölçülmeden doğrulanmadı; compare modu bunu ölçer."
+  },
+  "identifyCheck": {
+    "lonDeg": 77.45,
+    "latDeg": 18.43,
+    "serviceValue": -2574,
+    "serviceRaw": {
+      "objectId": 0,
+      "name": "Pixel",
+      "value": "-2574",
+      "location": {
+        "x": 77.45,
+        "y": 18.43,
+        "spatialReference": {
+          "wkid": 104905,
+          "latestWkid": 104905
+        }
+      },
+      "properties": null,
+      "catalogItems": null,
+      "catalogItemVisibilities": []
+    },
+    "nearestValue": -2582,
+    "nearestStatus": "ok",
+    "nearestCell": {
+      "row": 193,
+      "col": 192
+    },
+    "bilinearValue": -2577.632000000005,
+    "differenceNearestMinusServiceM": -8
+  },
+  "notes": [
+    "Bölgesel bağlam, ~463 m/piksel; yürünebilirlik puanı üretilmez.",
+    "Düşey datum ve enlem konvansiyonu doğrulanmadı (status needs_review).",
+    "Ham TIFF dosyası kaydedilmedi; yalnız sha256 ve başlık özeti."
+  ],
+  "generatedBy": "Sim/scripts/fetch-regional-dem.mjs"
+}

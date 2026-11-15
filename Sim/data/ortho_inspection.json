@@ -1,47 +1,5 @@
 {
-  "file": "ESP_046060_1985_RED_C_01_ORTHO.JP2",
-  "width": 6673,
-  "height": 14266,
-  "components": 1,
-  "bitsPerComponent": 8,
-  "geotiff": {
-    "pixelScale": [
-      1.0096633268711,
-      1.0096633268711,
-      0
-    ],
-    "tiePoint": [
-      0,
-      0,
-      0,
-      -3240.5144475928964,
-      1099012.9781508944,
-      0
-    ],
-    "rasterType": "PixelIsArea",
-    "citation": "Equirectangular MARS|",
-    "projCoordTrans": 17,
-    "linearUnits": 9001,
-    "centerLong": 77.44,
-    "stdParallel1": 15,
-    "falseEasting": 0,
-    "falseNorthing": 0,
-    "semiMajor": 3394839.8133163,
-    "semiMinor": 3394839.8133163
-  },
-  "crsText": "Equirectangular (GeoJP2), std. paralel (ProjCenterLat) 15°, merkez boylam 77.44°, R=3394839.8133163 m",
-  "pixelScaleM": 1.0096633268711,
-  "registration": {
-    "checked": true,
-    "sameDims": true,
-    "sameCrs": true,
-    "jp2RasterType": "PixelIsArea",
-    "pdsConvention": "PDS3: 1 tabanlı LINE/SAMPLE piksel merkezi; X=(SAMPLE−SAMPLE_PROJECTION_OFFSET)·MAP_SCALE, Y=(LINE_PROJECTION_OFFSET−LINE)·MAP_SCALE",
-    "jp2MinusPdsCenterOffsetPx": {
-      "col": 0.5,
-      "row": 0.5
-    },
-    "note": "Aynı boyut ve CRS: evet. JP2 GeoTIFF (PixelIsArea) ile DTM PDS etiketi arasında piksel merkezinde 0.500 sütun / 0.500 satır fark var (≈0.71 m). Uygulama örneklenen katman olan DTM’nin PDS etiketini esas alır; bu yarım piksellik belirsizlik konum/kot gösteriminde belirtilir."
-  },
-  "decodeReason": "Ortogörüntü kullanılamıyor: JP2 başlığı/GeoTIFF okundu, ancak bu bağımlılıksız yığında JPEG 2000 piksel kod çözücü yok (tarayıcılar JP2 göstermiyor, Node/Python ortamında OpenJPEG/GDAL/Pillow kurulu değil). Harita zemini DTM’den türetilmiştir."
+  "file": null,
+  "available": false,
+  "decodeReason": "Kullanıcı eski JP2 ortogörüntüyü geçersiz bildirdi; yeni doğrulanmış orto ürün pakete henüz eklenmedi. Mevcut zemin DTM’den türetilmiş gölgeli kabartmadır (orto değildir)."
 }

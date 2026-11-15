@@ -9,15 +9,20 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(root, 'public');
 const DATA = path.join(root, 'data');
 const PORT = Number(process.env.PORT) || 8080;
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.f32': 'application/octet-stream', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.md': 'text/markdown; charset=utf-8', '.json': 'application/json; charset=utf-8', '.f32': 'application/octet-stream', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
 const server = http.createServer((req, res) => {
   let urlPath;
   try { urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400).end(); return; }
   if (urlPath === '/') urlPath = '/index.html';
-  const [base, rel] = urlPath.startsWith('/data/') ? [DATA, urlPath.slice(6)] : [PUBLIC, urlPath.slice(1)];
-  const file = path.resolve(base, rel);
-  if (!file.startsWith(base + path.sep)) { res.writeHead(403).end(); return; }
+  let file;
+  if (urlPath === '/SOURCES.md') {
+    file = path.join(root, 'SOURCES.md');
+  } else {
+    const [base, rel] = urlPath.startsWith('/data/') ? [DATA, urlPath.slice(6)] : [PUBLIC, urlPath.slice(1)];
+    file = path.resolve(base, rel);
+    if (!file.startsWith(base + path.sep)) { res.writeHead(403).end(); return; }
+  }
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Not found'); return; }
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] ?? 'application/octet-stream', 'Content-Length': st.size, 'Cache-Control': 'no-cache' });

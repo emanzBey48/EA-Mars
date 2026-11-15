@@ -1,0 +1,84 @@
+{
+  "schema": "marswalk.nodata-fixture.v1",
+  "synthetic": true,
+  "label": "SENTETİK TEST VERİSİ — gerçek veri değildir (no-data kapsam testleri için).",
+  "dataFile": "nodata-fixture.f32",
+  "dtype": "float32",
+  "byteOrder": "little-endian",
+  "rows": 200,
+  "cols": 240,
+  "cellSizeM": 1,
+  "nwXM": -120,
+  "nwYM": 100,
+  "widthM": 240,
+  "heightM": 200,
+  "cellRule": "row-major, row 0 = north, col 0 = west; cell (r,c) centre x = nwXM + (c+0.5)*cellSizeM, y = nwYM - (r+0.5)*cellSizeM",
+  "noDataValue": -3.4028226550889045e+38,
+  "noDataBits": "0xFF7FFFFB",
+  "validMin": -2700,
+  "validMax": -2300,
+  "noDataCellCount": 1029,
+  "islandBoundsM": {
+    "minX": -10,
+    "maxX": 10,
+    "minY": -10,
+    "maxY": 10
+  },
+  "geometry": [
+    {
+      "id": "island",
+      "kind": "rect",
+      "rowMin": 90,
+      "rowMax": 109,
+      "colMin": 110,
+      "colMax": 129,
+      "role": "pencere ortasında 20x20 m no-data adası; yerel (0,0) merkezinde, yoldaşı engeller"
+    },
+    {
+      "id": "north-edge-strip",
+      "kind": "rect",
+      "rowMin": 0,
+      "rowMax": 59,
+      "colMin": 180,
+      "colMax": 183,
+      "role": "kuzey grid kenarına (satır 0) değen 4 m genişliğinde no-data şeridi"
+    },
+    {
+      "id": "isolated-hole",
+      "kind": "rect",
+      "rowMin": 60,
+      "rowMax": 60,
+      "colMin": 60,
+      "colMax": 60,
+      "role": "tek hücrelik izole no-data deliği"
+    },
+    {
+      "id": "corridor-wall-west",
+      "kind": "rect",
+      "rowMin": 150,
+      "rowMax": 151,
+      "colMin": 20,
+      "colMax": 99,
+      "role": "dar koridorun batı duvarı (2 satır kalınlıkta)"
+    },
+    {
+      "id": "corridor-wall-east",
+      "kind": "rect",
+      "rowMin": 150,
+      "rowMax": 151,
+      "colMin": 106,
+      "colMax": 219,
+      "role": "dar koridorun doğu duvarı; geçilebilir boşluk sütun 100..105 (3x3 kuralıyla 101..104 geçilebilir)"
+    }
+  ],
+  "terrain": {
+    "model": "sentetik düzlem + Gauss tümseği",
+    "formula": "z = -2500 + 0.02*x + 0.01*y + 6*exp(-((x-80.5)^2 + (y-69.5)^2) / (2*18^2)), x/y yerel metre",
+    "unit": "m",
+    "verticalDatum": null,
+    "note": "Datum veya gerçek Mars yükseklik iddiası yoktur."
+  },
+  "sha256Data": "3fae0f7fe1f4ae2f92449cf294017d71a702ea6b57dfb160813ef28b562639f5",
+  "generator": "scripts/make-nodata-fixture.mjs",
+  "caveat": "Yalnız test ve script verisi. Gerçek NASA/USGS ürünü değildir; CRS/datum tahmini yapılmamıştır."
+}

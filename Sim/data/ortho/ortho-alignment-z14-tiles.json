@@ -1,0 +1,334 @@
+{
+  "schema": "marswalk.ortho-alignment.v1",
+  "product": {
+    "kind": "HiRISE orthomosaic (WMTS tiles from NASA Mars Trek). Not the DTM hillshade; not from JP2.",
+    "layerId": "JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd",
+    "tileMatrixSet": "default028mm",
+    "crs": "urn:ogc:def:crs:EPSG::104905",
+    "zoom": 14,
+    "resourceUrlTemplate": "https://trek.nasa.gov/tiles/Mars/EQ/JEZ_hirise_soc_006_orthoMosaic_25cm_Eqc_latTs0_lon0_first_dd/1.0.0//{Style}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png"
+  },
+  "tileMatrix": {
+    "topLeftCornerDeg": {
+      "lon": -180,
+      "lat": 90
+    },
+    "tilePx": [
+      256,
+      256
+    ],
+    "matrixSize": [
+      32768,
+      16384
+    ],
+    "degPerPx": 0.00004291534423828125,
+    "pathOrder": "ortho-tiles/{zoom}/{row}/{col}.png (row = TileRow, north = 0)",
+    "extentAssumption": "matrix spans the globe (-180..180, 90..-90); ScaleDenominator is Earth-based and NOT used"
+  },
+  "registration": {
+    "convention": "PIXEL_IS_AREA (WMTS): pixel (i,j) spans [lon0+i*d, lon0+(i+1)*d]; its centre is +0.5 px. Integer global coordinates are pixel EDGES.",
+    "pixelCenterOffsetPx": 0.5,
+    "glTexelNote": "UV edges u=0/1 map to the outer mosaic pixel edges; GL texel centres (i+0.5)/W are consistent with this convention.",
+    "halfPixelRegistrationOfSourceRasterVerified": false,
+    "alignmentVsDtmVisuallyVerified": false,
+    "statusTr": "Hizalama DTM ile gorsel olarak DOGRULANMADI; sadece karo aritmetigi (WMTS) ile turetildi. Kaynak raster yari-piksel kaydi kanitlanmadi."
+  },
+  "groundSampleDistance": {
+    "atLatDeg": 18.43505859375,
+    "northSouthM": 2.5437940488326833,
+    "eastWestProjectedM": 2.5437940488326833,
+    "eastWestGroundM": 2.4132533866486616,
+    "nominalClaim": "25 cm",
+    "meetsNominal25cm": false,
+    "note": "Metres per pixel from degree grid and R=3396190 m; zoom 17 is the finest tile level available."
+  },
+  "window": {
+    "name": "tiles",
+    "source": "union of tiles present at chosen zoom",
+    "requestedBboxDeg": {
+      "west": 77.442626953125,
+      "east": 77.464599609375,
+      "north": 18.446044921875,
+      "south": 18.424072265625,
+      "source": "union of tiles present at chosen zoom"
+    },
+    "marginM": 0,
+    "pixelBoundsGlobal": {
+      "x0": 5998848,
+      "y0": 1667328,
+      "x1": 5999360,
+      "y1": 1667840
+    },
+    "sizePx": [
+      512,
+      512
+    ],
+    "actualBboxDeg": {
+      "west": 77.442626953125,
+      "east": 77.464599609375,
+      "north": 18.446044921875,
+      "south": 18.424072265625
+    },
+    "localBoundsM": {
+      "xMin": -401.592410704121,
+      "xMax": 900.8301422987133,
+      "yMin": -888.9381561081391,
+      "yMax": 413.4843968942296
+    },
+    "sizeM": {
+      "width": 1302.4225530028343,
+      "height": 1302.4225530023687
+    },
+    "localFrame": "Sim local plane: x east, y north, metres, origin = Sol 120 waypoint, equirectangular latTs0=0 lon0=0 R=3396190 (geo.js)"
+  },
+  "uvMapping": {
+    "uScale": 0.0007677999722090376,
+    "uOffset": 0.3083426417779845,
+    "vScale": -0.0007677999722093121,
+    "vOffset": 0.31747330844437366,
+    "vOrigin": "top-row"
+  },
+  "meshWindow": {
+    "source": "data/dtm_subset.json coverage.localBoundsM",
+    "localBoundsM": {
+      "xMin": -500.8804674297571,
+      "xMax": 634.1195325702429,
+      "yMin": -1175.2488485651556,
+      "yMax": 500.75115143484436
+    },
+    "uvOfMeshCorners": {
+      "northWest": {
+        "u": -0.07623336719463275,
+        "v": -0.06700341171108087
+      },
+      "southEast": {
+        "u": 0.7952196012626249,
+        "v": 1.219829341711726
+      }
+    },
+    "mosaicCoversFractionOfMeshWindow": 0.7091220933702236,
+    "note": "UV outside [0,1] has no ortho imagery: keep DTM hillshade there (never stretch / clamp-extend the edge)."
+  },
+  "otherWindowCoverage": {
+    "corridor": {
+      "tilesNeeded": 4,
+      "tilesMissing": 0,
+      "complete": true,
+      "missingSample": []
+    },
+    "route": {
+      "tilesNeeded": 2,
+      "tilesMissing": 0,
+      "complete": true,
+      "missingSample": []
+    },
+    "dtm": {
+      "tilesNeeded": 12,
+      "tilesMissing": 8,
+      "complete": false,
+      "missingSample": [
+        {
+          "row": 6512,
+          "col": 23432
+        },
+        {
+          "row": 6512,
+          "col": 23433
+        },
+        {
+          "row": 6512,
+          "col": 23434
+        },
+        {
+          "row": 6513,
+          "col": 23432
+        },
+        {
+          "row": 6514,
+          "col": 23432
+        },
+        {
+          "row": 6515,
+          "col": 23432
+        }
+      ]
+    },
+    "tiles": {
+      "tilesNeeded": 4,
+      "tilesMissing": 0,
+      "complete": true,
+      "missingSample": []
+    }
+  },
+  "mosaic": {
+    "file": "ortho-mosaic-z14-tiles.png",
+    "bytes": 254883,
+    "sha256": "545ff1ae975ce4928017a09380359e6e4834d0bbe352ce2b30acfb5124c62490",
+    "widthPx": 512,
+    "heightPx": 512,
+    "channels": 2,
+    "bitDepth": 8,
+    "layout": "gray+alpha",
+    "transparentPixels": 0
+  },
+  "tiles": [
+    {
+      "zoom": 14,
+      "row": 6513,
+      "col": 23433,
+      "status": "ok",
+      "bytes": 59870,
+      "sha256": "56900051e486a35bb9f9c36f5986a64f6768df2b6151e1d9830ff004537c45b0",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 14,
+      "row": 6513,
+      "col": 23434,
+      "status": "ok",
+      "bytes": 61487,
+      "sha256": "32d376286d83b66c7766cd72e67b1eb94ba2b55785ea6cf27825dac81168bb78",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 14,
+      "row": 6514,
+      "col": 23433,
+      "status": "ok",
+      "bytes": 58020,
+      "sha256": "c1babab97b906587efaa946f3ca63273c919c94c99872dfd6d0bb28d146a786f",
+      "colorType": 4,
+      "bitDepth": 8
+    },
+    {
+      "zoom": 14,
+      "row": 6514,
+      "col": 23434,
+      "status": "ok",
+      "bytes": 59594,
+      "sha256": "735e027de0e94cbfc70dbd71b8eb15f7b3846fef7ce86b32874ec84661fefbe3",
+      "colorType": 4,
+      "bitDepth": 8
+    }
+  ],
+  "missingTiles": [],
+  "integrity": {
+    "note": "manifest.json carries no per-tile sha256; sha256 below are computed here and can be pinned.",
+    "inventory": {
+      "totalTilesFound": 91,
+      "manifestTotalTiles": 91,
+      "levels": [
+        {
+          "zoom": 13,
+          "gridTiles": 4,
+          "tilesFound": 4,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 231890,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 5.088,
+          "resolutionComputedM": 5.087588097665367,
+          "resolutionMatches": true
+        },
+        {
+          "zoom": 14,
+          "gridTiles": 4,
+          "tilesFound": 4,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 238971,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 2.544,
+          "resolutionComputedM": 2.5437940488326833,
+          "resolutionMatches": true
+        },
+        {
+          "zoom": 15,
+          "gridTiles": 9,
+          "tilesFound": 9,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 516419,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 1.272,
+          "resolutionComputedM": 1.2718970244163417,
+          "resolutionMatches": true
+        },
+        {
+          "zoom": 16,
+          "gridTiles": 20,
+          "tilesFound": 20,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 981816,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 0.636,
+          "resolutionComputedM": 0.6359485122081708,
+          "resolutionMatches": true
+        },
+        {
+          "zoom": 17,
+          "gridTiles": 54,
+          "tilesFound": 54,
+          "tileCountMatchesManifest": true,
+          "bytesFound": 1981340,
+          "bytesMatchManifest": true,
+          "latRangeMatches": true,
+          "lonRangeMatches": true,
+          "resolutionManifestM": 0.318,
+          "resolutionComputedM": 0.3179742561040854,
+          "resolutionMatches": true
+        }
+      ]
+    },
+    "metadataFiles": [
+      {
+        "file": "hirise_ortho_25cm_fgdc.html",
+        "manifestSha256": "dc19e73f42de53dabfb4273af060105b59ced5547e136d8eb78dcf0ca064ef67",
+        "manifestSize": 5641,
+        "diskSize": 5801,
+        "diskSha256": "3a9900fb5cc8418f0d5bc36eab3181af00444ec61ba5fc3f46bb5b6bd649143a",
+        "matches": false,
+        "lfNormalisedSha256": "dc19e73f42de53dabfb4273af060105b59ced5547e136d8eb78dcf0ca064ef67",
+        "lfNormalisedMatches": true
+      },
+      {
+        "file": "hirise_ortho_25cm_WMTSCapabilities.xml",
+        "manifestSha256": "6a67af4f3e79ed8bf5e625b60d4b9250533f38a8f61e98758410ff8ad9213693",
+        "manifestSize": 10037,
+        "diskSize": 10147,
+        "diskSha256": "f4770a7f4d6cdb7aca6e07d531838271d7de41deb71e5ef7f5ddb0315b1e2512",
+        "matches": false,
+        "lfNormalisedSha256": "6a67af4f3e79ed8bf5e625b60d4b9250533f38a8f61e98758410ff8ad9213693",
+        "lfNormalisedMatches": true
+      }
+    ],
+    "sourceFileSha256": {
+      "hirise_ortho_25cm_WMTSCapabilities.xml": "f4770a7f4d6cdb7aca6e07d531838271d7de41deb71e5ef7f5ddb0315b1e2512",
+      "hirise_ortho_25cm_fgdc.html": "3a9900fb5cc8418f0d5bc36eab3181af00444ec61ba5fc3f46bb5b6bd649143a"
+    }
+  },
+  "attribution": {
+    "fgdcTitle": "MRO HiRISE, Jezero Mosaic, Controlled",
+    "fgdcAbstractVerbatim": "The Mars 2020 rover will explore Jezero crater, Mars to investigate an ancient delta for evidence of past microbial life and to better understand the geologic history of the region. The landing system onboard Mars 2020 will use technology developed at the Jet Propulsion Laboratory (JPL) called Terrain Relative Navigation (TRN), which will enable the spacecraft to autonomously avoid hazards (e.g., rock fields, crater rims) that exceed the safety requirements of the landing system. This capability allows small-scale hazards to be present in the landing ellipse, providing greater flexibility in selecting a landing location. In support of TRN, the USGS Astrogeology Science Center has generated and delivered a High-Resolution Imaging Science Experiment (HiRISE) digital terrain model (DTM) mosaic and orthomosaic that is the basemap onto which surface hazards were mapped. The hazard map will be onboard the spacecraft and used by TRN to help identify the final, hazard-free landing location.",
+    "fgdcDcRights": "",
+    "fgdcUseConstraints": "",
+    "fgdcAccessConstraints": "",
+    "fgdcOriginator": "",
+    "licenseStatus": "NOT_STATED_IN_PROVIDED_FGDC",
+    "creditAsFoundInManifest": "USGS/NASA MRO HiRISE Controlled Orthomosaic (25cm resolution) over Jezero crater TRN basemap; generated by the USGS Astrogeology Science Center (per FGDC abstract); served by NASA JPL Mars Trek",
+    "note": "FGDC rights/constraints fields are empty. config.js MAP_FRAME.attribution/CC0 text belongs to the DTM product; 21B must confirm ortho licence before claiming it."
+  },
+  "caveats": [
+    "Alignment with the DTM is NOT visually verified.",
+    "Half-pixel registration of the source orthomosaic is not proven by any provided metadata.",
+    "This is orthoimagery, not DTM hillshade; do not label the hillshade \"ortho\".",
+    "Tile alpha < 255 / alpha 0 means no data; no imagery was synthesised."
+  ]
+}

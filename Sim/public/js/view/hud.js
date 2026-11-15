@@ -122,7 +122,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
   }
 
   function updateHud(snapshot, { plannedRouteGuidance = null, showPlannedRouteGuidance = false } = {}) {
-    const { phase, simTimeS, distanceWalkedM, astronaut, surface, route } = snapshot;
+    const { phase, simTimeS, distanceWalkedM, astronaut, surface, route, thermal } = snapshot;
     const ph = $('phase'); ph.textContent = PHASE_TEXT[phase]; ph.className = `phase ${phase}`;
     $('btn-pause').textContent = phase === PHASE.PAUSED ? 'Devam' : 'Duraklat';
     $('v-pos').textContent = `x = ${astronaut.xM.toFixed(1)} m (doğu), y = ${astronaut.yM.toFixed(1)} m (kuzey)`;
@@ -250,6 +250,59 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     const presClock = $('pres-clock');
     if (presClock) {
       presClock.textContent = `${formatClock(simTimeS)} (T+0)`;
+    }
+
+    const th = thermal;
+    if (th && th.status === 'ok') {
+      const helmetLmst = $('helmet-lmst-val');
+      if (helmetLmst) helmetLmst.textContent = `${th.lmstString} (Sol ${th.sol})`;
+
+      const helmetGround = $('helmet-ground-temp');
+      if (helmetGround) helmetGround.innerHTML = `${th.groundTempC >= 0 ? '+' : ''}${th.groundTempC.toFixed(1)} °C <small>(TIRS)</small>`;
+
+      const helmetAir = $('helmet-air-temp');
+      if (helmetAir) helmetAir.innerHTML = `${th.airTempC >= 0 ? '+' : ''}${th.airTempC.toFixed(1)} °C <small>(ATS)</small>`;
+
+      const helmetPres = $('helmet-pressure');
+      if (helmetPres) helmetPres.innerHTML = `${th.pressureMbar.toFixed(2)} mbar <small>(${((th.pressureMbar * 100) / 1000).toFixed(2)} kPa)</small>`;
+
+      const helmetInertia = $('helmet-inertia');
+      if (helmetInertia) helmetInertia.innerHTML = `${th.thermalInertiaSI} SI <small>(${th.thermalInertiaLabel.split(' ')[0]})</small>`;
+
+      const helmetElevSlope = $('helmet-elev-slope');
+      if (helmetElevSlope) {
+        const zStr = Number.isFinite(astronaut.zM) ? `${astronaut.zM.toFixed(1)} m` : '—';
+        const sStr = Number.isFinite(surface.slope?.value) ? `${surface.slope.value.toFixed(1)}°` : '—';
+        helmetElevSlope.textContent = `${zStr} · ${sStr}`;
+      }
+
+      const helmetMovement = $('helmet-movement');
+      if (helmetMovement) {
+        const speed = astronaut.movement?.horizontalSpeedMps ?? 0;
+        const mode = astronaut.movement?.airborne
+          ? 'Sıçrama'
+          : (speed > 0.1 ? 'Loping Yürüyüş' : 'Sabit');
+        helmetMovement.textContent = `${speed.toFixed(1)} m/s (${mode})`;
+      }
+
+      const presTemp = $('pres-temp');
+      if (presTemp) {
+        presTemp.textContent = `Zemin: ${th.groundTempC.toFixed(1)} °C · Hava: ${th.airTempC.toFixed(1)} °C`;
+        presTemp.className = 'pres-val status-ok';
+      }
+
+      const vThLmst = $('v-thermal-lmst');
+      if (vThLmst) vThLmst.textContent = `${th.lmstString} (Sol ${th.sol} · ${formatClock(simTimeS)})`;
+      const vThG = $('v-thermal-ground');
+      if (vThG) vThG.textContent = `${th.groundTempC >= 0 ? '+' : ''}${th.groundTempC.toFixed(1)} °C (${th.groundTempK.toFixed(1)} K) · TIRS 8-14 µm`;
+      const vThA = $('v-thermal-air');
+      if (vThA) vThA.textContent = `${th.airTempC >= 0 ? '+' : ''}${th.airTempC.toFixed(1)} °C (${th.airTempK.toFixed(1)} K) · ATS 1.45 m`;
+      const vThP = $('v-thermal-pressure');
+      if (vThP) vThP.textContent = `${th.pressureMbar.toFixed(2)} mbar (${th.pressurePa} Pa) · Barometre`;
+      const vThI = $('v-thermal-inertia');
+      if (vThI) vThI.textContent = `${th.thermalInertiaSI} J m⁻² K⁻¹ s⁻¹/² (${th.thermalInertiaLabel})`;
+      const vThInterp = $('v-thermal-interp');
+      if (vThInterp) vThInterp.textContent = th.surfaceInterpretation;
     }
   }
 

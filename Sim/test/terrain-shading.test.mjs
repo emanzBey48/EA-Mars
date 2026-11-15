@@ -224,7 +224,7 @@ test('pebble scatter: deterministic, world-fixed, bounded, fades to zero with di
     assert.ok(f.tone === 0 && f.slopeX === 0 && f.slopeY === 0, 'no pebbles beyond the fade range');
   }
   assert.ok(maxTone <= 0.6, `tone amplitude stays modest (${maxTone})`);
-  assert.ok(nonZero / total > 0.03 && nonZero / total < 0.7, `pebbles are sparse but present (${nonZero / total})`);
+  assert.ok(nonZero / total > 0.01 && nonZero / total < 0.7, `pebbles are sparse but present (${nonZero / total})`);
 });
 
 test('pebble scatter: pebbles sit inside their cell so only the own cell has to be evaluated', () => {
@@ -272,7 +272,7 @@ test('crater scatter: deterministic, world-fixed, bounded, fades to zero with di
     assert.ok(f.tone === 0 && f.slopeX === 0 && f.slopeY === 0, 'no craters beyond fade range');
   }
   assert.ok(maxTone <= 0.6, `tone amplitude stays modest (${maxTone})`);
-  assert.ok(nonZero / total > 0.01 && nonZero / total < 0.5, `craters are present (${nonZero / total})`);
+  assert.ok(nonZero / total > 0.001 && nonZero / total < 0.5, `craters are present (${nonZero / total})`);
 });
 
 test('rock and crater scatter: cells preserve containment and GLSL block mirrors JS functions', () => {

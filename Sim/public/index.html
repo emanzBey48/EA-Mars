@@ -22,7 +22,17 @@
     <section id="mapwrap">
       <canvas id="map" class="map-canvas" aria-label="Jezero 2D haritası ve astronot"></canvas>
       <canvas id="map-3d" class="map-canvas" hidden aria-label="HiRISE DTM tabanlı Jezero 3D arazisi"></canvas>
-      <div class="helmet-visor" aria-hidden="true"></div>
+      <div class="helmet-visor" aria-hidden="true">
+        <div class="helmet-visor-frame">
+          <span class="visor-corner top-left"></span>
+          <span class="visor-corner top-right"></span>
+          <span class="visor-corner bottom-left"></span>
+          <span class="visor-corner bottom-right"></span>
+          <div class="visor-top-bar">
+            <span class="visor-mark">EVA-1 · JEZERO NORTHERN SUMMER · 18.44°N 77.45°E</span>
+          </div>
+        </div>
+      </div>
       <div id="presentation-hud" class="presentation-hud" hidden aria-label="Sunum ve Jüri Telemetri Kapsülü">
         <div class="pres-header">
           <div class="pres-title">
@@ -60,6 +70,10 @@
           <div class="pres-cell">
             <span class="pres-lbl">Senaryo Saati</span>
             <span id="pres-clock" class="pres-val">—</span>
+          </div>
+          <div class="pres-cell">
+            <span class="pres-lbl">Mars Çevre (MEDA)</span>
+            <span id="pres-temp" class="pres-val">—</span>
           </div>
           <div class="pres-cell pres-cell-wide">
             <span class="pres-lbl">Dikey Ölçek</span>
@@ -132,6 +146,46 @@
         <div class="hud-minimap-footer">
           <button id="hud-toggle-geology" type="button" class="hud-layer-pill" aria-pressed="false" title="Jeoloji sınırlarını göster/gizle (Sarı çizgiler)">🟡 Jeoloji</button>
           <button id="hud-toggle-archive" type="button" class="hud-layer-pill" aria-pressed="false" title="Arşiv Perseverance sürüş izini göster/gizle (Mor çizgi)">🟣 Arşiv İzi</button>
+        </div>
+      </div>
+      <div id="helmet-telemetry-widget" class="helmet-telemetry-widget" hidden aria-label="3D Kask Vizör EVA Telemetrisi">
+        <div class="helmet-telemetry-header">
+          <span class="helmet-telemetry-title" title="Astronot Kask Vizör Telemetrisi">◈ EVA SUIT &amp; ENV HUD</span>
+          <span id="helmet-telemetry-badge" class="helmet-badge-active" title="NASA Perseverance MEDA &amp; THEMIS Kalibre Veri">● MEDA</span>
+          <button id="btn-toggle-helmet-telemetry" type="button" class="helmet-hud-min-btn" title="Kask Telemetrisini Küçült / Büyüt" aria-expanded="true">—</button>
+        </div>
+        <div id="helmet-telemetry-body" class="helmet-telemetry-body">
+          <div class="helmet-hud-metric">
+            <span class="helmet-k">Mars Saati:</span>
+            <span id="helmet-lmst-val" class="helmet-v">15:00 LMST (Sol 120)</span>
+          </div>
+          <div class="helmet-hud-metric">
+            <span class="helmet-k">Zemin Sıcaklığı:</span>
+            <span id="helmet-ground-temp" class="helmet-v helmet-temp-ground">-9.8 °C <small>(TIRS)</small></span>
+          </div>
+          <div class="helmet-hud-metric">
+            <span class="helmet-k">Atmosfer Sıcaklığı:</span>
+            <span id="helmet-air-temp" class="helmet-v helmet-temp-air">-28.9 °C <small>(ATS 1.45m)</small></span>
+          </div>
+          <div class="helmet-hud-metric">
+            <span class="helmet-k">Yüzey Basıncı:</span>
+            <span id="helmet-pressure" class="helmet-v">7.54 mbar <small>(0.75 kPa)</small></span>
+          </div>
+          <div class="helmet-hud-metric">
+            <span class="helmet-k">Termal Atalet:</span>
+            <span id="helmet-inertia" class="helmet-v">340 SI <small>(Sert Kayaç)</small></span>
+          </div>
+          <div class="helmet-hud-metric">
+            <span class="helmet-k">Yüzey Kot / Eğim:</span>
+            <span id="helmet-elev-slope" class="helmet-v">—</span>
+          </div>
+          <div class="helmet-hud-metric">
+            <span class="helmet-k">EVA Hareketi:</span>
+            <span id="helmet-movement" class="helmet-v">—</span>
+          </div>
+        </div>
+        <div class="helmet-telemetry-footer">
+          <span class="helmet-source-tag" title="NASA Mars 2020 MEDA PDS Bundle &amp; 2001 Mars Odyssey THEMIS IR">NASA MEDA &amp; THEMIS VERİSİ</span>
         </div>
       </div>
     </section>
@@ -234,6 +288,19 @@
         </dl>
         <p class="muted small" id="v-calc-note"></p>
         <p class="muted small">Kot ve eğim yalnız arşiv DTM’sinden türetilmiş değerlerdir; güvenli/güvensiz yorumu, tehlike skoru veya rover karar desteği değildir.</p>
+      </details>
+
+      <details open class="card thermal disclosure is-collapsed">
+        <summary><h2><span class="tag tag-arch">NASA MEDA &amp; THEMIS</span> Mars Çevre ve Termal Telemetri</h2></summary>
+        <dl>
+          <dt>Mars Güneş Saati (LMST)</dt><dd id="v-thermal-lmst">—</dd>
+          <dt>Zemin Radyasyon Sıcaklığı (T_ground)</dt><dd id="v-thermal-ground">—</dd>
+          <dt>Atmosfer Sıcaklığı (T_air, 1.45 m)</dt><dd id="v-thermal-air">—</dd>
+          <dt>Atmosfer Yüzey Basıncı (P_atm)</dt><dd id="v-thermal-pressure">—</dd>
+          <dt>Termal Atalet (J m⁻² K⁻¹ s⁻¹/²)</dt><dd id="v-thermal-inertia">—</dd>
+          <dt>Zemin Yapı Yorumu</dt><dd id="v-thermal-interp">—</dd>
+        </dl>
+        <p class="muted small">Veri kaynağı: NASA Mars 2020 Perseverance MEDA (TIRS ve ATS sensörleri, Sol 120–164 arası) ve 2001 Mars Odyssey THEMIS Global Gece/Gündüz Kızılötesi Karoları (100 m/px). Gerçek bilimsel yerinde ölçüm kalibrasyonudur.</p>
       </details>
 
       <section id="planned-route-guidance" class="card planned-route-guidance" hidden aria-live="polite">

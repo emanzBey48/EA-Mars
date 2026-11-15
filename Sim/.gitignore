@@ -16,3 +16,7 @@ node_modules/
 !data/regional-dem/**
 !data/nodata-fixture/
 !data/nodata-fixture/**
+!data/mars-trek/
+!data/mars-trek/**
+!data/perseverance-meda/
+!data/perseverance-meda/**

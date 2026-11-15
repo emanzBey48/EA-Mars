@@ -33,6 +33,7 @@ import { buildPlannedRouteLinePositions, derivePlannedRouteGuidance } from './vi
 import { createFootprintTrail } from './view/3d/footprint-trail.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 import { createMinimap } from './view/minimap/minimap.js';
+import { createThermalModel } from './surface/thermal.js';
 import { createMarsGlobe } from './view/globe/mars-globe.js';
 import { classifyPlanResponse } from './route/plan-response-state.js';
 import { summarizeRouteEvidence } from './route/route-evidence.js';
@@ -1677,8 +1678,21 @@ function resolveGeologicContext(xM, yM) {
   return { geology, contactDistanceM: contact?.distanceM ?? null };
 }
 
+let thermalModel = createThermalModel();
+
 function buildSnapshot() {
   const { geology, contactDistanceM } = resolveGeologicContext(sim.pos.x, sim.pos.y);
+  const currentElev = lastSnapshot?.surface?.elevation?.value ?? null;
+  const currentSlope = lastSnapshot?.surface?.slope?.value ?? null;
+  const thermalEnvironment = thermalModel.sample({
+    simTimeS: sim.simTimeS,
+    xM: sim.pos.x,
+    yM: sim.pos.y,
+    elevationM: Number.isFinite(currentElev) ? currentElev : null,
+    slopeDeg: Number.isFinite(currentSlope) ? currentSlope : null,
+    sol: 120,
+  });
+
   lastSnapshot = createWorldSnapshot({
     sim,
     surfaceProvider: layers.dtm,
@@ -1688,6 +1702,7 @@ function buildSnapshot() {
     geology,
     geologyLayerStatus: geologyStatus,
     geologyContactDistanceM: contactDistanceM,
+    thermalEnvironment,
   });
   return lastSnapshot;
 }
@@ -1824,6 +1839,22 @@ function updateHudFromSnapshot(snapshot) {
 }
 
 const updateHud = () => updateHudFromSnapshot(buildSnapshot());
+
+async function loadThermalData() {
+  try {
+    const [profileResp, manifestResp] = await Promise.all([
+      fetch('data/perseverance-meda/thermal_profile.json'),
+      fetch('data/mars-trek/themis_thermal_manifest.json'),
+    ]);
+    if (profileResp.ok && manifestResp.ok) {
+      const [profile, manifest] = await Promise.all([profileResp.json(), manifestResp.json()]);
+      thermalModel = createThermalModel(profile, manifest);
+      updateHud();
+    }
+  } catch (err) {
+    console.warn('Termal veri dosyaları yüklenemedi; yerleşik MEDA modeli kullanılıyor:', err);
+  }
+}
 
 async function loadRoverGallery() {
   try {
@@ -1980,6 +2011,17 @@ void loadGeology();
 void loadHorizonGrid();
 void loadArchiveTraverse();
 void loadOrthoMosaics();
+void loadThermalData();
+
+const btnToggleHelmetTelemetry = $('btn-toggle-helmet-telemetry');
+const helmetTelemetryWidget = $('helmet-telemetry-widget');
+if (btnToggleHelmetTelemetry && helmetTelemetryWidget) {
+  btnToggleHelmetTelemetry.addEventListener('click', () => {
+    const collapsed = helmetTelemetryWidget.classList.toggle('is-collapsed');
+    btnToggleHelmetTelemetry.textContent = collapsed ? '+' : '—';
+    btnToggleHelmetTelemetry.setAttribute('aria-expanded', String(!collapsed));
+  });
+}
 
 const { keys } = bindControls({
   mapEl: mapWrap,

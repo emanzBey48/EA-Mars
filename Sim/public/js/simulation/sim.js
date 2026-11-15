@@ -2,6 +2,7 @@
 // Works purely in the local metre plane (x east, y north). No DOM, no screen coordinates.
 import { pointToSegment } from '../geo/geo.js';
 import { toGeologySnapshot } from '../geo/geology.js';
+import { DEFAULT_THERMAL_SNAPSHOT } from '../surface/thermal.js';
 
 const EMPTY_GEOLOGY_SNAPSHOT = toGeologySnapshot(null, null);
 
@@ -422,6 +423,7 @@ export function deepFreeze(obj) {
 export function createWorldSnapshot({
   sim, surfaceProvider, adapter, waypoints = [], routeNote = '',
   geology = EMPTY_GEOLOGY_SNAPSHOT, geologyLayerStatus = 'unavailable', geologyContactDistanceM = null,
+  thermalEnvironment = null,
 }) {
   const xM = sim.pos.x;
   const yM = sim.pos.y;
@@ -487,6 +489,7 @@ export function createWorldSnapshot({
       elevation,
       slope,
     },
+    thermal: thermalEnvironment ?? DEFAULT_THERMAL_SNAPSHOT,
     geology: geology ?? EMPTY_GEOLOGY_SNAPSHOT,
     geologyLayerStatus,
     geologyContactDistanceM: Number.isFinite(geologyContactDistanceM) && geologyContactDistanceM >= 0

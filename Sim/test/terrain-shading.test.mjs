@@ -12,7 +12,7 @@ import {
   MICRO_DERIVATIVE_BOUND, ORTHO_MID_LUMA, PALETTE_LINEAR, TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS,
   combineAlbedo, hash2, hashUnit, meshEdgeFade, microDetail, octaveFade, orthoCoverage, orthoGain,
   paletteAlbedo, perturbNormal, slopeAlbedoFactor, slopeRoughness, tanSlopeFromNormalZ, terrainSlopeWeight,
-  valueNoiseD, pebbleDetail, rockDetail, craterDetail,
+  valueNoiseD, pebbleDetail, rockDetail, craterDetail, applyDust,
 } from '../public/js/view/3d/terrain-shading.js';
 
 const P = TERRAIN_SHADING_PARAMS;
@@ -285,4 +285,23 @@ test('rock and crater scatter: cells preserve containment and GLSL block mirrors
   const renderer = fs.readFileSync(new URL('../public/js/view/3d/renderer.js', import.meta.url), 'utf8');
   assert.match(renderer, /terrainRocks\(vWorldPos\.xy/);
   assert.match(renderer, /terrainCraters\(vWorldPos\.xy/);
+});
+
+test('surface dust mantle: deterministic, sheds on steep slopes, blends on gentle slopes', () => {
+  const base = [0.20, 0.15, 0.12];
+  for (const [x, y] of samples(50)) {
+    const a = applyDust(base, x, y, 0.1, 10);
+    const b = applyDust(base, x, y, 0.1, 10);
+    assert.deepEqual(a, b, 'deterministic');
+    assert.ok(finite(a) && a.every((v) => v >= 0), 'finite positive albedo');
+    // On flat ground, dust adds warm tone (increases R and G)
+    assert.ok(a[0] >= base[0] * 0.95);
+    // On steep slope, dust is shed (albedo remains close to base)
+    const steep = applyDust(base, x, y, 0.95, 10);
+    assert.ok(Math.abs(steep[0] - base[0]) < 0.05, 'steep slope sheds dust');
+  }
+  assert.match(TERRAIN_SHADING_GLSL, /vec3 terrainApplyDust\(/);
+  assert.match(TERRAIN_SHADING_GLSL, /const vec3 TERRAIN_DUST =/);
+  const renderer = fs.readFileSync(new URL('../public/js/view/3d/renderer.js', import.meta.url), 'utf8');
+  assert.match(renderer, /terrainApplyDust\(albedo/);
 });

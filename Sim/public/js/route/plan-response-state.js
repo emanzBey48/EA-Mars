@@ -1,4 +1,4 @@
-// Pure request-state guard shared by the route UI and deterministic tests.
+// Pure request-state guard shared by the route UI and its deterministic tests.
 export function classifyPlanResponse({
   responseId,
   pendingPlanId,

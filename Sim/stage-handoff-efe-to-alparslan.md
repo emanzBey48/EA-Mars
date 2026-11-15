@@ -48,6 +48,8 @@ Yeni pass gerekirse 8 ve sonrası kullanılır. Pass 4 erken döner; pass 7'nin 
 
 ## 5. Ölçümler ve doğrulama (bu oturum)
 
+Bu tablo, USGS DTM etkinleştirme commit'i `c6ab77d` öncesindeki legacy-aktif çalışma ağacına ait tarihsel kabul ölçümlerini içerir. `c6ab77d` sonrasında güncel aktif yüzey değişti; bu tablo yeni sürüm için tarayıcı kabulü veya tekrar test sonucu değildir.
+
 | Konu | Değer | Kaynak |
 |---|---|---|
 | Birim testleri | 612/612 | `node --test test/` (çıkış kodu 0) |

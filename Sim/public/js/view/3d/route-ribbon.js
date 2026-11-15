@@ -3,6 +3,8 @@
 // yerel bounds ve provenance. Render/shader Aşama 33B'dedir; bu modül yalnız geometri üretir.
 // PLANLAMA GÖSTERGESİ: şerit rota görselleştirmesidir; güvenli rota, canlı telemetri veya gerçek rover izi iddiası değildir.
 
+import { smoothPolylineCached } from '../../geo/smooth-path.js';
+
 export const ROUTE_RIBBON_SCHEMA_VERSION = 1;
 
 export const ROUTE_RIBBON_NOTE =
@@ -35,7 +37,9 @@ export const ROUTE_RIBBON_TUNING = Object.freeze({
   miterLimit: 2,           // 1/cos(θ/2) bu değeri aşarsa miter yerine bevel
   areaEpsM2: 1e-9,         // bu alanın altındaki üçgen dejenere sayılır
   zeroLengthM: 1e-9,       // bu uzunluktaki yol parçası atlanır
-  maxSpacingPasses: 12,    // maxVertices aşılırsa adım en fazla bu kadar iki katına çıkarılır
+  dashCapM: 0.12,          // kesik uç yuvarlama yarıçapı (m); dash/2 ile sınırlı
+  dashCapMinFactor: 0.35,  // dash ucunda en küçük genişlik çarpanı (dejenere olmasın)
+  maxSpacingPasses: 12,   // maxVertices aşılırsa adım en fazla bu kadar iki katına çıkarılır
 });
 
 const COUNTER_KEYS = [
@@ -89,6 +93,9 @@ export function buildRouteRibbon({
   maxSegmentTurnRad = ROUTE_RIBBON_DEFAULTS.maxSegmentTurnRad,
   maxVertices = ROUTE_RIBBON_DEFAULTS.maxVertices,
   cameraXY = null,
+  smooth = false,
+  dashM = null,
+  gapM = null,
   nearM,
   farM,
   nearSpacingM,
@@ -140,9 +147,14 @@ export function buildRouteRibbon({
     provenance,
   };
 
+  if (Array.isArray(path) && smooth) path = smoothPolylineCached(path, typeof smooth === 'object' ? smooth : { minSpacingM: 1 });
+  opt.pathLength = Array.isArray(path) ? path.length : 0;
+  const dash = isFiniteNumber(dashM) && dashM > 0 && isFiniteNumber(gapM) && gapM > 0 ? { dashM, gapM } : null;
+  opt.dash = dash;
+
   if (!Array.isArray(path)) return finish(opt, emptyPass(), null, 'path_not_array', 1);
   if (path.length < 2) return finish(opt, emptyPass(), null, 'path_too_short', 1);
-  const prep = prepareChains(path);
+  const prep = prepareChains(path, dash);
   if (prep.chains.length === 0) return finish(opt, emptyPass(prep), prep, 'no_valid_segments', 1);
 
   // Adım seyreltme: maxVertices aşılırsa örnekleme aralığı iki katına çıkar (hata yok).
@@ -161,7 +173,41 @@ export function buildRouteRibbon({
 // ------------------------------------------------------------------------------------------------------------
 // Path preparation
 
-function prepareChains(path) {
+// Kesikli kılavuz: s (yay uzunluğu) ekseninde [a, b] aralığının dash periyodu içindeki "açık" alt aralıkları.
+function dashIntervals(a, b, dash) {
+  const period = dash.dashM + dash.gapM;
+  const out = [];
+  let k = Math.floor(a / period);
+  for (;; k++) {
+    const ds = k * period;
+    const lo = Math.max(a, ds);
+    const hi = Math.min(b, ds + dash.dashM);
+    if (ds >= b) break;
+    if (hi - lo > 1e-6) out.push([lo, hi, ds, ds + dash.dashM]);
+  }
+  return out;
+}
+
+// Yuvarlak kesik uçları: dash ucundan d mesafede genişlik çarpanı (köşeleri kırpılmış oval uç; uçta 0 değil, dejenere olmasın).
+function dashCapFactor(d, capM) {
+  if (!(capM > 0) || d >= capM) return 1;
+  const u = 1 - d / capM;
+  return Math.max(ROUTE_RIBBON_TUNING.dashCapMinFactor, Math.sqrt(Math.max(0, 1 - u * u)));
+}
+
+// [lo, hi] aralığını dash uç-kapak kırılma noktalarından (s ekseni) böler.
+function dashPieces(lo, hi, ds, de, capM) {
+  const cuts = [lo, hi];
+  if (capM > 0) {
+    for (const off of [0.28 * capM, capM]) {
+      for (const s of [ds + off, de - off]) if (s > lo + 1e-6 && s < hi - 1e-6) cuts.push(s);
+    }
+  }
+  cuts.sort((x, y) => x - y);
+  return cuts.filter((v, i) => i === 0 || v - cuts[i - 1] > 1e-6);
+}
+
+function prepareChains(path, dash = null) {
   const chains = [];
   let current = null;
   let sCum = 0;
@@ -181,6 +227,32 @@ function prepareChains(path) {
     if (len <= ROUTE_RIBBON_TUNING.zeroLengthM) { zeroLengthSegments++; continue; }
     const ux = dx / len;
     const uy = dy / len;
+    if (dash) {
+      // Dash alt-segmentleri: aynı doğrultu/yay uzunluğu; boşluklarda zincir kırılır (üçgen boşluğu aşmaz).
+      const capM = Math.min(ROUTE_RIBBON_TUNING.dashCapM, dash.dashM / 2);
+      for (const [dLo, dHi, ds, de] of dashIntervals(sCum, sCum + len, dash)) {
+        const cuts = dashPieces(dLo, dHi, ds, de, capM);
+        for (let c = 0; c + 1 < cuts.length; c++) {
+          const lo = cuts[c];
+          const hi = cuts[c + 1];
+          const t0 = (lo - sCum) / len;
+          const t1 = (hi - sCum) / len;
+          const sub = {
+            idx: i, x0: a.xM + dx * t0, y0: a.yM + dy * t0, x1: a.xM + dx * t1, y1: a.yM + dy * t1,
+            len: hi - lo, ux, uy, nx: -uy, ny: ux, s0: lo,
+            w0: dashCapFactor(Math.min(lo - ds, de - lo), capM), w1: dashCapFactor(Math.min(hi - ds, de - hi), capM),
+          };
+          const prev = current !== null ? current[current.length - 1] : null;
+          if (prev === null || Math.abs(prev.s0 + prev.len - lo) > 1e-6) {
+            if (current !== null) chains.push(current);
+            current = [];
+          }
+          current.push(sub);
+        }
+      }
+      sCum += len;
+      continue;
+    }
     const seg = { idx: i, x0: a.xM, y0: a.yM, x1: b.xM, y1: b.yM, len, ux, uy, nx: -uy, ny: ux, s0: sCum };
     sCum += len;
     if (current === null) current = [];
@@ -269,7 +341,7 @@ function buildPass(prep, opt, mult) {
         const x = seg.x0 + (seg.x1 - seg.x0) * t;
         const y = seg.y0 + (seg.y1 - seg.y0) * t;
         const s = seg.s0 + seg.len * t;
-        const hw = halfWidthAt(distTo(x, y));
+        const hw = halfWidthAt(distTo(x, y)) * (seg.w0 === undefined ? 1 : seg.w0 + (seg.w1 - seg.w0) * t);
         if (j === 0 && k > 0) {
           addJoin(cross, chain[k - 1], seg, x, y, s, hw, opt, counters);
         } else {
@@ -280,7 +352,7 @@ function buildPass(prep, opt, mult) {
     const last = chain[chain.length - 1];
     cross.push({
       kind: 'single', x: last.x1, y: last.y1, vx: last.nx, vy: last.ny,
-      hw: halfWidthAt(distTo(last.x1, last.y1)), s: last.s0 + last.len, segIdx: last.idx, turnSign: 0,
+      hw: halfWidthAt(distTo(last.x1, last.y1)) * (last.w1 === undefined ? 1 : last.w1), s: last.s0 + last.len, segIdx: last.idx, turnSign: 0,
     });
   }
 
@@ -616,4 +688,33 @@ function deepFreeze(value) {
   Object.freeze(value);
   for (const child of Object.values(value)) deepFreeze(child);
   return value;
+}
+
+/**
+ * Tek yön kılavuzu (3B): yumuşatılmış, zemine oturan, KESİKLİ koyu kömür şerit. Skor rengi/dolgu/parlama yok.
+ * main.js yalnız bu fonksiyonu çağırıp sonucu plannedRouteRibbon olarak verir; colorsRgb (sRGB) hazır gelir.
+ * NOT: renderer pass 6 şu an additive (SRC_ALPHA, ONE) karıştırır; koyu çizgi için normal alfa karışımı gerekir
+ * (renderer.js tarafı, bu modülün sınırı dışında). Alfa için meta.guideAlpha kullanılabilir.
+ */
+export const ROUTE_GUIDE_3D = Object.freeze({
+  colorRgb: Object.freeze([0.082, 0.067, 0.055]), // ~#15110e
+  alpha: 0.6,
+  widthM: 0.16,
+  dashM: 1.1,
+  gapM: 0.9,
+  groundOffsetM: 0.04,
+});
+
+export function buildRouteGuideRibbon(args = {}) {
+  const ribbon = buildRouteRibbon({
+    widthM: ROUTE_GUIDE_3D.widthM,
+    groundOffsetM: ROUTE_GUIDE_3D.groundOffsetM,
+    smooth: true,
+    dashM: ROUTE_GUIDE_3D.dashM,
+    gapM: ROUTE_GUIDE_3D.gapM,
+    ...args,
+  });
+  const colorsRgb = new Float32Array(ribbon.positions.length);
+  for (let i = 0; i < colorsRgb.length; i += 3) colorsRgb.set(ROUTE_GUIDE_3D.colorRgb, i);
+  return { ...ribbon, colorsRgb, guideAlpha: ROUTE_GUIDE_3D.alpha };
 }

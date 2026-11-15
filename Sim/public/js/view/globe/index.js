@@ -1,8 +1,9 @@
-﻿// Mars küresi giriş ekranı. Kullanım: createGlobeScreen({ root, onSimulate, getEtaMinutes }) -> { show, hide, dispose }
+// Mars küresi giriş ekranı. Kullanım: createGlobeScreen({ root, onSimulate, getEtaMinutes }) -> { show, hide, dispose }
 // Doku: USGS Astrogeology Viking MDIM 2.1 renkli mozaik (ortogörüntü değil). Konumlar yaklaşıktır.
 import { createGlobe } from './globe.js';
 import { createGlobePanel } from './globe-panel.js';
 import { REGIONS, REGION_TYPES, findRegionAt, typeLabel } from './regions.js';
+import { makeFreePoint, hoverLabel } from './free-point.js';
 
 function h(tag, cls, text) {
   const e = document.createElement(tag);
@@ -11,7 +12,7 @@ function h(tag, cls, text) {
   return e;
 }
 
-export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null, dataBase = '/data/viking-mdim', regions = REGIONS }) {
+export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null, dataBase = '/data/viking-mdim', regions = REGIONS, onUnavailable = null }) {
   const screen = h('div', 'mw-globe-screen mw-globe-screen--hidden');
   const canvas = h('canvas', 'mw-globe-canvas');
   const title = h('div', 'mw-globe-title');
@@ -24,12 +25,17 @@ export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null
   root.appendChild(screen);
 
   const state = { start: null, end: null, busy: false, disposed: false };
-  let globe = null, errorEl = null;
+  let globe = null, unavailable = false;
   try {
     globe = createGlobe({ canvas, dataBase, onPick, onHover });
   } catch (e) {
-    errorEl = h('div', 'mw-globe-error', `Küre gösterilemedi (${e.message}). WebGL gerekli.`);
-    screen.appendChild(errorEl);
+    unavailable = true; // WebGL yok/başlatılamadı: ekran uygulamayı örtmez
+    try { console.info('[globe] kullanılamıyor:', e?.message); } catch { /* yok say */ }
+  }
+  if (unavailable) {
+    screen.remove();
+    try { onUnavailable?.(); } catch { /* yok say */ }
+    return { unavailable: true, pickRegion() {}, simulate() { return Promise.resolve(); }, show() {}, hide() {}, dispose() { state.disposed = true; } };
   }
 
   const panel = createGlobePanel({
@@ -42,10 +48,11 @@ export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null
 
   function onHover(p) {
     const m = p ? findRegionAt(p.lat, p.lon, { regions }) : null;
-    globe?.setAutoRotatePaused(!!m);
-    if (!m) { tip.hidden = true; return; }
-    tipName.textContent = m.region.name;
-    tipType.textContent = typeLabel(m.region.type);
+    // Dönen küre üzerinde hover/tıklama dönüş matrisiyle doğru lat/lon bulur; hover dönüşü durdurmaz.
+    if (!p) { tip.hidden = true; return; }
+    const lab = hoverLabel(p.lat, p.lon, m, typeLabel);
+    tipName.textContent = lab.name;
+    tipType.textContent = lab.detail;
     tip.hidden = false;
     const r = screen.getBoundingClientRect();
     // Imleç sağ kenara/panele yakınsa ipucu imlecin soluna açılır (panel altında kesilmesin).
@@ -57,9 +64,8 @@ export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null
 
   function onPick(p) {
     if (state.busy) return;
-    const m = findRegionAt(p.lat, p.lon, { regions });
-    if (!m) return;
-    const r = m.region;
+    // Serbest nokta: isimli bölgeye yapışmadan tam tıklanan lat/lon.
+    const r = makeFreePoint(p.lat, p.lon, regions);
     // 1. tıklama başlangıç, 2. varış; sonraki tıklamalar varışı değiştirir.
     if (!state.start) { state.start = r; panel.setStart(r); }
     else { state.end = r; panel.setEnd(r); }

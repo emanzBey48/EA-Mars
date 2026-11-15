@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createAutoDrive, nearestPointOnPolyline, polylineLengthM, clampSpeedMultiplier, shortestAngleDelta,
@@ -152,4 +152,46 @@ test('bos/tek noktali rota: replan, update guvenli', () => {
 test('shortestAngleDelta sarmalama', () => {
   assert.ok(Math.abs(shortestAngleDelta(3, -3) - (2 * Math.PI - 6)) < 1e-12);
   assert.ok(Math.abs(shortestAngleDelta(-3, 3) + (2 * Math.PI - 6)) < 1e-12);
+});
+
+// --- Donus puruzsuzlugu olcumu (gercek-zaman kare dt = 1/60, sim hizi = 1.2 m/s * effectiveTimeScaleMultiplier) ---
+// ONCE (eski bang-bang kontrol): maks yaw hizi 143 deg/s (2.5 rad/s siniri), yaw ivmesi ~7000-17000 deg/s^2, maks sapma 1-1.8 m.
+function measure(poly, mult) {
+  const d = createAutoDrive({ routePolyline: poly });
+  d.setEnabled(true); d.engage(poly[0]); d.setSpeedMultiplier(mult);
+  const dt = 1 / 60;
+  const pos = { ...poly[0] };
+  let yaw = Math.atan2(poly[1].y - poly[0].y, poly[1].x - poly[0].x);
+  let prevRate = null, maxRate = 0, maxAcc = 0, maxDev = 0, arrived = false;
+  for (let i = 0; i < 200000; i++) {
+    const u = d.update(dt, pos, yaw);
+    if (u.arrived) { arrived = true; break; }
+    const rate = shortestAngleDelta(yaw, u.steerYawRad) / dt;
+    maxRate = Math.max(maxRate, Math.abs(rate));
+    if (prevRate !== null) maxAcc = Math.max(maxAcc, Math.abs(rate - prevRate) / dt);
+    prevRate = rate; yaw = u.steerYawRad;
+    if (u.forward) { const v = 1.2 * d.effectiveTimeScaleMultiplier(); pos.x += Math.cos(yaw) * v * dt; pos.y += Math.sin(yaw) * v * dt; }
+    maxDev = Math.max(maxDev, nearestPointOnPolyline(poly, pos).distanceM);
+  }
+  return { arrived, maxRateDeg: maxRate * 180 / Math.PI, maxAccDeg: maxAcc * 180 / Math.PI, maxDev };
+}
+
+const SHAPES = {
+  L: L,
+  U: [{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 20 }, { x: 0, y: 20 }],
+  S: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 30 }, { x: 100, y: 30 }, { x: 100, y: 60 }],
+  zigzag: [[0, 0], [8, 0], [14, 6], [14, 14], [22, 22], [30, 22], [36, 16], [36, 8], [44, 0], [52, 0]].map(([x, y]) => ({ x, y })),
+};
+
+test('donus puruzsuzlugu: 0.5x-10x, L/U/S/zikzak: yaw <= 90 deg/s, ivme sinirli, yoldan <= 3 m', () => {
+  for (const [name, poly] of Object.entries(SHAPES)) {
+    for (const mult of [0.5, 1, 3, 6, 10]) {
+      const m = measure(poly, mult);
+      const tag = `${name} x${mult}`;
+      assert.ok(m.arrived, `${tag} varmali`);
+      assert.ok(m.maxRateDeg <= 90, `${tag} yaw hizi ${m.maxRateDeg.toFixed(1)} deg/s`);
+      assert.ok(m.maxAccDeg <= 300, `${tag} yaw ivmesi ${m.maxAccDeg.toFixed(0)} deg/s^2`);
+      assert.ok(m.maxDev <= 3, `${tag} sapma ${m.maxDev.toFixed(2)} m`);
+    }
+  }
 });

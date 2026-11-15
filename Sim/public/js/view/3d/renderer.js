@@ -98,6 +98,7 @@ uniform int uRenderPass;
 uniform float uAlpha;
 uniform float uRouteTimeS;
 uniform float uRoutePulseUM;
+uniform float uRouteGuideAlpha; // pass 6: >= 0 = matte alpha-blended dark guide line at this alpha; < 0 = legacy emissive ribbon
 uniform sampler2D uOrthoTexFine;
 uniform sampler2D uOrthoTexCoarse;
 uniform vec4 uOrthoUvFine;
@@ -152,6 +153,14 @@ void main() {
 
   // Pass 6: planned-route emissive ribbon (pass 4 is the shadow depth pass and returns early above).
   if (uRenderPass == 6) {
+    if (uRouteGuideAlpha >= 0.0) {
+      // Matte dark dashed guide: no emissive, no pulse. Colour still goes linear -> ACES -> sRGB; alpha fades with
+      // distance (full to ~60 m, then smoothly down to 0.25x by ~140 m).
+      vec3 guideLinear = srgbToLinear(clamp(vColor, 0.0, 1.0));
+      float distFade = mix(1.0, 0.25, smoothstep(60.0, 140.0, dist));
+      outColor = finishColor(guideLinear, clamp(uRouteGuideAlpha, 0.0, 1.0) * distFade);
+      return;
+    }
     float flow = 0.5 + 0.5 * sin((vRouteUv.x - uRouteTimeS * 2.8) * 0.72);
     float pulseDelta = abs(vRouteUv.x - uRoutePulseUM);
     float pulse = exp(-pulseDelta * pulseDelta / 30.0);
@@ -588,6 +597,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     partRoughMetal: uniform('uPartRoughMetal'),
     routeTimeS: uniform('uRouteTimeS'),
     routePulseUM: uniform('uRoutePulseUM'),
+    routeGuideAlpha: uniform('uRouteGuideAlpha'),
     detailGain: uniform('uDetailGain'),
     dustGain: uniform('uDustGain'),
   };
@@ -1064,7 +1074,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
     },
 
     /** Draws one immutable frame from snapshot, camera state, and a prepared CPU mesh asset. */
-    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null, plannedRouteRibbon = null, plannedRoutePulseUM = 0, footprintTrail = null, horizonMesh = null }) {
+    renderFrame({ snapshot, camera, terrainMesh, markerMesh = null, geologyLinePositions = null, archiveLinePositions = null, plannedRouteLinePositions = null, plannedRouteRibbon = null, plannedRoutePulseUM = 0, footprintTrail = null, horizonMesh = null, disableSurfaceOverlayLines = false }) {
       const frameStartedAt = collectDiagnostics ? now() : 0;
       if (disposed) throw new Error('Renderer has been disposed');
       if (!snapshot || !snapshot.astronaut || !Object.isFrozen(snapshot)) {
@@ -1340,8 +1350,12 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.drawArrays(gl.LINES, 0, positions.length / 3);
         gl.bindVertexArray(null);
       }
-      drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24, 2);
-      drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1, 1, 1, 2);
+      // Yellow geology / purple archive 3D lines are skipped when the caller passes null/empty (or a non-Float32Array),
+      // and via the disableSurfaceOverlayLines flag below; the code path itself is kept.
+      if (!disableSurfaceOverlayLines) {
+        drawSurfaceLines(geologyLinePositions, 1, 0.82, 0.22, 0.84, 0.24, 2);
+        drawSurfaceLines(archiveLinePositions, 0.81, 0.67, 1, 1, 1, 2);
+      }
       drawSurfaceLines(plannedRouteLinePositions, 0.12, 0.92, 0.78, 0.96, 1, 3);
       lap('guidesMs');
 
@@ -1351,12 +1365,21 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.uniform1f(locations.alpha, 1);
         gl.uniform1f(locations.routeTimeS, snapshot.astronaut.movement?.timeS ?? 0);
         gl.uniform1f(locations.routePulseUM, Number.isFinite(plannedRoutePulseUM) ? plannedRoutePulseUM : 0);
+        const guideAlpha = uploadedRouteRibbon.source.guideAlpha;
+        const matteGuide = typeof guideAlpha === 'number' && Number.isFinite(guideAlpha);
+        gl.uniform1f(locations.routeGuideAlpha, matteGuide ? Math.min(Math.max(guideAlpha, 0), 1) : -1);
         gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        // Matte guide: normal alpha blend; legacy ribbon: additive emissive glow.
+        gl.blendFunc(gl.SRC_ALPHA, matteGuide ? gl.ONE_MINUS_SRC_ALPHA : gl.ONE);
         gl.depthMask(false);
+        if (matteGuide) {
+          gl.enable(gl.POLYGON_OFFSET_FILL);
+          gl.polygonOffset(-2, -2); // pull toward the camera so the flat strip does not z-fight the terrain
+        }
         gl.bindVertexArray(uploadedRouteRibbon.vao);
         gl.drawElements(gl.TRIANGLES, uploadedRouteRibbon.indexCount, gl.UNSIGNED_INT, 0);
         gl.bindVertexArray(null);
+        if (matteGuide) gl.disable(gl.POLYGON_OFFSET_FILL);
         gl.depthMask(true);
         gl.disable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);

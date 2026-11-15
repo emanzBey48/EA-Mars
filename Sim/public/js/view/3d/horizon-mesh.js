@@ -25,7 +25,7 @@ import {
 export const HORIZON_SCHEMA = 'marswalk.horizon.v1';
 export const HORIZON_LABEL = 'Bölgesel bağlam, ~463 m/piksel. Düşey datum doğrulanmadı. Yürünebilirlik puanı yok.';
 export const HORIZON_SOURCE = 'NASA Mars Trek MOLA (ImageServer), ~463 m/piksel';
-export const HORIZON_LICENSE_NOTE = 'lisans belirtilmemiş (ImageServer copyrightText boş); atıf: NASA Mars Trek / MOLA';
+export const HORIZON_LICENSE_NOTE = 'Kaynak: NASA Mars Trek / MOLA';
 
 export const HORIZON_DEFAULTS = Object.freeze({
   innerMarginM: 2, // horizon starts this far outside the local window (visual seam; sunum)

@@ -23,7 +23,7 @@ import { createQualityGovernor, QUALITY_MODES } from './view/3d/quality-governor
 import { buildTerrainMesh } from './view/3d/terrain-mesh.js';
 import { buildHorizonMesh, regionalGridFromBinary } from './view/3d/horizon-mesh.js';
 import { buildMarkerMeshes } from './view/3d/marker-mesh.js';
-import { buildRouteRibbon } from './view/3d/route-ribbon.js';
+import { buildRouteGuideRibbon } from './view/3d/route-ribbon.js';
 import { bindControls } from './input/input.js';
 import { createStops } from './geo/rover-observations.js';
 import { createRoverGallery } from './view/rover-gallery.js';
@@ -42,6 +42,12 @@ import { createViewModeBar } from './view/minimap/view-mode-bar.js';
 import { computeModeField, drawModeOverlay } from './view/minimap/view-modes.js';
 import { createAutoDrive } from './simulation/auto-drive.js';
 import { createDemoFlow, PLAN_SPEED_MPS } from './app/demo-flow.js';
+import { createCrewSim } from './simulation/crew-sim.js';
+import { resolveSelectionPoints, OUTSIDE_PATCH_NOTE } from './app/free-start.js';
+import { createBiomeTracker } from './app/biome-label.js';
+import { createBiomeChip } from './view/biome-chip.js';
+import { chaikinSmooth } from './simulation/path-smooth-local.js';
+import { createCrewStrip } from './view/crew-strip.js';
 
 const $ = (id) => document.getElementById(id);
 const urlParams = new URLSearchParams(window.location.search);
@@ -269,7 +275,7 @@ function updateMissionSetupUi() {
     const detail = [lengthStr, durStr].filter(Boolean).join(' · ');
     setupStepBanner.textContent = `Koridor ve A* rotası hazır${detail ? ` (${detail})` : ''}. Artık simülasyona girebilirsiniz.`;
   } else if (plannerUnavailable || !layers.dtm.available) {
-    setupStepBanner.textContent = 'Rota planlayıcı veya DTM kullanılamıyor; seçilen noktalarla devam edebilirsiniz.';
+    setupStepBanner.textContent = 'Rota planlayıcı veya DTM hazır değil; seçilen noktalarla devam edebilirsiniz.';
   } else {
     setupStepBanner.textContent = `Rota hesaplanamadı (${activeRoute?.reason || activeRoute?.status || 'erişilemeyen nokta'}). Haritada başka noktalar veya alttan örnek rota seçin.`;
   }
@@ -425,21 +431,30 @@ function closeMissionSetup() {
   requestAnimationFrame(() => minimapController.draw());
 }
 
-async function startDemoTour() {
+async function startDemoTour(selection = null) {
   if (missionSetupOpen) closeMissionSetup();
   setPresentationMode(true);
   if (currentVerticalScale !== 1) {
     rebuildTerrainMeshForScale(1);
   }
-  const startPt = DEFAULT_WAYPOINT_POINTS[0];
-  const endPt = DEFAULT_WAYPOINT_POINTS[1];
+  // Küreden serbest nokta seçildiyse ve Jezero HiRISE yamasındaysa rota o noktalardan kurulur; aksi halde varsayılan.
+  const resolved = selection ? resolveSelectionPoints(selection, {
+    toLocal: (lat, lon) => adapter.latLonToLocal(lat, lon),
+    bounds: layers.dtm.available ? layers.dtm.descriptor?.coverage?.localBoundsM : null,
+    defaults: { start: DEFAULT_WAYPOINT_POINTS[0], end: DEFAULT_WAYPOINT_POINTS[1] },
+    isValidAt: (x, y) => layers.dtm.sampleElevation(x, y)?.status === 'ok',
+  }) : null;
+  const startPt = resolved ? resolved.start : DEFAULT_WAYPOINT_POINTS[0];
+  const endPt = resolved ? resolved.end : DEFAULT_WAYPOINT_POINTS[1];
+  const useCustom = Boolean(resolved?.anyCustom);
+  patchNote = resolved?.outside ? OUTSIDE_PATCH_NOTE : null;
   const archiveMainToggle = $('toggle-archive-traverse');
-  if (archiveMainToggle) archiveMainToggle.checked = true;
-  if (minimapArchiveToggle) minimapArchiveToggle.checked = true;
+  if (archiveMainToggle) archiveMainToggle.checked = !useCustom;
+  if (minimapArchiveToggle) minimapArchiveToggle.checked = !useCustom;
   applyCustomMissionRoute(startPt, endPt, {
-    startLabel: WAYPOINTS[0].label,
-    endLabel: WAYPOINTS[1].label,
-    custom: false,
+    startLabel: useCustom ? 'Seçilen başlangıç' : WAYPOINTS[0].label,
+    endLabel: useCustom ? 'Seçilen varış' : WAYPOINTS[1].label,
+    custom: useCustom,
   });
   showSelectedPoint('start', startPt, false, { autoPlan: false, applyRoute: false });
   showSelectedPoint('end', endPt, false, { autoPlan: false, applyRoute: false });
@@ -630,7 +645,7 @@ function updateRouteButton() {
       ? 'Rota hesaplanıyor…'
       : !endpointsReady
         ? 'Başlangıç ve bitiş seçin'
-        : routeWorkerReady ? 'Rota planla' : 'Rota planlayıcı kullanılamıyor';
+        : routeWorkerReady ? 'Rota planla' : 'Rota planlayıcı hazırlanıyor';
 }
 
 function formatDurationS(totalS) {
@@ -652,8 +667,6 @@ function renderRouteSummary(result) {
       const speedStr = Number.isFinite(speed) ? `${String(speed).replace('.', ',')} m/s` : 'bilinmeyen hız';
       add('Tahmini yürüme süresi', `${formatDurationS(Math.round(stats.estimatedDurationS))} (simülasyon saati, ${speedStr} senaryo hızı)`);
       add('Duvar saati (tahmini)', `${formatDurationS(Math.round(stats.estimatedDurationS / SCENARIO.timeScale))} (×${SCENARIO.timeScale} zaman hızı)`);
-    } else {
-      add('Tahmini yürüme süresi', 'yok (bölgesel çözünürlük)');
     }
     if (Number.isFinite(stats.meanScore)) {
       const score = Math.round(stats.meanScore);
@@ -794,6 +807,7 @@ function handleRouteWorkerMessage({ data }) {
     hudMinimapController?.setPlanning(resultPlanning);
     renderRouteSummary(activeRoute);
     demoFlow?.onRouteResult(activeRoute);
+    crewHooks?.rebuild();
     minimapStatus.textContent = activeRoute?.status === 'ok'
       ? `Rota planlandı. ${activeRoute.mode === 'eva_walkability' ? 'EVA yürünebilirlik' : 'Bölgesel ön planlama'}. Planlama göstergesi — güvenli rota sertifikası değildir.`
       : activeRoute?.reason || `Rota üretilemedi (${activeRoute?.status || 'bilinmiyor'}).`;
@@ -818,7 +832,7 @@ function ensureRouteWorker() {
     pendingAutoPlan = false;
     latestExplainId = null;
     routeWorkerRequests.clear();
-    minimapStatus.textContent = `Rota Worker kullanılamıyor: ${event.message || 'çalışma hatası'}.`;
+    minimapStatus.textContent = `Rota Worker çalışmadı: ${event.message || 'çalışma hatası'}.`;
     updateRouteButton();
     updateMissionSetupUi();
   });
@@ -886,7 +900,7 @@ function renderCellExplanation(result) {
     ['Yürünebilirlik puanı', Number.isFinite(result?.score) ? `${result.score}/100` : 'üretilmiyor'],
     ['Eğim', Number.isFinite(result?.slopeDeg) ? `${result.slopeDeg.toFixed(2)}°` : 'bilinmiyor'],
     ['Pürüzlülük', Number.isFinite(result?.roughnessM) ? `${result.roughnessM.toFixed(3)} m` : 'bilinmiyor'],
-    ['Açıklama', result?.reason || result?.caveatTR || 'Veri açıklaması yok'],
+    ['Açıklama', result?.reason || result?.caveatTR || '—'],
   ];
   for (const [label, value] of entries) { const p = document.createElement('p'); p.textContent = `${label}: ${value}`; minimapCellExplanation.append(p); }
   if (Array.isArray(result?.components)) for (const component of result.components) {
@@ -939,12 +953,16 @@ function refreshMinimapOverlays() {
   };
   minimapController.setOverlays(overlayState);
   hudMinimapController?.setOverlays(overlayState);
-  const geologyText = geologyStatus === 'ready' ? 'hazır' : geologyStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
-  const archiveText = archiveTraverseStatus === 'ready' ? 'hazır' : archiveTraverseStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
-  const vikingText = vikingBaseStatus === 'ready'
-    ? `Viking MDIM 2.1: hazır · ${Math.round(vikingBaseNativeMPerPx)} m/px · lisans: ${vikingBaseLicense} · ${vikingBaseAttribution}`
-    : `Viking global: ${vikingBaseStatus}`;
-  minimapLayerStatus.textContent = `Jeoloji: ${geologyText} · Arşiv izi: ${archiveText} · ${vikingText}`;
+  // Yalnızca hazır/yüklenen katmanlar listelenir; eksik katman için satır yazılmaz.
+  const stateText = (s) => (s === 'ready' ? 'hazır' : s === 'loading' ? 'yükleniyor' : null);
+  const geologyText = stateText(geologyStatus);
+  const archiveText = stateText(archiveTraverseStatus);
+  const parts = [];
+  if (geologyText) parts.push(`Jeoloji: ${geologyText}`);
+  if (archiveText) parts.push(`Arşiv izi: ${archiveText}`);
+  if (vikingBaseStatus === 'ready') parts.push(`Viking MDIM 2.1: hazır · ${Math.round(vikingBaseNativeMPerPx)} m/px · ${vikingBaseAttribution}`);
+  else if (vikingBaseStatus === 'loading') parts.push('Viking global: yükleniyor');
+  minimapLayerStatus.textContent = parts.join(' · ');
 }
 
 function setMinimapPickMode(kind) {
@@ -1002,8 +1020,8 @@ try {
 } catch (error) {
   renderer3dError = error;
   view3dBtn.disabled = true;
-  view3dBtn.title = 'Bu tarayıcıda WebGL2 kullanılamıyor.';
-  viewStatus.textContent = `3D görünüm kullanılamıyor: ${error.message}. 2D harita kullanılabilir.`;
+  view3dBtn.title = '3D görünüm için WebGL2 gerekir.';
+  viewStatus.textContent = `3D görünüm açılamadı: ${error.message}. 2D harita kullanılabilir.`;
   viewStatus.hidden = false;
 }
 
@@ -1015,11 +1033,11 @@ function updateViewControls() {
   view3dBtn.setAttribute('aria-pressed', String(is3d));
   view3dBtn.disabled = !renderer3d || !layers.dtm.available || Boolean(terrainMeshError);
   view3dBtn.textContent = terrainMeshError
-    ? '3D kullanılamıyor'
+    ? '3D açılamadı'
     : !renderer3d
       ? '3D desteklenmiyor'
       : !layers.dtm.available
-        ? (layers.dtm.descriptor.access.reason === 'Yükleniyor…' ? '3D DTM yükleniyor…' : '3D DTM yok')
+        ? '3D DTM yükleniyor…'
         : '3D';
   canvas2d.hidden = is3d;
   canvas3d.hidden = !is3d;
@@ -1185,23 +1203,15 @@ function preparePlannedRouteGuide() {
   for (let i = 1; i < path.length; i++) {
     plannedRoutePathCumulativeM.push(plannedRoutePathCumulativeM[i - 1] + Math.hypot(path[i].xM - path[i - 1].xM, path[i].yM - path[i - 1].yM));
   }
-  const ribbon = buildRouteRibbon({
-    path,
-    segments: activeRoute.segments,
+  // Tek yön kılavuzu: yumuşatılmış yol, koyu kesikli şerit (renk/alfa route-ribbon.js'ten gelir; guideAlpha renderer'a iletilir).
+  plannedRouteRibbon = buildRouteGuideRibbon({
+    path: smoothedRoutePath() ?? path,
+    segments: null,
     sampleElevation: (xM, yM) => layers.dtm.sampleElevation(xM, yM),
     displayConfig: terrainMesh.displayConfig,
     sampleSpacingM: 1.5,
-    provenance: { source: 'active route planner result', mode: activeRoute.mode ?? null },
+    provenance: { source: 'active route planner result (smoothed)', mode: activeRoute.mode ?? null },
   });
-  const colorsRgb = new Float32Array(ribbon.positions.length);
-  const hasAlignedScores = Array.isArray(activeRoute.segments) && activeRoute.segments.length === path.length - 1;
-  for (let vertex = 0; vertex < ribbon.vertexCount; vertex++) {
-    const alongM = ribbon.uvs[vertex * 2];
-    let segmentIndex = 0;
-    while (segmentIndex + 1 < plannedRoutePathCumulativeM.length - 1 && alongM > plannedRoutePathCumulativeM[segmentIndex + 1]) segmentIndex++;
-    colorsRgb.set(routeScoreColor(hasAlignedScores ? activeRoute.segments[segmentIndex]?.score : null), vertex * 3);
-  }
-  plannedRouteRibbon = { ...ribbon, colorsRgb };
 }
 
 function routeScoreColor(score) {
@@ -1276,7 +1286,7 @@ async function loadArchiveTraverse() {
     refreshMinimapOverlays();
   } catch (error) {
     archiveTraverseStatus = 'unavailable';
-    status.textContent = 'MMGIS sürüş arşivi kullanılamıyor.';
+    status.textContent = 'MMGIS sürüş arşivi yüklenemedi.';
     refreshMinimapOverlays();
     console.warn('MMGIS sürüş arşivi yüklenemedi:', error);
   }
@@ -1366,12 +1376,12 @@ async function selectView(view) {
     return;
   }
   if (!renderer3d) {
-    viewStatus.textContent = `3D görünüm kullanılamıyor: ${renderer3dError?.message ?? 'WebGL2 başlatılamadı'}. 2D harita kullanılabilir.`;
+    viewStatus.textContent = `3D görünüm açılamadı: ${renderer3dError?.message ?? 'WebGL2 başlatılamadı'}. 2D harita kullanılabilir.`;
     viewStatus.hidden = false;
     return;
   }
   if (!layers.dtm.available) {
-    viewStatus.textContent = '3D terrain için HiRISE DTM kullanılamıyor; 2D görünüm açık kalıyor.';
+    viewStatus.textContent = '3D terrain için HiRISE DTM henüz hazır değil; 2D görünüm açık kalıyor.';
     viewStatus.hidden = false;
     return;
   }
@@ -1725,7 +1735,6 @@ async function loadOrthoMosaics() {
         body: 'MARS',
         source: 'NASA JPL Mars Trek / USGS Astrogeology',
         attribution: 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona',
-        license: 'Lisans: kaynakta belirtilmemiş',
         unit: 'Albedo (gri tonlama albedo)',
         crs: 'urn:ogc:def:crs:EPSG::104905 (Equirectangular Mars 2000 Sphere)',
         pixelScaleM: fineLayer.gsdM,
@@ -1746,7 +1755,7 @@ async function loadOrthoMosaics() {
     if (orthoStatus) {
       const gsd17 = (fineLayer.gsdM || 0.318).toFixed(3);
       const gsd14 = (coarseLayer.gsdM || 2.544).toFixed(3);
-      orthoStatus.textContent = `HiRISE WMTS Ortomozaik: z17 (${gsd17} m/px) ve z14 (${gsd14} m/px) yüklendi · WMTS projeksiyon aritmetiği · ${ORTHO_MOSAIC_SOURCES.licenseNotice}`;
+      orthoStatus.textContent = `HiRISE WMTS Ortomozaik: z17 (${gsd17} m/px) ve z14 (${gsd14} m/px) yüklendi · WMTS projeksiyon aritmetiği`;
     }
   } catch (err) {
     console.warn('HiRISE ortomozaik yüklenemedi:', err);
@@ -1899,14 +1908,15 @@ window.addEventListener('keydown', (e) => {
   if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && showreel &&
       !/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName ?? '')) {
     // R oyun içinde "yeniden başlat"; gösteri yalnız küre ekranında başlar, çalışırken her yerde durdurulur.
-    if (showreel.isRunning()) { showreel.stop(); return; }
-    if (document.querySelector('.mw-globe-screen:not(.mw-globe-screen--hidden)')) { showreel.start(); return; }
+    // Yakalama aşamasında çalışır: gösteriyi başlatan/durduran R, input.js'in "yeniden başlat"ına ulaşmaz.
+    if (showreel.isRunning()) { showreel.stop(); e.stopImmediatePropagation(); return; }
+    if (document.querySelector('.mw-globe-screen:not(.mw-globe-screen--hidden)')) { showreel.start(); e.stopImmediatePropagation(); return; }
   }
   if (e.key === 'Escape' && !document.pointerLockElement) {
     if (missionSetupOpen) closeMissionSetup();
     else if (presentationModeActive) setPresentationMode(false);
   }
-});
+}, true);
 
 const btnTogglePanel = $('btn-toggle-panel');
 btnTogglePanel?.addEventListener('click', () => {
@@ -1951,9 +1961,21 @@ const introEnabled = urlParams.get('intro') !== '0';
 let resolveDataReady = () => {};
 const dataReady = new Promise((resolve) => { resolveDataReady = resolve; });
 let globeScreen = null;
+let globeUnavailable = false; // WebGL yoksa küre atlanır, uygulama intro=0 gibi açılır
 let introSimulate = null;
 let showreel = null;
 let modeState = { mode: 'normal', field: null, overlay: null, acc: 0 };
+const SHOW_3D_OVERLAY_LINES = false;
+let crewHooks = null;
+let biomeHooks = null;
+let patchNote = null; // yama dışı seçimde tek sakin bilgi satırı
+// Planlayıcı yolunu Chaikin ile yumuşatır (2 iterasyon, uçlar sabit); otomatik sürüş ve yoldaşlar bunu kullanır.
+let smoothedCache = { src: null, out: null };
+function smoothedRoutePath() {
+  if (activeRoute?.status !== 'ok' || !Array.isArray(activeRoute.path) || activeRoute.path.length < 2) return null;
+  if (smoothedCache.src !== activeRoute.path) smoothedCache = { src: activeRoute.path, out: chaikinSmooth(activeRoute.path, { iterations: 2 }) };
+  return smoothedCache.out;
+}
 if (introEnabled) {
   const autoDrive = createAutoDrive({});
   const helmet = createHelmetOverlay({ root: mapWrap });
@@ -1966,9 +1988,9 @@ if (introEnabled) {
   barRoot.className = 'mw-holo-bar';
   dock.appendChild(barRoot);
   demoFlow = createDemoFlow({
-    doc: document, mapWrap, helmet, autoDrive, typeLabel: regionTypeLabel, onReturnToGlobe: () => globeScreen?.show(),
+    doc: document, mapWrap, helmet, autoDrive, typeLabel: regionTypeLabel, getInfoNote: () => patchNote, onReturnToGlobe: () => globeScreen?.show(),
     getPlayerPos: () => ({ x: sim.pos.x, y: sim.pos.y }),
-    getRoutePath: () => (activeRoute?.status === 'ok' ? activeRoute.path : null),
+    getRoutePath: () => smoothedRoutePath(),
     getRouteStats: () => activeRoute?.stats ?? null,
     requestReplan: (pos) => {
       if (pendingPlanId !== null || !routeWorkerReady || !minimapEndpoints.end) return false;
@@ -1986,6 +2008,79 @@ if (introEnabled) {
     onReroute: () => demoFlow.reroute(),
   });
   demoFlow.attachControls(controls);
+
+  // Ekip (yalnız 2B minimap; 3B sahneye eklenmez): oyuncu gerçek sim, diğerleri aynı rotada ilerleyen yoldaşlar.
+  const crewStrip = createCrewStrip({ parent: mapWrap.querySelector('.mw-auto-panel') ?? mapWrap });
+  let crew = null, crewSelection = null, crewPushAcc = 0;
+  const pushCompanions = (list) => {
+    minimapController.setCompanions?.(list);
+    hudMinimapController?.setCompanions?.(list);
+    crewStrip.update(list);
+  };
+  crewHooks = {
+    rebuild() {
+      const sel = demoFlow.getSelection();
+      const poly = smoothedRoutePath();
+      if (!demoFlow.isIn3d() || !(sel?.crew?.count >= 2) || !poly) {
+        if (crew) { crew = null; crewSelection = null; pushCompanions([]); }
+        return;
+      }
+      if (crew && crewSelection === sel) { crew.setPolyline(poly); return; }
+      crewSelection = sel;
+      const others = sel.crew.count - 1;
+      const offsetsM = Array.from({ length: others }, (_, k) => (sel.crew.mode === 'split'
+        ? { arcM: 20 * (k + 1), lateralM: 0 }
+        : { arcM: 0, lateralM: (k % 2 === 0 ? 1 : -1) * 2.5 * (Math.floor(k / 2) + 1) }));
+      crew = createCrewSim({ polyline: poly, count: sel.crew.count, followIndex: sel.crew.followIndex ?? 0, speedMps: SCENARIO.walkSpeedMps, offsetsM });
+      pushCompanions(crew.getPositions());
+    },
+    step(dt) {
+      if (crew && !demoFlow.isIn3d()) { crew = null; crewSelection = null; pushCompanions([]); return; }
+      if (!crew) return;
+      const frozen = missionSetupOpen || sim.phase === 'paused';
+      crew.update(frozen ? 0 : dt, demoFlow.getCrewTimeScale());
+      crewPushAcc += dt;
+      if (crewPushAcc >= 0.1) { crewPushAcc = 0; pushCompanions(crew.getPositions()); }
+    },
+  };
+
+  // Anlık biyom çipi: snapshot'taki gerçek jeolojik birimden; birim yoksa çip hiç gösterilmez.
+  const biomeChip = createBiomeChip({ parent: mapWrap });
+  const biomeTracker = createBiomeTracker({ minIntervalMs: 400 });
+  biomeHooks = {
+    update(snapshot, nowMs) {
+      const on = demoFlow.isIn3d() && !missionSetupOpen;
+      const label = on ? biomeTracker.update({ geology: snapshot.geology, slopeDeg: snapshot.surface?.slope?.status === 'ok' ? snapshot.surface.slope.value : null }, nowMs) : null;
+      biomeChip.set(label?.text ?? null);
+    },
+  };
+
+  // M: haritayı ekranın %75'ine büyüt / küçült. Esc küçültür.
+  const mapScrim = document.createElement('div');
+  mapScrim.className = 'mw-map-scrim';
+  document.body.appendChild(mapScrim);
+  function setMapExpanded(on) {
+    const next = Boolean(on);
+    if (next === dock.classList.contains('is-expanded')) return;
+    dock.classList.toggle('is-expanded', next);
+    mapScrim.classList.toggle('is-on', next);
+    qualityGovernor.notifyLoadChange?.();
+    if (next && document.pointerLockElement) document.exitPointerLock?.();
+    modeState.acc = 1;
+    requestAnimationFrame(() => { hudMinimapController?.draw?.(); drawMinimapModeOverlay(); });
+    setTimeout(() => { hudMinimapController?.draw?.(); drawMinimapModeOverlay(); }, 300);
+  }
+  mapScrim.addEventListener('click', () => setMapExpanded(false));
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Escape') { if (dock.classList.contains('is-expanded')) setMapExpanded(false); return; }
+    if (e.code !== 'KeyM' || e.repeat) return;
+    if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable="true"]')) return;
+    if (!document.body.classList.contains('view-3d') || missionSetupOpen) return;
+    if (document.querySelector('.mw-globe-screen:not(.mw-globe-screen--hidden)')) return;
+    e.preventDefault();
+    setMapExpanded(!dock.classList.contains('is-expanded'));
+  });
   const overlay = document.createElement('canvas');
   overlay.className = 'mw-mode-overlay';
   overlay.setAttribute('aria-hidden', 'true');
@@ -1997,20 +2092,29 @@ if (introEnabled) {
   });
   function applyMode(mode) {
     modeState.mode = mode;
+    qualityGovernor.notifyLoadChange?.();
     let field = null;
     try { field = computeModeField(mode, { grid: routeGrid.grid }); } catch { field = null; }
     modeState.field = field;
     modeBar.setField(field);
   }
+  // Küre ekranı görünürken oyun tuşları (W/A/S/D/Space/P/ok) sim'e gitmesin; input.js'e dokunmadan yakalama aşamasında engellenir.
+  window.addEventListener('keydown', (e) => {
+    if (!document.querySelector('.mw-globe-screen:not(.mw-globe-screen--hidden)')) return;
+    if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable="true"]')) return;
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyP', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.stopImmediatePropagation();
+  }, true);
   globeScreen = createGlobeScreen({
     root: document.body,
+    onUnavailable: () => { globeUnavailable = true; },
     getEtaMinutes: () => (Number.isFinite(activeRoute?.stats?.estimatedDurationS) ? activeRoute.stats.estimatedDurationS / 60 : null),
     onSimulate: introSimulate = async (selection) => {
       await dataReady;
       globeScreen.hide();
-      await startDemoTour();
+      await startDemoTour(selection);
       setPresentationMode(false);
       demoFlow.enter3d(selection);
+      crewHooks?.rebuild();
     },
   });
   // Tanıtım gösterisi (yalnız sunum): ?showreel=1 veya R tuşu.
@@ -2089,7 +2193,7 @@ function drawMinimapModeOverlay() {
     await startDemoTour();
   } else if (startIn3dRequested && layers.dtm.available && renderer3d && !forceWebgl2Failure) {
     await selectView('3d');
-  } else if (introEnabled) {
+  } else if (introEnabled && !globeUnavailable) {
     // Küre ekranı üstte; 3B/HUD arkada hazır. Rota planı Jezero varsayılanıyla SİMÜLE ET'te başlar.
     globeScreen?.show();
     if (urlParams.get('showreel') === '1') showreel?.start();
@@ -2118,6 +2222,7 @@ function frame(now) {
   const qualityStep = qualityGovernor.update(dt * 1000, {
     hidden: document.hidden || activeView !== '3d' || !renderer3d || missionSetupOpen,
     paused: sim.phase === 'paused',
+    focused: document.hasFocus(),
   });
   if (activeView === '3d') renderer3d?.setQualityLevel(qualityStep.level);
   if (!missionSetupOpen) {
@@ -2147,7 +2252,9 @@ function frame(now) {
       sim.resolveSurfaceContact(layers.dtm.sampleElevation(sim.pos.x, sim.pos.y));
     }
   }
+  crewHooks?.step(dt);
   const snapshot = buildSnapshot();
+  biomeHooks?.update(snapshot, now);
   updateFootprints(snapshot);
   hudMinimapAcc += dt;
   if (activeView === '3d' && hudMinimapController && !missionSetupOpen && hudMinimapAcc >= 0.06) {
@@ -2240,9 +2347,11 @@ function frame(now) {
         camera: camera3d,
         terrainMesh,
         markerMesh: displayedMarkerMesh(),
-        archiveLinePositions: $('toggle-archive-traverse').checked ? archiveTraverse3d?.linePositions : null,
-        geologyLinePositions: geologyLayerVisible ? geologyLinePositions : null,
+        // 3B sarı jeoloji ve mor arşiv çizgileri kapalı (kod duruyor; bayrakla açılır).
+        archiveLinePositions: SHOW_3D_OVERLAY_LINES && $('toggle-archive-traverse').checked ? archiveTraverse3d?.linePositions : null,
+        geologyLinePositions: SHOW_3D_OVERLAY_LINES && geologyLayerVisible ? geologyLinePositions : null,
         plannedRouteLinePositions,
+        disableSurfaceOverlayLines: !SHOW_3D_OVERLAY_LINES,
         plannedRouteRibbon,
         plannedRoutePulseUM: plannedRoutePulseDistance(player),
         footprintTrail: footprintTrailSnapshot,

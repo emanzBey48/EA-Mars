@@ -40,7 +40,7 @@ export function subSteps(dt, maxStep = MAX_SUBSTEP_S) {
 
 export function createDemoFlow({
   doc, mapWrap, globeScreen = null, helmet = null, autoDrive, getPlayerPos, getRoutePath, getRouteStats,
-  requestReplan = () => false, onAutoChange = () => {}, setHudMinimapVisible = () => {}, onReturnToGlobe = () => {}, typeLabel = (t) => t,
+  requestReplan = () => false, onAutoChange = () => {}, setHudMinimapVisible = () => {}, onReturnToGlobe = () => {}, typeLabel = (t) => t, getInfoNote = () => null,
 }) {
   let selection = null;
   let in3d = false;
@@ -74,7 +74,7 @@ export function createDemoFlow({
   function renderTags() {
     tag.textContent = '';
     if (!selection) { tag.hidden = true; return; }
-    const parts = [crewLabel(selection.crew), regionBadgeText(selection.regionTypes, typeLabel)].filter(Boolean);
+    const parts = [crewLabel(selection.crew), regionBadgeText(selection.regionTypes, typeLabel), getInfoNote?.()].filter(Boolean);
     for (const t of parts) { const s = doc.createElement('span'); s.className = 'mw-demo-tag'; s.textContent = t; tag.appendChild(s); }
     tag.hidden = parts.length === 0 || !in3d;
   }
@@ -129,6 +129,9 @@ export function createDemoFlow({
     },
     leave3d() { in3d = false; if (autoOn) setAuto(false); helmet?.hide(); setHelmetMode(false); tag.hidden = true; },
     isAuto: () => autoOn,
+    isIn3d: () => in3d,
+    /** Ekip yoldaşları için zaman çarpanı: otomatik sürüş açıkken kullanıcı kaydırıcısı (duraklatıldıysa 0), kapalıyken 1. */
+    getCrewTimeScale: () => (autoOn ? (autoDrive.isPaused() ? 0 : autoDrive.getSpeedMultiplier()) : 1),
     /** Karede çağrılır; aktif değilse null. */
     autoStep(dtWall, { yawRad, simPhase }) {
       if (!autoOn || !in3d) return null;

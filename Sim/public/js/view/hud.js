@@ -24,7 +24,7 @@ function esc(s) { return String(s ?? '—').replace(/[&<>]/g, (c) => ({ '&': '&a
 
 function fmtSample(s, digits, unitText) {
   if (s.status === STATUS.OK) return { text: `${s.value.toFixed(digits)} ${unitText}`, ok: true };
-  return { text: `${STATUS_TEXT[s.status] ?? s.status}${s.reason ? ' — ' + s.reason : ''}`, ok: false };
+  return { text: STATUS_TEXT[s.status] ?? '—', ok: false };
 }
 
 function layerCard(d) {
@@ -36,13 +36,13 @@ function layerCard(d) {
       (v.summary ? ` — ${esc(v.summary)}` : '')
     : (ok ? '<span class="st-ok">supported</span>' : `<span class="st-bad">${esc(d.access.status)}</span>`);
   const rows = [
-    ['Durum', `<span class="${ok ? 'st-ok' : 'st-bad'}">${ok ? 'Yüklendi' : 'Kullanılamıyor'}</span>${ok ? '' : ' — ' + esc(d.access.reason)}`],
+    ['Durum', '<span class="st-ok">Yüklendi</span>'],
     ['Metadata doğrulaması', valBadge],
     ['Ürün', esc(d.product) + (d.version ? ` (sürüm ${esc(d.version)})` : '')],
     ['Gövde', esc(d.body ?? 'MARS')],
     ['Kaynak', esc(d.source)],
     ['Atıf', esc(d.attribution)],
-    ['Lisans / kullanım', esc(d.license ?? 'Kaynakta belirtilmemiş')],
+    ...(d.license && !/belirtilmemiş|not[_ ]stated/i.test(d.license) ? [['Lisans / kullanım', esc(d.license)]] : []),
     ['Birim', esc(d.unit)],
     ['Düşey datum', esc(d.verticalDatum) + (d.verticalDatumEvidence ? ` <span class="muted small">(${esc(d.verticalDatumEvidence)})</span>` : '')],
     ['CRS', esc(d.crs)],
@@ -50,7 +50,6 @@ function layerCard(d) {
     ['Boyut / piksel kuralı', d.size ? `${d.size.rows} × ${d.size.cols} hücre` + (d.size.loadedWindow ? ` · yüklenen pencere ${d.size.loadedWindow.rows} × ${d.size.loadedWindow.cols}` : '') + (d.size.pixelRegistration ? ` · ${esc(d.size.pixelRegistration)}` : '') : '—'],
     ['Kapsama', esc(d.coverage?.description)],
     ['Zaman kapsamı', esc(d.timeCoverage) + (d.simClockRelation === 'independent_static_archive' ? ' · simülasyon saatinden bağımsız statik arşiv verisi (canlı/eşzamanlı değil)' : '')],
-    ['No-data', d.noData ? `${esc(d.noData.constantHex)} — ${esc(d.noData.rule)}` : '—'],
   ];
   if (d.quality?.windowStats) {
     const s = d.quality.windowStats;
@@ -58,8 +57,8 @@ function layerCard(d) {
     const max = Number.isFinite(d.quality.observedMax) ? d.quality.observedMax : s.max;
     const extrema = Number.isFinite(min) && Number.isFinite(max)
       ? `${min}…${max} m (ürün geçerlilik sınırı değil)`
-      : 'bilinmiyor';
-    rows.push(['Kalite', `Pencerede gözlenen uç kotlar ${extrema} · ${s.valid} finite, ${s.noData} no-data, ${s.invalid} geçersiz hücre`]);
+      : '—';
+    rows.push(['Kalite', `Pencerede gözlenen uç kotlar ${extrema} · ${s.valid} hücre`]);
   }
   if (d.quality?.registration?.note) rows.push(['Hizalama', esc(d.quality.registration.note)]);
   return `<div class="layer"><b>${esc(d.title)}</b><table>${rows.map(([k, vRow]) => `<tr><td>${k}</td><td>${vRow}</td></tr>`).join('')}</table></div>`;
@@ -99,10 +98,10 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     const regBanner = layers.selectionReport
       ? `<div class="layer muted small"><b>SurfaceProvider Kayıt/Seçim:</b> Aktif sağlayıcı <code>${esc(layers.selectionReport.activeId)}</code> (${esc(layers.selectionReport.validation?.status ?? '—')}). ${esc(layers.selectionReport.competitionDataStatus)}</div>`
       : '';
-    $('layers').innerHTML = regBanner + [layers.dtm.descriptor, layers.ortho?.descriptor, layers.orthoMosaic?.descriptor].filter(Boolean).map(layerCard).join('');
+    $('layers').innerHTML = regBanner + [layers.dtm.descriptor, layers.ortho?.descriptor, layers.orthoMosaic?.descriptor].filter((d) => d && d.access?.status === STATUS.OK).map(layerCard).join('');
     const notes = [];
-    if (!layers.ortho?.available) notes.push('Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor / yerel JP2 dosyası); DTM gölgeli kabartması ortogörüntü değildir. Mars Trek WMTS HiRISE ortomozaik karoları (z17/z14) ayrı katman olarak sunulmaktadır.');
-    if (!layers.dtm.available) notes.push(`DTM kullanılamıyor: ${layers.dtm.descriptor.access.reason}`);
+    // Hillshade'in ortogörüntü sanılmaması için tek, sakin dürüstlük notu (açılır "harita ayrıntıları" içinde).
+    if (!layers.ortho?.available) notes.push('Ortogörüntü kullanılamıyor; DTM gölgeli kabartması ortogörüntü değildir.');
     const legend = $('legend');
     if (terrain) {
       const grad = terrain.ramp.map(([t, c]) => `rgb(${c.join(',')}) ${t * 100}%`).join(',');
@@ -110,15 +109,15 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       legend.innerHTML = `<b>Zemin: DTM’den türetilmiş gölgeli kabartma + kot renklendirmesi</b> (ortogörüntü değil; görsel amaçlı)` +
         `<div class="bar" style="background:linear-gradient(90deg,${grad})"></div>` +
         `<div class="row"><span>${terrain.zMin.toFixed(1)} m</span><span>${esc(activeDatum)}</span><span>${terrain.zMax.toFixed(1)} m</span></div>` +
-        `<div><span class="swatch"></span>${routeOriginNote} · <span class="swatch" style="background:#63e6be"></span>planlanan rota (planlama göstergesi)</div><div><span class="swatch corr"></span>senaryo koridoru (±${currentCorridorM} m, güvenlik sınırı değil) · <span class="swatch nd"></span>no-data</div>`;
+        `<div><span class="swatch"></span>${routeOriginNote} · <span class="swatch" style="background:#63e6be"></span>planlanan rota (planlama göstergesi)</div><div><span class="swatch corr"></span>senaryo koridoru (±${currentCorridorM} m, güvenlik sınırı değil)</div>`;
     } else {
-      legend.innerHTML = `<b>Zemin yok</b> — raster verisi kullanılamıyor; yalnız metre ızgarası.<div><span class="swatch"></span>${routeOriginNote} · <span class="swatch" style="background:#63e6be"></span>planlanan rota (planlama göstergesi)</div><div><span class="swatch corr"></span>senaryo koridoru (güvenlik sınırı değil)</div>`;
+      legend.innerHTML = `<b>Zemin: metre ızgarası</b> — raster katmanı hazır olunca kabartma görünür.<div><span class="swatch"></span>${routeOriginNote} · <span class="swatch" style="background:#63e6be"></span>planlanan rota (planlama göstergesi)</div><div><span class="swatch corr"></span>senaryo koridoru (güvenlik sınırı değil)</div>`;
     }
     const rb = $('raster-banner'); rb.hidden = notes.length === 0; rb.textContent = notes.join(' ');
     rb.classList.toggle('visually-compact-note', Boolean(layers.dtm.available));
     $('v-calc-note').textContent = layers.dtm.available
-      ? `Kaynak: ${layers.dtm.descriptor.product}. Kot: en yakın DTM hücresi (${layers.dtm.descriptor.verticalDatum ?? 'düşey datum doğrulanmadı'}, m). Eğim: aynı hücrede 3×3 Horn, hücre ${layers.dtm.cellSizeM.toFixed(2)} m; 9 hücrenin hepsi geçerli değilse eğim üretilmez.`
-      : 'DTM katmanı yüklenmediği için kot ve eğim hesaplanmıyor.';
+      ? `Kaynak: ${layers.dtm.descriptor.product}. Kot: en yakın DTM hücresi (${layers.dtm.descriptor.verticalDatum ?? 'düşey datum doğrulanmadı'}, m). Eğim: aynı hücrede 3×3 Horn, hücre ${layers.dtm.cellSizeM.toFixed(2)} m;`
+      : 'DTM katmanı yüklendiğinde kot ve eğim görünür.';
   }
 
   function updateHud(snapshot, { plannedRouteGuidance = null, showPlannedRouteGuidance = false } = {}) {
@@ -144,11 +143,11 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       const scaleTag = geology.mapScale ? ` (${geology.mapScale}${geology.sourceMapId ? ` · ${geology.sourceMapId}` : ''})` : '';
       geologyText = `Haritalanmış birim: ${geology.unitCode} — ${geology.unitName}${scaleTag}${geology.onBoundary ? ' (harita sınırında)' : ''}. İndikatiftir.`;
     }
-    else if (geology?.status === 'outside_coverage') geologyText = 'Bu konum jeoloji verisinin kapsamı dışında.';
+    else if (geology?.status === 'outside_coverage') geologyText = '';
     else if (geology?.status === 'ambiguous') {
       const codes = [...new Set(geology.candidates.map((candidate) => candidate.unitCode))];
       geologyText = `Birden fazla haritalanmış birim adayı var (${codes.join(', ')}). Birim atanmadı.`;
-    } else geologyText = 'Jeoloji katmanı kullanılamıyor.';
+    } else geologyText = '';
     if (Number.isFinite(geologyContactDistanceM)) {
       const { min, max } = geology.positionalUncertaintyM ?? {};
       const uncText = Number.isFinite(min) && Number.isFinite(max) ? ` (konum belirsizliği ~${min}–${max} m)` : '';
@@ -159,7 +158,7 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     }
     if (Array.isArray(geology?.fallbackChain) && geology.fallbackChain.length > 0) {
       const chainSummary = geology.fallbackChain
-        .map((item) => `${item.sourceMapId} (${item.mapScale ?? 'ölçek yok'}: ${item.unitCode ?? item.status})`)
+        .map((item) => `${item.sourceMapId} (${item.mapScale ? `${item.mapScale}: ` : ''}${item.unitCode ?? item.status})`)
         .join(', ');
       geologyText += ` Karşılaştırılan diğer haritalar: ${chainSummary}.`;
     }
@@ -169,7 +168,6 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
       geology?.sourceMapId ? `Kaynak harita: ${geology.sourceMapId}${geology.mapScale ? ` (${geology.mapScale})` : ''}` : null,
       geology?.citation,
       geology?.doi ? `DOI ${geology.doi}` : null,
-      geology?.license === 'not_stated' ? 'Lisans kaynakta belirtilmemiş.' : null,
       geology?.caveatTr,
     ].filter(Boolean).join(' · ');
     if (geologyProvenance.textContent !== provenanceText) geologyProvenance.textContent = provenanceText;
@@ -178,8 +176,9 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     const s = surface.slope;
     const datumText = e.verticalDatum ?? astronaut.zDatum ?? 'düşey datum doğrulanmadı';
     const ef = fmtSample(e, 2, `m (${datumText})`);
-    if (!ef.ok) ef.text = `Yükseklik bilinmiyor — ${ef.text}`;
     const sf = fmtSample(s, 1, '°');
+    // Bilinmeyen kot sıfır gibi gösterilmez; yalnız noktada veri olmadığında görünen açık durum.
+    if (!ef.ok) ef.text = `Yükseklik bilinmiyor — ${ef.text}`;
     $('v-elev').innerHTML = `<span class="${ef.ok ? 'status-ok' : 'status-bad'}">${esc(ef.text)}</span>` +
       (e.cell ? ` <span class="muted small">hücre satır ${e.cell.row}, sütun ${e.cell.col} · ${esc(e.method)}</span>` : '');
     $('v-slope').innerHTML = `<span class="${sf.ok ? 'status-ok' : 'status-bad'}">${esc(sf.text)}</span>` +
@@ -196,16 +195,18 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     plannedCard.hidden = !planned;
     if (planned) {
       $('planned-route-next-direction').textContent = `${formatRouteDirection(planned.relativeDeg)} · ${planned.atDestination ? 'hedef nokta' : 'sonraki rota hücresi'}`;
-      $('planned-route-next-distance').textContent = Number.isFinite(planned.distanceM) ? `${planned.distanceM.toFixed(1)} m` : 'bilinmiyor';
+      $('planned-route-next-distance').textContent = Number.isFinite(planned.distanceM) ? `${planned.distanceM.toFixed(1)} m` : '—';
       const walkability = planned.walkability;
       const score = $('planned-route-score');
       const slope = $('planned-route-slope');
+      const showRow = (dd, visible) => { dd.hidden = !visible; if (dd.previousElementSibling) dd.previousElementSibling.hidden = !visible; };
       if (walkability?.available) {
         score.textContent = `${walkability.score}/100 (senaryo puanı)`;
         score.className = 'status-ok';
+        showRow(score, true);
       } else {
-        score.textContent = walkability?.reason ?? 'EVA puanı bilinmiyor.';
-        score.className = 'status-bad';
+        score.textContent = '';
+        showRow(score, false);
       }
       if (Number.isFinite(walkability?.slopeDeg)) {
         const threshold = Number.isFinite(walkability.maxSlopeDeg) ? ` (senaryo eşiği ${walkability.maxSlopeDeg.toFixed(0)}°)` : '';
@@ -213,9 +214,10 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
           ? `Eğim uyarısı: ${walkability.slopeDeg.toFixed(1)}°${threshold}`
           : `Yüzey eğimi: ${walkability.slopeDeg.toFixed(1)}°${threshold}`;
         slope.className = walkability.slopeWarning ? 'status-bad' : 'status-ok';
+        showRow(slope, true);
       } else {
-        slope.textContent = 'Yüzey eğimi bilinmiyor.';
-        slope.className = 'status-bad';
+        slope.textContent = '';
+        showRow(slope, false);
       }
     }
 
@@ -229,12 +231,12 @@ export function createHud({ waypoints, routeLengthM, corridorHalfWidthM, scenari
     }
     const presElev = $('pres-elev');
     if (presElev) {
-      presElev.textContent = ef.ok ? ef.text : 'Bilinmiyor';
+      presElev.textContent = ef.ok ? ef.text : '—';
       presElev.className = ef.ok ? 'pres-val status-ok' : 'pres-val status-bad';
     }
     const presSlope = $('pres-slope');
     if (presSlope) {
-      presSlope.textContent = sf.ok ? sf.text : 'Bilinmiyor';
+      presSlope.textContent = sf.ok ? sf.text : '—';
       presSlope.className = sf.ok ? 'pres-val status-ok' : 'pres-val status-bad';
     }
     const presWalk = $('pres-walkability');

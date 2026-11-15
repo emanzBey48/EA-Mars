@@ -201,10 +201,10 @@ const STATUS_NAME = ['OK', 'TOO_STEEP', 'NO_DATA', 'OUT_OF_COVERAGE', 'INVALID',
 const STATUS_TEXT = Object.freeze({
   OK: ['geçilebilir', 'passable'],
   TOO_STEEP: ['eğim senaryo eşiğinin üstünde (geçilemez)', 'slope above scenario threshold (impassable)'],
-  NO_DATA: ['no-data (bilinmiyor; geçilebilir sayılmaz)', 'no-data (unknown; never treated as passable)'],
-  OUT_OF_COVERAGE: ['kapsam dışı (bilinmiyor)', 'out of coverage (unknown)'],
-  INVALID: ['geçersiz kot değeri (bilinmiyor)', 'invalid elevation value (unknown)'],
-  EDGE_UNKNOWN: ['komşu pencere bilinmiyor/ızgara kenarı (fail-closed)', '3x3 window touches unknown data or the grid edge (fail-closed)'],
+  NO_DATA: ['ölçüm kapsamı dışı hücre (geçilebilir sayılmaz)', 'cell outside measured coverage (never treated as passable)'],
+  OUT_OF_COVERAGE: ['kapsam dışı (geçilebilir sayılmaz)', 'out of coverage (unknown)'],
+  INVALID: ['geçersiz kot değeri (geçilebilir sayılmaz)', 'invalid elevation value (unknown)'],
+  EDGE_UNKNOWN: ['komşu pencere ölçüm kapsamı dışına değiyor/ızgara kenarı (geçilebilir sayılmaz)', '3x3 window touches unknown data or the grid edge (fail-closed)'],
   IMPASSABLE: ['geçilemez', 'impassable'],
 });
 

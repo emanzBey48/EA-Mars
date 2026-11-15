@@ -495,7 +495,7 @@ const CANVAS_PX = 400;
 const NODATA_RGB = [255, 0, 255];
 const DARK_NODATA_RGB = [90, 0, 90];
 const VALID_RGB = [100, 120, 80];
-const REJECT_NODATA = 'Bu hücre no-data veya geçersiz; başka bir nokta seçin.';
+const REJECT_NODATA = 'Bu nokta seçilemez; başka bir nokta seçin.';
 const HOLE = { row: 60, col: 60 };
 
 function fixtureTerrainCanvas() {

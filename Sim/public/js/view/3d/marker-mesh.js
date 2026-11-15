@@ -40,10 +40,10 @@ const BEACON_THEMES = {
     gemHeight: 1.2,
     colors: {
       base: [0.38, 0.32, 0.25],
-      mast: [0.85, 0.70, 0.32],      // Bronze / gold alloy
-      gemTop: [1.0, 0.82, 0.15],     // Bright amber / gold glow
-      gemBottom: [0.90, 0.62, 0.08],
-      accent: [1.0, 0.75, 0.20],
+      mast: [0.50, 0.44, 0.34],      // Muted bronze (low saturation)
+      gemTop: [0.50, 0.41, 0.28],     // Dull dark amber (no bright yellow)
+      gemBottom: [0.38, 0.31, 0.22],
+      accent: [0.46, 0.38, 0.27],
     },
   },
   default: {
@@ -57,9 +57,9 @@ const BEACON_THEMES = {
     colors: {
       base: [0.4, 0.4, 0.4],
       mast: [0.7, 0.7, 0.7],
-      gemTop: [0.95, 0.85, 0.3],
-      gemBottom: [0.8, 0.65, 0.2],
-      accent: [0.9, 0.8, 0.25],
+      gemTop: [0.50, 0.43, 0.31],
+      gemBottom: [0.38, 0.33, 0.25],
+      accent: [0.46, 0.40, 0.30],
     },
   },
 };
@@ -213,7 +213,7 @@ class MeshBuilder {
     width = 1.8,
     length = 2.0,
     thickness = 0.12,
-    color = [0.95, 0.78, 0.20],
+    color = [0.50, 0.43, 0.30],
   }) {
     const topZ = baseZ + thickness;
     const fx = forwardX, fy = forwardY;
@@ -534,7 +534,7 @@ export function buildMarkerMeshes({
           width: 1.8,
           length: 2.2,
           thickness: 0.12,
-          color: [0.96, 0.82, 0.22], // Amber guide
+          color: [0.52, 0.42, 0.26], // Muted earth-amber guide
         });
         guideCount++;
 
@@ -545,8 +545,8 @@ export function buildMarkerMeshes({
             baseZ,
             height: 1.2,
             radius: 0.08,
-            color: [0.70, 0.65, 0.55],
-            capColor: [1.0, 0.60, 0.10], // High-visibility reflector cap
+            color: [0.52, 0.47, 0.40],
+            capColor: [0.60, 0.40, 0.20], // Muted reflector cap
           });
         }
       }

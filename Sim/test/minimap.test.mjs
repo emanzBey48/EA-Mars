@@ -12,7 +12,7 @@ const VALID_RGB = [100, 120, 80];
 const REJECT = {
   noDtm: 'DTM kapsamı yüklenmedi; nokta seçilemez.',
   outside: 'Nokta yüklenen DTM kapsamının dışında.',
-  nodata: 'Bu hücre no-data veya geçersiz; başka bir nokta seçin.',
+  nodata: 'Bu nokta seçilemez; başka bir nokta seçin.',
 };
 
 // 20x20 DTM, 1 m per cell, north-west corner at (-10, 10): covers x in [-10, 10), y in (-10, 10].
@@ -216,7 +216,7 @@ const ROUTE_PLANNING = () => ({
   route: [{ xM: -8, yM: -8 }, { xM: 0, yM: 0 }, { xM: 8, yM: -2 }],
   segments: [{ score: 80 }, { score: 20 }],
 });
-const STROKES_PER_ROUTE_DRAW = 6; // halo + body + dashed core, one stroke per segment each
+const STROKES_PER_ROUTE_DRAW = 2; // koyu kesikli yön kılavuzu: yumuşatılmış tek polyline = açık kenar + koyu dash stroke
 
 test('minimap route: segments never set a positive shadowBlur and no shadow stays active', () => {
   const { mini, ctx, restore } = setupMinimap({ terrain: fakeTerrain() });
@@ -236,7 +236,7 @@ test('minimap route: a route change redraws immediately while the minimap is sho
     assert.equal(ctx.strokeCount - before, STROKES_PER_ROUTE_DRAW, 'one full route draw');
     const second = ctx.strokeCount;
     mini.setPlanning({ route: [{ xM: 0, yM: 0 }, { xM: 4, yM: 4 }], segments: [{ score: 50 }] });
-    assert.equal(ctx.strokeCount - second, 3, 'new single-segment route is drawn at once');
+    assert.equal(ctx.strokeCount - second, 2, 'new single-segment route is drawn at once');
   } finally { restore(); }
 });
 
@@ -279,7 +279,7 @@ test('minimap: hidden document skips drawing and visibilitychange redraws', () =
   }
 });
 
-test('minimap route animation: redraws at about 15 Hz while shown and stops while hidden', () => {
+test('minimap route: static dark dashed guide, no animation loop (no redraw per frame)', () => {
   const previousRaf = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
   const previousCaf = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame');
   const previousPerf = Object.getOwnPropertyDescriptor(globalThis, 'performance');
@@ -300,8 +300,7 @@ test('minimap route animation: redraws at about 15 Hz while shown and stops whil
     mini.setPlanning(ROUTE_PLANNING()); // immediate draw; schedules the animation
     const start = ctx.strokeCount;
     frames(60); // one simulated second
-    const drawsPerSecond = (ctx.strokeCount - start) / STROKES_PER_ROUTE_DRAW;
-    assert.ok(drawsPerSecond >= 13 && drawsPerSecond <= 17, `about 15 redraws per second, got ${drawsPerSecond}`);
+    assert.equal(ctx.strokeCount, start, 'route no longer animates');
 
     canvas.shown = false;
     frames(2); // at most one in-flight frame callback may still fire

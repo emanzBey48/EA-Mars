@@ -97,7 +97,7 @@ test('drawModeOverlay: sahte ctx ile hata vermez; chemical hatch + etiket, uydur
   const g = makeGrid(10, 10, (r, c) => c);
   const proj = (x, y) => [(x - 100) * 10, (200 - y) * 10];
   drawModeOverlay(ctx, { mode: 'chemical', field: null, projectToCanvas: proj, canvasW: 200, canvasH: 200, bounds: { nwXM: 100, nwYM: 200, widthM: 10, heightM: 10 } });
-  assert.ok(calls.some(([n, a]) => n === 'fillText' && /Kimyasal harita verisi yok/.test(a[0])));
+  assert.ok(calls.some(([n, a]) => n === 'fillText' && /Kimyasal/.test(a[0])));
   calls.length = 0;
   const f = computeModeField('topographic', { grid: g });
   drawModeOverlay(ctx, { mode: 'topographic', field: f, projectToCanvas: proj, canvasW: 200, canvasH: 200 });

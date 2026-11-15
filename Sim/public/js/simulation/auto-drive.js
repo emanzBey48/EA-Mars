@@ -1,4 +1,4 @@
-// Auto-drive (tanitim videosu / sunum): saf, deterministik rota takip mantigi.
+﻿// Auto-drive (tanitim videosu / sunum): saf, deterministik rota takip mantigi.
 // DOM, ag, dosya ve sim state'i yok. Yerel metre duzleminde calisir (x dogu, y kuzey; yaw = atan2(y, x)).
 // Cikti sim'in mevcut stepFirstPerson girdisine ({moveX, moveY, headingRad}) cevrilebilir; bkz. stage-auto-drive-integration.md.
 // Hiz carpani bir sunum/zaman ayaridir; fizik parametresi veya "guvenli rota" iddiasi degildir.
@@ -99,7 +99,12 @@ export function createAutoDrive({
   routePolyline = [],
   arriveRadiusM = 3,
   rejoinThresholdM = 20,
-  maxYawRateRadPerS = 2.5,
+  maxYawRateRadPerS = 1.5, // ~86 deg/s gercek-zaman tavani (sim zaman carpanindan bagimsiz)
+  maxYawAccelRadPerS2 = 4,
+  maxYawJerkRadPerS3 = 20,
+  walkSpeedMps = 1.2, // kose yavaslamasi icin referans yurume hizi (zaman carpani uygulanmadan)
+  cornerArcM = 4, // bir kose donusunun tarayacagi yol uzunlugu (yavaslama olcutu)
+  cornerDecelMps2 = 3,
   lookAheadMinM = 3,
   lookAheadMaxM = 6,
   slowdownRadiusM = 8,
@@ -115,6 +120,12 @@ export function createAutoDrive({
   let arcM = 0; // takip edilen yay uzunlugu (tekdüze artar)
   let snapPoint = null;
   let slowdown = 1;
+  let cornerSlow = 1;
+  let yawRate = 0;
+  let yawAcc = 0;
+  let lastOutYaw = null;
+
+  function resetYawDynamics() { yawRate = 0; yawAcc = 0; lastOutYaw = null; }
 
   function setPolyline(pts) {
     poly = normalizePolyline(pts);
@@ -124,6 +135,8 @@ export function createAutoDrive({
     arcM = 0;
     snapPoint = null;
     slowdown = 1;
+    cornerSlow = 1;
+    resetYawDynamics();
   }
   setPolyline(routePolyline);
 
@@ -146,6 +159,44 @@ export function createAutoDrive({
 
   function progressFrac() {
     return hasRoute() ? Math.min(1, Math.max(0, arcM / totalLen())) : 0;
+  }
+
+  /** Yaklasan koselerin izin verdigi azami yurume hizi (m/s); hiz carpani uygulanmadan sonra oran olarak kullanilir. */
+  function cornerAllowedSpeed(fromArc) {
+    let allowed = Infinity;
+    for (let i = 1; i < poly.length - 1; i++) {
+      const d = cum[i] - fromArc;
+      if (d < -2) continue;
+      if (d > 60) break;
+      const a1 = Math.atan2(poly[i].y - poly[i - 1].y, poly[i].x - poly[i - 1].x);
+      const a2 = Math.atan2(poly[i + 1].y - poly[i].y, poly[i + 1].x - poly[i].x);
+      const theta = Math.abs(shortestAngleDelta(a1, a2));
+      if (theta < 0.25) continue;
+      const vc = Math.max(1.5, (maxYawRateRadPerS * cornerArcM) / theta);
+      allowed = Math.min(allowed, Math.sqrt(vc * vc + 2 * cornerDecelMps2 * Math.max(0, d)));
+    }
+    return allowed;
+  }
+
+  function stepYaw(yaw, err, dt) {
+    // Hiz limiti + ivme limiti + jerk limiti: aci hatasina gore hedef hiz profili (sqrt), iki kat integral.
+    const n = Math.max(1, Math.ceil(dt / (1 / 120)));
+    const h = dt / n;
+    let y = yaw;
+    let e = err;
+    for (let i = 0; i < n; i++) {
+      const sgn = e < 0 ? -1 : 1;
+      const vdes = sgn * Math.min(maxYawRateRadPerS, Math.sqrt(2 * maxYawAccelRadPerS2 * 0.6 * Math.abs(e)));
+      const aTarget = Math.max(-maxYawAccelRadPerS2, Math.min(maxYawAccelRadPerS2, (vdes - yawRate) / 0.15));
+      const da = maxYawJerkRadPerS3 * h;
+      yawAcc += Math.max(-da, Math.min(da, aTarget - yawAcc));
+      yawRate += yawAcc * h;
+      yawRate = Math.max(-maxYawRateRadPerS, Math.min(maxYawRateRadPerS, yawRate));
+      const dy = yawRate * h;
+      y += dy;
+      e -= dy;
+    }
+    return y;
   }
 
   function update(dtWallS, playerPos, playerYawRad = 0) {
@@ -191,8 +242,12 @@ export function createAutoDrive({
 
     const desired = Math.atan2(target.y - pos.y, target.x - pos.x);
     const err = shortestAngleDelta(yaw, desired);
-    const maxStep = maxYawRateRadPerS * dt;
-    const steerYawRad = yaw + Math.max(-maxStep, Math.min(maxStep, err));
+    if (lastOutYaw !== null && Math.abs(shortestAngleDelta(lastOutYaw, yaw)) > 0.2) { yawRate = 0; yawAcc = 0; }
+    const steerYawRad = paused ? yaw : stepYaw(yaw, err, dt);
+    if (paused) { yawRate = 0; yawAcc = 0; }
+    lastOutYaw = steerYawRad;
+    const allowed = cornerAllowedSpeed(arcM);
+    cornerSlow = Number.isFinite(allowed) ? Math.min(1, allowed / (walkSpeedMps * mult)) : 1;
     slowdown = distEnd < slowdownRadiusM ? Math.max(minSlowdown, distEnd / slowdownRadiusM) : 1;
     const residual = Math.abs(shortestAngleDelta(steerYawRad, desired));
     const forward = !paused && residual <= maxForwardAngleRad;
@@ -217,6 +272,7 @@ export function createAutoDrive({
     engage,
     update,
     /** sim dt'sine uygulanacak carpan: duraklatilmis/devre disi -> 0; varisa yaklasirken yavaslama dahil. */
-    effectiveTimeScaleMultiplier: () => (!enabled || paused ? 0 : mult * (phase === 'following' ? slowdown : 1)),
+    effectiveTimeScaleMultiplier: () => (!enabled || paused ? 0 : mult * (phase === 'following' ? Math.min(slowdown, cornerSlow) : 1)),
   };
 }
+

@@ -44,3 +44,34 @@ body.mw-helmet-mode .view-toolbar, body.mw-helmet-mode .hint, body.mw-helmet-mod
 body.mw-helmet-mode .mw-demo-tags { top: calc(3vh + 48px); z-index: 25; }
 .mw-holo-dock .mw-vm-legend, .mw-holo-dock .mw-vm-legend__row { text-transform: none; letter-spacing: 0; color: #cfe6ee; }
 .mw-holo-dock .mw-vm-legend { padding: 3px 6px; background: rgba(6, 28, 34, 0.6); border-radius: 4px; }
+
+/* --- Harita büyütme (M): dock ekranın %75'i --- */
+.mw-map-scrim { position: fixed; inset: 0; z-index: 59; background: rgba(2, 8, 12, 0.5); opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+.mw-map-scrim.is-on { opacity: 1; pointer-events: auto; }
+.mw-holo-dock.is-expanded,
+body.mw-helmet-mode .mw-holo-dock.is-expanded {
+  position: fixed; left: 12.5vw; top: 12.5vh; width: 75vw; max-width: none; height: 75vh; z-index: 60;
+  box-sizing: border-box; display: flex; flex-direction: column; animation: mw-dock-grow 0.25s ease-out;
+}
+@keyframes mw-dock-grow { from { opacity: 0.4; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
+.mw-holo-dock.is-expanded .hud-minimap-widget { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.mw-holo-dock.is-expanded .mw-holo { transform: none; }
+.mw-holo-dock.is-expanded .mw-holo > canvas#hud-minimap-canvas,
+.mw-holo-dock.is-expanded #hud-minimap-canvas { height: auto; flex: 1 1 auto; min-height: 0; }
+.mw-holo-dock.is-expanded .mw-vm-btn { flex: 0 1 auto; padding: 4px 12px; font-size: 12px; }
+.mw-holo-dock.is-expanded .mw-vm-legend__note { white-space: normal; }
+.mw-map-hint { position: absolute; right: 10px; top: 6px; z-index: 5; font: 600 10px/1 system-ui, sans-serif; color: rgba(190, 240, 240, 0.7); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .mw-holo-dock.is-expanded { animation: none; } .mw-map-scrim { transition: none; } }
+
+/* --- Ekip şeridi --- */
+.mw-crew-strip { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 2px 4px 0; font: 500 11px/1.3 system-ui, sans-serif; color: rgba(214, 236, 242, 0.85); font-variant-numeric: tabular-nums; }
+.mw-crew-strip[hidden] { display: none; }
+
+/* --- Biyom çipi --- */
+.mw-biome-chip { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); z-index: 8; pointer-events: none; opacity: 0; transition: opacity 0.25s ease;
+  font: 600 12px/1.2 system-ui, sans-serif; color: #e4f3ee; background: rgba(8, 24, 22, 0.55); border: 1px solid rgba(150, 220, 200, 0.4); border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
+.mw-biome-chip.is-on { opacity: 1; }
+.mw-biome-chip:empty { display: none; }
+body.mw-helmet-mode .mw-biome-chip { top: calc(3vh + 82px); z-index: 25; }
+body:not(.view-3d) .mw-biome-chip { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .mw-biome-chip { transition: none; } }

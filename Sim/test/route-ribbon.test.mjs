@@ -274,3 +274,25 @@ test('displayConfig is validated and labelled but source metres stay unchanged',
   assert.ok(Math.abs(r.sourceElevationsM[0] + 2000) < 1e-3);
   assert.ok(Math.abs(r.positions[2] - (-2000 + OFFSET)) < 1e-3);
 });
+
+test('dash option leaves gaps along the path and never bridges them; smooth option rounds corners', async () => {
+  const { buildRouteGuideRibbon } = await import('../public/js/view/3d/route-ribbon.js');
+  const solid = buildRouteRibbon({ path: line([0, 0], [20, 0]), sampleElevation: flat(), sampleSpacingM: 1 });
+  const dashed = buildRouteRibbon({ path: line([0, 0], [20, 0]), sampleElevation: flat(), sampleSpacingM: 1, dashM: 2, gapM: 2 });
+  assert.equal(dashed.runs.length, 5);
+  assert.ok(solid.runs.length === 1 && dashed.runs.length > solid.runs.length);
+  // Yuvarlak uç: her dash'in ilk kesiti tam genişlikten dar (kırpılmış köşe), orta kesit tam genişlik.
+  const widthAt = (ribbon, vi) => Math.hypot(ribbon.positions[vi * 3] - ribbon.positions[(vi + 1) * 3],
+    ribbon.positions[vi * 3 + 1] - ribbon.positions[(vi + 1) * 3 + 1]);
+  const r0 = dashed.runs[0];
+  assert.ok(widthAt(dashed, r0.startIndex) < 0.5 * 1.2 + 1e-6);
+  let maxW = 0;
+  for (let v = 0; v < r0.vertexCount; v += 2) maxW = Math.max(maxW, widthAt(dashed, r0.startIndex + v));
+  assert.ok(Math.abs(maxW - 1.2) < 1e-3);
+  assert.ok(widthAt(dashed, r0.startIndex + r0.vertexCount - 2) < 0.5 * 1.2 + 1e-6);
+  assert.ok(Math.abs(dashed.runs.reduce((s, r) => s + r.lengthM, 0) - 10) < 1e-6);
+  const guide = buildRouteGuideRibbon({ path: line([0, 0], [10, 0], [10, 10]), sampleElevation: flat() });
+  assert.ok(guide.runs.length >= 2);
+  assert.equal(guide.colorsRgb.length, guide.positions.length);
+  for (const t of triangles(guide)) assert.ok(area2(guide, t) > 0);
+});

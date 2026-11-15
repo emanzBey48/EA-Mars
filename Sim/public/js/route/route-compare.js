@@ -180,7 +180,7 @@ function defaultNow() {
 // için ortak ölçek compareAll içinde (referans ağırlıkları, yol hücreleri) ayrıca hesaplanır.
 function scoreSummary(win, params, res) {
   const st = res.stats;
-  if (res.mode !== 'eva_walkability') return { minScore: null, meanScore: null, scoreSource: 'yok (bölgesel ön planlama: yürünebilirlik puanı üretilmez)' };
+  if (res.mode !== 'eva_walkability') return { minScore: null, meanScore: null, scoreSource: '— (bölgesel ön planlama: yürünebilirlik puanı üretilmez)' };
   const minS = numOrNull(st.minScore), meanS = numOrNull(st.meanScore);
   if (minS !== null && meanS !== null) {
     return { minScore: minS, meanScore: meanS, scoreSource: 'stats; tercihin kendi ağırlıklarıyla (izlenen hücreler)' };
@@ -194,7 +194,7 @@ function scoreSummary(win, params, res) {
     if (s < mn) mn = s;
     sum += s; cnt++;
   }
-  if (cnt === 0) return { minScore: null, meanScore: null, scoreSource: 'yok (yol hücrelerinde geçilebilir puan yok)' };
+  if (cnt === 0) return { minScore: null, meanScore: null, scoreSource: '— (yol hücreleri için puan hesaplanmadı)' };
   return { minScore: mn, meanScore: sum / cnt, scoreSource: 'hücre puanları; tercihin kendi ağırlıklarıyla (yol hücreleri, stats puanı yoktu)' };
 }
 

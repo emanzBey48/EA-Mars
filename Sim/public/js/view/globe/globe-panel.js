@@ -1,4 +1,4 @@
-﻿// Küre ekranının sağındaki seçim paneli (cam efektli). Yalnız DOM; iş mantığı crew-split/regions'tadır.
+// Küre ekranının sağındaki seçim paneli (cam efektli). Yalnız DOM; iş mantığı crew-split/regions'tadır.
 import { splitTargetsAcrossCrew } from './crew-split.js';
 import { greatCircleDistanceKm, typeSafetyWeight, typeLabel } from './regions.js';
 
@@ -23,7 +23,7 @@ export function createGlobePanel({ parent, regions, regionTypes, getEtaMinutes =
   const slot = (label, which) => {
     const row = h('div', 'mw-globe-slot');
     row.appendChild(h('span', 'mw-globe-slot__label', label));
-    const name = h('span', 'mw-globe-slot__name', 'Küreden bir bölge seçin');
+    const name = h('span', 'mw-globe-slot__name', 'Küreden bir nokta seçin');
     const clear = h('button', 'mw-globe-link', 'temizle'); clear.type = 'button';
     on(clear, 'click', () => { state[which] = null; refresh(); onClear?.(which); onChange?.(); });
     row.append(name, clear);
@@ -53,7 +53,7 @@ export function createGlobePanel({ parent, regions, regionTypes, getEtaMinutes =
   const minutes = h('input', 'mw-globe-input'); minutes.type = 'number'; minutes.min = '1'; minutes.step = '1'; minutes.placeholder = 'ör. 45';
   on(minutes, 'input', () => { const v = parseFloat(minutes.value); state.targetMinutes = Number.isFinite(v) && v > 0 ? v : null; refresh(); onChange?.(); });
   el.appendChild(minutes);
-  el.appendChild(h('p', 'mw-globe-help', 'Süre güvenlikten önceliklidir; rota güvenli değilse kask uyarısı verilir.'));
+  el.appendChild(h('p', 'mw-globe-help', 'Süre öncelikli planlanır; rota istenen süreyi aşarsa kaskta bilgi uyarısı çıkar.'));
 
   // kişi sayısı
   el.appendChild(h('h3', 'mw-globe-panel__h', 'Kişi sayısı'));
@@ -114,8 +114,8 @@ export function createGlobePanel({ parent, regions, regionTypes, getEtaMinutes =
   }
 
   function refresh() {
-    startSlot.name.textContent = state.start ? state.start.name : 'Küreden bir bölge seçin';
-    endSlot.name.textContent = state.end ? state.end.name : 'Küreden bir bölge seçin';
+    startSlot.name.textContent = state.start ? state.start.name : 'Küreden bir nokta seçin';
+    endSlot.name.textContent = state.end ? state.end.name : 'Küreden bir nokta seçin';
     startSlot.clear.hidden = !state.start; endSlot.clear.hidden = !state.end;
     count.textContent = String(state.crewCount);
     minus.disabled = state.crewCount <= 1; plus.disabled = state.crewCount >= 4;
@@ -130,12 +130,12 @@ export function createGlobePanel({ parent, regions, regionTypes, getEtaMinutes =
       for (const c of sp.crew) {
         const row = h('div', 'mw-globe-summary__row' + (c.index === state.followIndex ? ' is-followed' : ''));
         row.appendChild(h('strong', '', `Kişi ${c.index + 1}: ~${Math.round(c.totalMinutes)} dk`));
-        row.appendChild(h('span', '', c.targets.length ? c.targets.map((t) => t.label).join(', ') : 'hedef yok'));
+        row.appendChild(h('span', '', c.targets.length ? c.targets.map((t) => t.label).join(', ') : '—'));
         summary.appendChild(row);
       }
       summary.appendChild(h('div', 'mw-globe-help', `Süre dengesi: ${(sp.balanceRatio * 100).toFixed(0)}% (en kısa/en uzun). Tahminler senaryo parametresidir, kaynaklı değil.`));
     }
-    const same = state.start && state.end && state.start.id === state.end.id;
+    const same = state.start && state.end && state.start.id !== null && state.start.id === state.end.id;
     go.disabled = !(state.start && state.end) || same;
     go.title = same ? 'Başlangıç ve varış farklı olmalı' : '';
   }

@@ -81,6 +81,6 @@ export const ORTHO_MOSAIC_SOURCES = {
   z14Manifest: '/data/ortho/ortho-alignment-z14-tiles.json',
   z14Image: '/data/ortho/ortho-mosaic-z14-tiles.png',
   defaultMode: 'hybrid', // 'hybrid' = HiRISE Ortomozaik + Rölyef/Mars Regolit Renklendirmesi, 'ortho' = Saf HiRISE Ortomozaik Albedo, 'hillshade' = Yalnız DTM Gölgeli Kabartma
-  licenseNotice: 'Lisans: kaynakta belirtilmemiş',
+  licenseNotice: 'Kaynak: NASA / USGS Astrogeology / HiRISE (University of Arizona)',
 };
 

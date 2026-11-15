@@ -32,6 +32,17 @@ The server uses `127.0.0.1` on port 8080 by default. Set the `PORT` environment 
 | `shadows` | `off`, `low`, `high` (default) | Sun shadow map resolution: 0, 1024 px, 2048 px |
 | `horizon` | `off` | Hides the regional MOLA horizon. Other values keep it on |
 | `debug` | `1` | Enables the `window.marswalk` test hook (development only) |
+| `intro` | `0` | Skips the Mars globe intro and the helmet/auto-drive flow (the smoke test uses this) |
+| `showreel` | `1` | Starts the automatic showreel when the globe screen opens (presentation only) |
+| `quality` | `auto` (default), `high`, `medium`, `low`, `minimal` | Pins the adaptive quality level |
+
+### Globe intro (default start)
+
+Opening `http://127.0.0.1:8080/` without parameters shows a full-screen Mars globe first (`?view=3d`, `?demo=1` skip it). The globe texture is the USGS Astrogeology Viking MDIM 2.1 color mosaic; it turns once every 5 seconds until you touch it. Hover shows a region name, click picks the start, then the end, on any point. The right-hand mission panel sets the wanted arrival time, crew size (1 to 4) and **SİMÜLE ET** (simulate). **The globe choices are context labels only: the simulated site is always the Jezero HiRISE patch**, and a point outside it falls back to the default Sol 120 to Sol 164 route with an on-screen note.
+
+After SİMÜLE ET the app enters a helmet view with a holographic minimap (press **M** to enlarge it to 75% of the screen), a view-mode bar and an auto-drive panel (0.5x to 10x; if the walker is within 20 m of the route line it joins the line, otherwise the route is re-planned from the current position). View modes: Normal, Optik (DTM hillshade, not an orthoimage) and Topo (real DTM contours) come from the DTM; Termal, Atmosfer and Radyasyon are **labeled scenario models, not measurements**. Crew companions (2 to 4 people) appear on the 2D minimap only. A biome chip names the local USGS geologic unit when one is known. **R** on the globe screen starts the showreel and stops it while running.
+
+Texture credit: USGS Astrogeology Viking MDIM 2.1. NASA/JPL-Caltech Mars 2020 raw images are used only as visual reference; the app's textures are procedural.
 
 ## Controls
 
@@ -41,7 +52,8 @@ The server uses `127.0.0.1` on port 8080 by default. Set the `PORT` environment 
 | Hop | — | **Space** makes a small scenario hop |
 | Pause or resume | **P** or **Space** | **P** (Space is a hop in 3D) |
 | Look around | — | Click the scene, then move the mouse. **Esc** releases the mouse (browser behavior) |
-| Restart | **R** | **R** |
+| Restart | **R** | **R** (on the globe screen: showreel) |
+| Enlarge minimap | — | **M** (75% of the screen; **Esc** or a click outside shrinks it) |
 | Zoom | **+** / **-** or mouse wheel | **+** / **-** or mouse wheel |
 
 On screen, the buttons are labeled in Turkish. The main ones are:

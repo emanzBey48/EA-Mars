@@ -57,7 +57,7 @@ export function createRoverGallery({ container, stops, onPointCamera }) {
     container.replaceChildren();
     append(container, 'h2', 'Perseverance arşiv fotoğrafları');
     if (status !== 'ready') {
-      append(container, 'p', status === 'loading' ? 'Fotoğraf arşivi yükleniyor…' : 'Fotoğraf arşivi kullanılamıyor.');
+      append(container, 'p', status === 'loading' ? 'Fotoğraf arşivi yükleniyor…' : 'Fotoğraf arşivi yüklenemedi.');
       return;
     }
     const observations = stop && observationsByStop.get(stop.id);

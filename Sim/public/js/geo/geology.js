@@ -99,8 +99,8 @@ function parseProvenance(source, geojson) {
   const statedU = u && typeof u === 'object' && Number.isFinite(u.min) && Number.isFinite(u.max) && u.min >= 0 && u.max >= u.min
     ? { min: u.min, max: u.max } : null;
   const scaleTxt = formatScale(scaleDenominator);
-  const genericTr = `Harita${scaleTxt ? ` ölçeğinde (${scaleTxt})` : ''} birim ataması indikatiftir; konum belirsizliği ${statedU ? `~${statedU.min}–${statedU.max} m (kaynak beyanı)` : 'kaynakta belirtilmemiş'}; saha gerçeği değildir. Mineraloji, güvenlik veya geçilebilirlik iddiası yoktur.`;
-  const genericEn = `Map${scaleTxt ? `-scale (${scaleTxt})` : ''} unit assignment is indicative; positional uncertainty ${statedU ? `~${statedU.min}-${statedU.max} m (as stated by the source)` : 'not stated by the source'}; not field truth. No mineralogy, safety or traversability claim.`;
+  const genericTr = `Harita${scaleTxt ? ` ölçeğinde (${scaleTxt})` : ''} birim ataması indikatiftir; konum belirsizliği ${statedU ? `~${statedU.min}–${statedU.max} m (kaynak beyanı)` : 'kaynak ölçeğine bağlıdır'}; saha gerçeği değildir. Mineraloji, güvenlik veya geçilebilirlik iddiası yoktur.`;
+  const genericEn = `Map${scaleTxt ? `-scale (${scaleTxt})` : ''} unit assignment is indicative; positional uncertainty ${statedU ? `~${statedU.min}-${statedU.max} m (as stated by the source)` : 'depends on the source map scale'}; not field truth. No mineralogy, safety or traversability claim.`;
   return {
     sourceProfile: isSim3464 ? 'usgs-sim3464' : 'generic',
     positionalUncertaintyM: isSim3464 ? GEOLOGY_POSITIONAL_UNCERTAINTY_M : statedU,
@@ -124,7 +124,7 @@ function parseProvenance(source, geojson) {
     caveats: isSim3464 ? GEOLOGY_CAVEATS : Object.freeze([genericTr]),
     attribution: isSim3464
       ? (citation ? `USGS SIM 3464 — ${citation}` : 'USGS SIM 3464 (Sun & Stack, 2020)')
-      : (citation ?? 'kaynak atfı belirtilmemiş'),
+      : (citation ?? 'USGS Astrogeology'),
   };
 }
 

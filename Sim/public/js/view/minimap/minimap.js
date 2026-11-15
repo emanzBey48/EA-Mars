@@ -1,6 +1,8 @@
 // Interactive 2D minimap presentation for an already-prepared terrain image.
 // This view never samples a provider or computes route costs. Missing/outside coverage stays blank.
 import { STATUS as ROUTE_CELL_STATUS } from '../../route/cost-model.js';
+import { smoothPolylineCached } from '../../geo/smooth-path.js';
+import { ROUTE_GUIDE_2D, SHOW_ARCHIVE_TRAVERSE_LINE } from '../render.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 // Route glow is a wide, low-alpha underlay. A per-segment shadowBlur made every redraw expensive.
@@ -78,6 +80,7 @@ export function createMinimap({
     selectionMode: selectionMode === 'start' || selectionMode === 'end' ? selectionMode : null,
     compactHud: Boolean(compactHud),
     player: null,
+    companions: [],
     corridor: null,
     centerXM: 0,
     centerYM: 0,
@@ -195,7 +198,7 @@ export function createMinimap({
     const row = Math.min(height - 1, Math.floor((b.nwYM - yM) / b.heightM * height));
     const offset = (row * width + col) * 4;
     // buildTerrainImage paints non-OK cells as (255,0,255) or (90,0,90).
-    if (data[offset + 1] === 0 && data[offset] === data[offset + 2]) return 'Bu hücre no-data veya geçersiz; başka bir nokta seçin.';
+    if (data[offset + 1] === 0 && data[offset] === data[offset + 2]) return 'Bu nokta seçilemez; başka bir nokta seçin.';
     const heatmap = state.planning.heatmap;
     if (!(heatmap?.status instanceof Uint8Array) || !Number.isSafeInteger(heatmap.rows) ||
         !Number.isSafeInteger(heatmap.cols) || heatmap.status.length !== heatmap.rows * heatmap.cols ||
@@ -345,13 +348,13 @@ export function createMinimap({
   function drawAttribution() {
     const d = state.descriptor;
     const title = state.globalBase
-      ? `Viking MDIM 2.1 · ${Math.round(state.globalBase.nativeMPerPx)} m/px · lisans: ${state.globalBase.license}`
+      ? `Viking MDIM 2.1 · ${Math.round(state.globalBase.nativeMPerPx)} m/px`
       : (d?.title ?? 'HiRISE DTM');
     const attribution = state.globalBase?.attribution ?? d?.attribution ?? 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona';
     const text = `${title} · ${attribution}`;
     ctx.font = '11px system-ui, sans-serif';
     const maxWidth = Math.max(40, state.width - 80); // Leave room for the north arrow.
-    const shown = ctx.measureText(text).width > maxWidth ? `${title} · kaynak atfı` : text;
+    const shown = ctx.measureText(text).width > maxWidth ? title : text;
     ctx.fillStyle = 'rgba(10, 12, 16, .78)';
     ctx.fillRect(10, 10, Math.min(maxWidth, ctx.measureText(shown).width + 12), 23);
     ctx.fillStyle = '#eee';
@@ -364,8 +367,8 @@ export function createMinimap({
     const mPerPx = 1 / state.pxPerM;
     const localAvailable = Boolean(state.terrain?.canvas && validBounds(bounds()));
     const text = mPerPx < base.nativeMPerPx
-      ? `Viking ${Math.round(base.nativeMPerPx)} m/px: yerel ayrıntı yok${localAvailable ? '; HiRISE DTM üstte' : ''}. Orto/kot verisi değildir.`
-      : `Viking MDIM renk mozaiği: bağlam katmanı, orto/kot verisi değildir.${localAvailable ? ' HiRISE DTM yerel ayrıntı verir.' : ''}`;
+      ? `Viking ${Math.round(base.nativeMPerPx)} m/px renk mozaiği${localAvailable ? '; HiRISE DTM üstte' : ''}.`
+      : 'Viking MDIM renk mozaiği: bağlam katmanı.';
     const maxWidth = Math.max(40, state.width - 80);
     ctx.font = '10px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(10, 12, 16, .78)';
@@ -389,14 +392,6 @@ export function createMinimap({
       const topLeft = worldToScreen(b.nwXM, b.nwYM);
       ctx.imageSmoothingEnabled = state.pxPerM < 1.5;
       ctx.drawImage(state.terrain.canvas, topLeft.x, topLeft.y, b.widthM * state.pxPerM, b.heightM * state.pxPerM);
-    } else if (!state.globalBase) {
-      ctx.fillStyle = '#ddd';
-      ctx.font = '14px system-ui, sans-serif';
-      ctx.fillText('HiRISE yüzey katmanı kullanılamıyor', 16, 42);
-    } else {
-      ctx.fillStyle = '#eee';
-      ctx.font = '11px system-ui, sans-serif';
-      ctx.fillText('HiRISE DTM yok; Viking MDIM yalnız 232 m/piksel renkli bağlam sağlar.', 16, 42);
     }
 
     if (state.overlays.orthoVisible && state.overlays.orthoOverlay && state.overlays.orthoOverlay.mode !== 'hillshade') {
@@ -420,8 +415,8 @@ export function createMinimap({
 
     if (state.overlays.geologyVisible) {
       ctx.save();
-      ctx.strokeStyle = 'rgba(255, 220, 90, .95)';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(214, 192, 150, .5)';
+      ctx.lineWidth = 1;
       ctx.setLineDash([4, 3]);
       for (const segment of state.overlays.geologySegments ?? []) {
         if (!Array.isArray(segment.xy) || segment.xy.length < 2) continue;
@@ -434,7 +429,7 @@ export function createMinimap({
       }
       ctx.restore();
     }
-    if (state.overlays.archiveVisible && state.overlays.archiveTraverse) {
+    if (SHOW_ARCHIVE_TRAVERSE_LINE && state.overlays.archiveVisible && state.overlays.archiveTraverse) {
       ctx.save();
       ctx.strokeStyle = '#ceabff';
       ctx.lineWidth = 1.7;
@@ -458,7 +453,8 @@ export function createMinimap({
         ctx.restore();
       }
     }
-    if (state.corridor?.a && state.corridor?.b && Number.isFinite(state.corridor.halfWidthM) && state.corridor.halfWidthM > 0) {
+    // Koridor kapsülü (cyan dolgu + kesikli kontur) kaldırıldı: trail/parlak rota çizgisi istenmiyor. setCorridor API'si korunur.
+    if (false && state.corridor?.a && state.corridor?.b && Number.isFinite(state.corridor.halfWidthM) && state.corridor.halfWidthM > 0) {
       const { a, b, halfWidthM: hw } = state.corridor;
       if (Number.isFinite(a.xM) && Number.isFinite(a.yM) && Number.isFinite(b.xM) && Number.isFinite(b.yM)) {
         const ux = b.xM - a.xM, uy = b.yM - a.yM, len = Math.hypot(ux, uy) || 1;
@@ -491,40 +487,22 @@ export function createMinimap({
       }
     }
     if (state.planning.route?.length) {
-      const route = state.planning.route;
-      const scores = state.planning.segments;
-      const hasAlignedScores = Array.isArray(scores) && scores.length === route.length - 1;
-      const now = nowMs();
-      const phase = now * 0.012;
-      lastRouteDrawMs = now;
-      const segments = [];
-      for (let i = 1; i < route.length; i++) {
-        segments.push({
-          a: worldToScreen(route[i - 1].xM, route[i - 1].yM),
-          b: worldToScreen(route[i].xM, route[i].yM),
-          color: routeScoreColor(hasAlignedScores ? scores[i - 1]?.score : null),
-        });
-      }
+      // Tek yön kılavuzu: koyu, kesikli, yumuşatılmış (renkli skor şeridi/halo/animasyon kaldırıldı).
+      const smooth = smoothPolylineCached(state.planning.route);
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      // Pass 1: halo (no shadowBlur). Pass 2: solid body. Pass 3: dashed core. Colors per segment are kept.
-      ctx.globalAlpha = ROUTE_HALO_ALPHA; ctx.lineWidth = ROUTE_HALO_WIDTH_PX;
-      for (const s of segments) {
-        ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y);
-        ctx.strokeStyle = s.color; ctx.stroke();
-      }
-      ctx.globalAlpha = 1; ctx.lineWidth = 8;
-      for (const s of segments) {
-        ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y);
-        ctx.strokeStyle = s.color; ctx.stroke();
-      }
-      ctx.lineWidth = 3.2; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -phase;
-      for (const s of segments) {
-        ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y);
-        ctx.strokeStyle = s.color; ctx.stroke();
-      }
-      ctx.setLineDash([]); ctx.restore();
+      ctx.beginPath();
+      smooth.forEach((pt, i) => {
+        const p = worldToScreen(pt.xM, pt.yM);
+        if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y);
+      });
+      ctx.setLineDash([]);
+      ctx.strokeStyle = ROUTE_GUIDE_2D.halo; ctx.lineWidth = ROUTE_GUIDE_2D.haloWidth; ctx.stroke();
+      ctx.setLineDash(ROUTE_GUIDE_2D.dash);
+      ctx.strokeStyle = ROUTE_GUIDE_2D.color;
+      ctx.lineWidth = ROUTE_GUIDE_2D.lineWidth;
+      ctx.stroke();
+      ctx.restore();
     }
     if (state.overlays.footprintTrail?.count > 0) {
       const trail = state.overlays.footprintTrail;
@@ -568,16 +546,6 @@ export function createMinimap({
       }
     }
 
-    if (!state.terrain?.canvas) {
-      ctx.fillStyle = '#ddd';
-      ctx.font = '12px system-ui, sans-serif';
-      ctx.fillText('Kapsam verisi yok; harita alanı boş bırakıldı.', 16, 62);
-    } else if (!state.compactHud) {
-      ctx.fillStyle = 'rgba(255,255,255,.84)';
-      ctx.font = '11px system-ui, sans-serif';
-      ctx.fillText('Eflatun tarama: DTM no-data / geçersiz hücre', 16, state.height - 49);
-    }
-
     const startPoint = (state.draggingEndpoint === 'start' && state.draggedPos) ? state.draggedPos : state.endpoints.start;
     const endPoint = (state.draggingEndpoint === 'end' && state.draggedPos) ? state.draggedPos : state.endpoints.end;
     drawMarker(startPoint, 'Başlangıç', '#52c7a5', state.draggingEndpoint === 'start');
@@ -600,6 +568,26 @@ export function createMinimap({
       ctx.lineWidth = 2;
       ctx.strokeStyle = '#111';
       ctx.stroke();
+      ctx.restore();
+    }
+    for (const c of state.companions) {
+      const p = worldToScreen(c.xM, c.yM);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = c.color ?? '#e8dcc8';
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(26,22,18,0.85)';
+      ctx.stroke();
+      if (c.label) {
+        ctx.font = '600 10px system-ui, sans-serif';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(26,22,18,0.7)';
+        ctx.strokeText(c.label, p.x + 7, p.y - 5);
+        ctx.fillStyle = '#efe6d6';
+        ctx.fillText(c.label, p.x + 7, p.y - 5);
+      }
       ctx.restore();
     }
     drawNorth();
@@ -627,14 +615,14 @@ export function createMinimap({
     }
     if (state.planning.route?.length) {
       if (!state.compactHud) {
-        const legend = 'Renk: yürünebilirlik puanı • planlama göstergesi; güvenli rota sertifikası değildir';
+        const legend = 'Kesikli çizgi: planlanan yön • planlama göstergesi; güvenli rota sertifikası değildir';
         ctx.fillStyle = 'rgba(7, 16, 22, .78)';
         ctx.fillRect(10, state.height - 61, Math.min(state.width - 20, 420), 21);
         ctx.fillStyle = '#e9fbff';
         ctx.font = '9px system-ui, sans-serif';
         ctx.fillText(legend, 16, state.height - 47, Math.max(1, state.width - 32));
       }
-      scheduleRouteAnimation(); // throttled (~15 Hz) and skipped while the minimap is hidden (demo-mode FPS fix)
+      // Rota artık statik koyu kesikli çizgi: animasyon döngüsü gerekmiyor.
     }
   }
 
@@ -836,6 +824,25 @@ export function createMinimap({
       state.player = pt
         ? { xM: pt.xM, yM: pt.yM, headingRad: Number.isFinite(player?.headingRad) ? player.headingRad : 0 }
         : null;
+      draw();
+    },
+    /** list: [{ id, xM, yM, label?, color? }]. Yalnız minimap'te küçük nokta (+ kısa etiket); 3B'de çizilmez. Boş liste -> hiçbir şey. */
+    setCompanions(list) {
+      const next = [];
+      if (Array.isArray(list)) {
+        for (const item of list) {
+          const pt = normalizePoint(item);
+          if (!pt) continue;
+          next.push({
+            id: item.id ?? null,
+            xM: pt.xM,
+            yM: pt.yM,
+            label: typeof item.label === 'string' ? item.label.slice(0, 6) : null,
+            color: typeof item.color === 'string' ? item.color : null,
+          });
+        }
+      }
+      state.companions = next;
       draw();
     },
     setCorridor(corridor) {

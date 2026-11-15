@@ -8,6 +8,7 @@ const provider = (sampleElevation, cellSizeM = 1) => ({ sampleElevation, cellSiz
 
 test('planned ground guide samples provider elevations and omits non-ok routes', () => {
   const positions = buildPlannedRouteLinePositions({
+    enabled: true,
     route: route([{ xM: 0, yM: 0 }, { xM: 2, yM: 0 }]),
     surfaceProvider: provider(() => ({ status: 'ok', value: -10 })),
     displayConfig: { referenceElevationM: -12, verticalScale: 3 },
@@ -21,6 +22,7 @@ test('planned ground guide samples provider elevations and omits non-ok routes',
 
 test('planned ground guide breaks at unknown samples and never invents elevation zero', () => {
   const positions = buildPlannedRouteLinePositions({
+    enabled: true,
     route: route([{ xM: 0, yM: 0 }, { xM: 2, yM: 0 }]),
     surfaceProvider: provider((xM) => xM === 1 ? { status: 'no_data', value: null } : { status: 'ok', value: -100 }),
     displayConfig: { referenceElevationM: -100, verticalScale: 3 },
@@ -32,6 +34,7 @@ test('planned ground guide breaks at unknown samples and never invents elevation
 
 test('planned ground guide densifies long segments (<= 4 m) and supports near-field parallel rails without bridging no-data', () => {
   const positions = buildPlannedRouteLinePositions({
+    enabled: true,
     route: route([{ xM: 0, yM: 0 }, { xM: 12, yM: 0 }]),
     surfaceProvider: provider(() => ({ status: 'ok', value: -10 }), 10),
     displayConfig: { referenceElevationM: -12, verticalScale: 3 },

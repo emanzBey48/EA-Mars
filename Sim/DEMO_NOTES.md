@@ -49,7 +49,26 @@ DTM etiketleri: **[AKTİF]** = ekranda gösterilen arazi (legacy PDS3 DTEEC yede
 5. Sol 164'e varılınca varış rozeti belirir (README tarifi; bu belgenin kabulünde gözlenmedi). Doğrudan çizgi ~687 m (USGS adayı ölçümü), A* rotası ~730 m (UI özeti, aktif legacy DTM); yürüme süresi (1,2 m/s × 8 ≈ 9,6 m/s duvar saati) yaklaşık 60–90 sn'dir (HESAP). Arayüzdeki "Tahmini yürüme süresi" simülasyon saatidir (730 m ≈ 10 dk 8 sn); duvar saati satırı ayrıca ≈ 1 dk 16 sn gösterir.
 6. Gösterilemiyorsa: `?view=3d` yerine varsayılan 2D görünüm açık kalır; WebGL2 yoksa 2D Canvas kesintisiz çalışır.
 
-Kullanışlı parametreler: `?view=3d`, `?scale=1|2|3`, `?shadows=off|low|high`, `?horizon=off`.
+Kullanışlı parametreler: `?view=3d`, `?scale=1|2|3`, `?shadows=off|low|high`, `?horizon=off`, `?intro=0` (küre girişi kapalı), `?showreel=1` (küre ekranında otomatik gösteri), `?quality=auto|high|medium|low|minimal`.
+Kısayollar: W/A/S/D (hareket), Space (3D'de sıçrama; 2D'de duraklat), P (duraklat), Esc (fare kilidi / kapat / haritayı küçült), M (haritayı %75 büyüt/küçült), R (yeniden başlat; küre ekranında gösteri).
+
+### 2b. Küre girişli akış (parametresiz açılış)
+
+`http://127.0.0.1:8080/` (veya `?showreel=1`) önce Mars küresini açar: Viking MDIM 2.1 dokusu, 5 sn/tur otomatik dönüş, hover'da bölge adı, herhangi bir noktadan başlangıç/varış seçimi, sağ görev paneli. **SİMÜLE ET** kask modunu açar; holografik minimap `M` ile %75'e büyür; görüş modları Normal / Optik / Topo / Termal / Atmosfer / Radyasyon; otomatik sürüş 0,5–10× (rota çizgisine ≤ 20 m ise katılır, aksi halde yeniden planlanır); 2 ve üzeri kişide yoldaşlar yalnız 2B minimap'te. `R` küre ekranında gösteriyi başlatır/durdurur. `?intro=0` bu akışı tamamen kapatır; `?view=3d`, `?demo=1` küreyi atlar.
+
+| Değer / öğe | Etiket | Sınır |
+|---|---|---|
+| Küre dokusu (Viking MDIM 2.1, 232 m/px) | ÖLÇÜM (ürün) / SUNUM | Renk bağlamı; ortogörüntü ve kot değil. Küre konumları ve bölge yarıçapları yaklaşıktır. |
+| Başlangıç/varış seçimi | SENARYO | Küre seçimi bağlam/etikettir. **Simülasyon sahası yalnız Jezero HiRISE yamasıdır;** yama dışı veya isimli bölge seçimi varsayılan Sol 120 → Sol 164'e döner ve bilgi satırı gösterilir. |
+| Bölge türü başına tahmini süre (20 + 40 × ağırlık dk) | SENARYO | Kaynaklı değil; güvenlik skoru değil. |
+| Görüş modları Optik, Topo | HESAP (gerçek DTM) | Optik = DTM hillshade, ortogörüntü değil. Topo = DTM kot konturu. |
+| Görüş modları Termal, Atmosfer, Radyasyon | SENARYO (model) | Göreli göstergeler; ölçüm değil (Termal: güneş 35°/13:00 varsayımı; Atmosfer: ölçek yüksekliği 11 km; Radyasyon: MSL RAD ölçümü değil). Jeofizik ve Kimyasal modlar veri olmadığı için listelenmez. |
+| Otomatik sürüş hız çarpanı 0,5–10×, 20 m katılma eşiği | SENARYO / SUNUM | Zaman ayarıdır; fizik veya güvenlik iddiası değil. |
+| Ekip yoldaşları (2–4 kişi) | SENARYO | Yalnız 2B; yoldaşlar senaryo hızıyla aynı rotada ilerler, gerçek ekip modeli değildir. |
+| Biyom çipi | HESAP (USGS SIM 3464 birim adından sezgisel eşleme) | ~100–200 m konum belirsizliği; mineraloji/geçilebilirlik iddiası yok; birim yoksa çip yok. |
+| Kask uyarısı (istenen süre aşıldı) | SENARYO | "Planlama göstergesi"; güvenli rota iddiası değil. Kaskta O₂/giysi sıcaklığı gösterilmez. |
+
+Atıf: küre dokusu USGS Astrogeology Viking MDIM 2.1; NASA/JPL-Caltech Mars 2020 ham görüntüleri yalnız görsel referanstır, uygulama dokuları prosedüreldir.
 
 ## 3. Sınırlar (jüriye açıkça söylenecekler)
 

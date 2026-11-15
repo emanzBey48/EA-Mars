@@ -753,7 +753,7 @@ export class SurfaceProviderRegistry {
         validation: fallback.validation,
         fallbackUsed: fallback.id !== preferredId,
         rejectedCandidate: { id: preferredId, status: primary.validation.status, reasonCode: primary.validation.reasonCode, summary: primary.validation.summary },
-        competitionDataStatus: `USGS adayı ve legacy HiRISE fallback kullanılamıyor: ${primary.validation.summary}${failedDefault ? ` · ${failedDefault.validation.summary}` : ''}`,
+        competitionDataStatus: `USGS adayı ve legacy HiRISE fallback doğrulanamadı: ${primary.validation.summary}${failedDefault ? ` · ${failedDefault.validation.summary}` : ''}`,
       };
     }
     return {

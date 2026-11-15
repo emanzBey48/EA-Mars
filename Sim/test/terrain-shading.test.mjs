@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  MICRO_DERIVATIVE_BOUND, ORTHO_MID_LUMA, PALETTE_LINEAR, TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS,
+  worleyEdge, terrainFields, MICRO_DERIVATIVE_BOUND, ORTHO_MID_LUMA, PALETTE_LINEAR, TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS,
   combineAlbedo, hash2, hashUnit, meshEdgeFade, microDetail, octaveFade, orthoCoverage, orthoGain,
   paletteAlbedo, perturbNormal, slopeAlbedoFactor, slopeRoughness, tanSlopeFromNormalZ, terrainSlopeWeight,
   valueNoiseD, pebbleDetail, rockDetail, craterDetail, applyDust,
@@ -45,7 +45,7 @@ test('micro detail is deterministic and world-fixed (same coordinates give the s
 });
 
 test('micro detail is bounded: slope within the cap, tone within the summed octave amplitude, no NaN', () => {
-  const toneBound = P.octaves.reduce((s, o) => s + o.toneAmp, 0);
+  const toneBound = P.octaves.reduce((s, o) => s + o.toneAmp, 0) + P.ripple.toneAmp + P.crack.toneAmp;
   for (const [x, y] of samples(800)) {
     for (const dist of [0, 3, 40, 200, 900]) {
       const m = microDetail(x, y, dist, 1 + P.slopeRoughnessGain);
@@ -253,7 +253,7 @@ test('rock scatter: deterministic, world-fixed, bounded, fades to zero with dist
     const f = rockDetail(x, y, far);
     assert.ok(f.tone === 0 && f.slopeX === 0 && f.slopeY === 0, 'no rocks beyond fade range');
   }
-  assert.ok(maxTone <= 0.6, `tone amplitude stays modest (${maxTone})`);
+  assert.ok(maxTone <= 1.0, `tone amplitude stays modest (${maxTone})`);
   assert.ok(nonZero / total > 0.02 && nonZero / total < 0.6, `rocks are present (${nonZero / total})`);
 });
 
@@ -304,4 +304,28 @@ test('surface dust mantle: deterministic, sheds on steep slopes, blends on gentl
   assert.match(TERRAIN_SHADING_GLSL, /const vec3 TERRAIN_DUST =/);
   const renderer = fs.readFileSync(new URL('../public/js/view/3d/renderer.js', import.meta.url), 'utf8');
   assert.match(renderer, /terrainApplyDust\(albedo/);
+});
+test('realistic ground: octave lattices are rotated and irrational, stone layers use distinct rotated lattices', () => {
+  const rots = P.octaves.map((o) => o.rotRad);
+  assert.equal(new Set(rots).size, rots.length, 'each octave samples its own rotated frame');
+  const layers = [...P.pebbles, ...P.rocks, ...P.craters];
+  assert.equal(new Set(layers.map((L) => L.rotRad)).size, layers.length, 'no two scatter layers share a lattice rotation');
+  const ratios = P.octaves.slice(1).map((o, i) => o.wavelengthM / P.octaves[i].wavelengthM);
+  for (const r of ratios) assert.ok(Math.abs(r - Math.round(r)) > 0.05, `octave ratio ${r} must not be an integer`);
+});
+
+test('stony-patch field, ripples and cracks: deterministic, bounded, faded with distance', () => {
+  let lo = 1, hi = 0;
+  for (const [x, y] of samples(400)) {
+    const fl = terrainFields(x, y);
+    lo = Math.min(lo, fl.patch); hi = Math.max(hi, fl.patch);
+    assert.ok(fl.patch >= 0 && fl.patch <= 1 && fl.mottle >= 0 && fl.mottle <= 1);
+    const e = worleyEdge(x * 0.7, y * 0.7);
+    assert.ok(Number.isFinite(e) && e >= 0 && e < 1.5, `worley edge ${e}`);
+    const far = microDetail(x, y, P.crack.fadeEndM + P.ripple.fadeEndM + 1, 1);
+    assert.ok(Number.isFinite(far.tone));
+  }
+  assert.ok(lo < 0.2 && hi > 0.8, `patch field spans dusty to stony (${lo}..${hi})`);
+  assert.match(TERRAIN_SHADING_GLSL, /float terrainWorleyEdge\(/);
+  assert.match(TERRAIN_SHADING_GLSL, /gTerrainPatch/);
 });

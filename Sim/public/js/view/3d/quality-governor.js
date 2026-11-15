@@ -22,19 +22,22 @@ export const QUALITY_LEVEL_SETTINGS = Object.freeze({
   }),
   medium: Object.freeze({
     shadows: 'low',
-    detail: Object.freeze({ micro: 0.6, pebbles: 1, rocks: 0.6, craters: 0.6, dust: 1 }),
+    // Granular (pebbles) and crack/crater layers are reduced; micro and rocks stay near full.
+    detail: Object.freeze({ micro: 0.8, pebbles: 0.6, rocks: 1, craters: 0.6, dust: 1 }),
     horizon: true,
     footprintMax: null,
   }),
   low: Object.freeze({
     shadows: 'off',
-    detail: Object.freeze({ micro: 0.3, pebbles: 0, rocks: 0, craters: 0, dust: 1 }),
+    // Pebble and rock octaves halved, crack/crater layer skipped.
+    detail: Object.freeze({ micro: 0.5, pebbles: 0.5, rocks: 0.5, craters: 0, dust: 1 }),
     horizon: true,
     footprintMax: null,
   }),
   minimal: Object.freeze({
     shadows: 'off',
-    detail: Object.freeze({ micro: 0.3, pebbles: 0, rocks: 0, craters: 0, dust: 1 }),
+    // Base colour only (dust gain 1 = the base albedo/dust tint); every procedural detail layer is skipped.
+    detail: Object.freeze({ micro: 0, pebbles: 0, rocks: 0, craters: 0, dust: 1 }),
     horizon: false,
     footprintMax: 60,
   }),
@@ -52,7 +55,11 @@ export const QUALITY_GOVERNOR_DEFAULTS = Object.freeze({
   severeDropHoldS: 1,   // sustained time below lowFps before stepping down
   recoverHoldS: 10,     // sustained time above recoverFps before stepping up
   minDwellS: 15,        // minimum time at a level before stepping up
-  maxFrameMs: 250,      // a single frame longer than this is an outlier (tab switch, debugger, GC stall)
+  minDropDwellS: 4,     // minimum time since ANY level change before stepping down (separate from the up dwell)
+  upgradeLockS: 30,     // a level that was reached by an upgrade and then dropped again is locked against upgrades this long
+  resumeSettleS: 1,     // samples ignored after hidden / focus loss / pause ends
+  loadChangeSettleS: 1.5, // samples ignored after notifyLoadChange() (helmet / map toggled, overlay opened)
+  maxFrameMs: 250,     // a single frame longer than this is an outlier (tab switch, debugger, GC stall)
   maxChanges: 100,      // change log capacity (the total count is kept separately)
 });
 
@@ -62,6 +69,12 @@ function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** Nearest-rank percentile (p in 0..1) of a non-empty list. */
+function percentile(values, p) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))];
 }
 
 /**
@@ -105,6 +118,10 @@ export function createQualityGovernor(options = {}) {
       changes: [],
       changeCount: 0,
       lastMedianMs: null,
+      lastChangeUp: false,    // the most recent level change was an upgrade
+      lockUntilS: [],         // per level index: elapsedS before which an upgrade INTO that level is refused
+      wasSuspended: false,    // previous update was hidden / unfocused / paused
+      loadChangeCount: 0,
     };
   }
   state = freshState(requestedMode);
@@ -115,7 +132,13 @@ export function createQualityGovernor(options = {}) {
 
   function record(to, reason) {
     const from = levels[state.levelIndex];
-    state.levelIndex = levels.indexOf(to);
+    const toIndex = levels.indexOf(to);
+    // Dropping out of a level that an upgrade had just reached proves the upgrade was premature: lock it.
+    if (toIndex > state.levelIndex && state.lastChangeUp && reason !== 'manual') {
+      state.lockUntilS[state.levelIndex] = state.elapsedS + cfg.upgradeLockS;
+    }
+    state.lastChangeUp = toIndex < state.levelIndex;
+    state.levelIndex = toIndex;
     state.changeCount += 1;
     state.changes.push({ tS: round(state.elapsedS, 2), from, to, reason });
     if (state.changes.length > cfg.maxChanges) state.changes.shift();
@@ -124,6 +147,13 @@ export function createQualityGovernor(options = {}) {
     state.aboveS = 0;
     state.window = [];
     state.settleLeftS = cfg.settleS;
+  }
+
+  function resetMeasurement() {
+    state.window = [];
+    state.belowS = 0;
+    state.aboveS = 0;
+    state.prevLong = false;
   }
 
   function result(reason, changed = false) {
@@ -138,12 +168,15 @@ export function createQualityGovernor(options = {}) {
     update(frameDtMs, context = {}) {
       if (!Number.isFinite(frameDtMs) || frameDtMs < 0) return result('invalid-sample');
       if (state.mode !== 'auto') return result('manual');
-      if (context.hidden || context.paused) {
-        state.window = [];
-        state.belowS = 0;
-        state.aboveS = 0;
-        state.prevLong = false;
-        return result(context.hidden ? 'hidden' : 'paused');
+      // hidden tab, lost focus, 2D view / overlays (caller sets hidden) and pause are never measured.
+      if (context.hidden || context.paused || context.focused === false) {
+        resetMeasurement();
+        state.wasSuspended = true;
+        return result(context.hidden ? 'hidden' : context.paused ? 'paused' : 'unfocused');
+      }
+      if (state.wasSuspended) {
+        state.wasSuspended = false;
+        state.settleLeftS = Math.max(state.settleLeftS, cfg.resumeSettleS);
       }
       const dtS = frameDtMs / 1000;
       state.elapsedS += dtS;
@@ -167,31 +200,47 @@ export function createQualityGovernor(options = {}) {
       if (state.window.length > cfg.windowFrames) state.window.shift();
       if (state.window.length < cfg.minSamples) return result('filling');
 
+      // Decisions use the median (spike-robust); the p90 frame time must also be healthy before an upgrade.
       const medianMs = median(state.window);
+      const p90Ms = percentile(state.window, 0.9);
       state.lastMedianMs = medianMs;
       const fps = 1000 / Math.max(medianMs, 1e-6);
+      const p90Healthy = p90Ms <= 1000 / cfg.targetFps;
       if (fps < cfg.targetFps) {
         state.belowS += dtS;
         state.aboveS = 0;
-      } else if (fps > cfg.recoverFps) {
+      } else if (fps > cfg.recoverFps && p90Healthy) {
         state.aboveS += dtS;
         state.belowS = 0;
       } else {
+        // Dead band 45..55 fps (or a ragged p90): no timer runs, so the level cannot flap.
         state.belowS = 0;
         state.aboveS = 0;
       }
 
       const dropHoldS = fps < cfg.lowFps ? cfg.severeDropHoldS : cfg.dropHoldS;
-      if (state.levelIndex < levels.length - 1 && state.belowS >= dropHoldS) {
+      if (state.levelIndex < levels.length - 1 && state.belowS >= dropHoldS && state.sinceChangeS >= cfg.minDropDwellS) {
         const reason = fps < cfg.lowFps ? 'frame-time-severe' : 'frame-time-low';
         record(levels[state.levelIndex + 1], reason);
         return result(reason, true);
       }
-      if (state.levelIndex > 0 && state.aboveS >= cfg.recoverHoldS && state.sinceChangeS >= cfg.minDwellS) {
+      if (state.levelIndex > 0 && state.aboveS >= cfg.recoverHoldS && state.sinceChangeS >= cfg.minDwellS
+        && state.elapsedS >= (state.lockUntilS[state.levelIndex - 1] ?? 0)) {
         record(levels[state.levelIndex - 1], 'frame-time-recovered');
         return result('frame-time-recovered', true);
       }
       return result('hold');
+    },
+
+    /**
+     * Tells the governor the render/CPU load just changed for a transient reason (helmet layer, minimap enlarged
+     * with M, overlay or vision mode toggled). The measurement window and hold timers restart and the next
+     * `loadChangeSettleS` seconds are not sampled. Optional and safe to never call. Does not change the level.
+     */
+    notifyLoadChange() {
+      state.loadChangeCount += 1;
+      resetMeasurement();
+      state.settleLeftS = Math.max(state.settleLeftS, cfg.loadChangeSettleS);
     },
 
     /** Pins a level ('auto' re-enables stepping). Pinning changes the level at once and is logged. */
@@ -224,7 +273,11 @@ export function createQualityGovernor(options = {}) {
 
     getState() {
       const medianMs = state.window.length >= cfg.minSamples ? median(state.window) : null;
+      const p90Ms = state.window.length >= cfg.minSamples ? percentile(state.window, 0.9) : null;
       return {
+        p90FrameMs: p90Ms === null ? null : round(p90Ms, 2),
+        loadChangeCount: state.loadChangeCount,
+        lockedLevels: levels.filter((_, i) => (state.lockUntilS[i] ?? 0) > state.elapsedS),
         mode: state.mode,
         level: levels[state.levelIndex],
         levelIndex: state.levelIndex,

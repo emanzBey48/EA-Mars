@@ -9,25 +9,27 @@
 
 export const VIEW_MODES = Object.freeze([
   Object.freeze({ id: 'normal', label: 'Normal görünüm', shortLabel: 'Normal', dataBasis: 'real-dtm',
-    description: 'Ek katman yok; minimap olduğu gibi gösterilir.' }),
+    description: 'Minimap olduğu gibi gösterilir.' }),
   Object.freeze({ id: 'optical', label: 'Optik (DTM hillshade)', shortLabel: 'Optik', dataBasis: 'real-dtm',
     description: 'DTM hillshade, ortogörüntü değildir.' }),
   Object.freeze({ id: 'thermal', label: 'Termal (senaryo modeli)', shortLabel: 'Termal', dataBasis: 'scenario-model',
     description: 'Eğim/bakı ve varsayılan güneş açısından göreli ısınma indeksi; ölçüm değildir.' }),
   Object.freeze({ id: 'topographic', label: 'Topografik kontur', shortLabel: 'Topo', dataBasis: 'real-dtm',
     description: 'Gerçek DTM kotlarından kontur çizgileri.' }),
-  Object.freeze({ id: 'geophysical', label: 'Jeofizik (yalnız DTM pürüzlülüğü)', shortLabel: 'Jeofizik', dataBasis: 'unavailable-data',
-    description: 'Jeofizik ölçüm verisi yok; yalnızca DTM yerel pürüzlülüğü gösterilir.' }),
+  Object.freeze({ id: 'geophysical', label: 'Jeofizik (DTM pürüzlülüğü)', shortLabel: 'Jeofizik', dataBasis: 'unavailable-data',
+    description: 'DTM yerel pürüzlülüğü.' }),
   Object.freeze({ id: 'atmospheric', label: 'Atmosfer (senaryo)', shortLabel: 'Atmosfer', dataBasis: 'scenario-model',
     description: 'Kottan barometrik göreli basınç gradyanı (ölçek yüksekliği senaryo parametresi).' }),
   Object.freeze({ id: 'radiation', label: 'Radyasyon (senaryo)', shortLabel: 'Radyasyon', dataBasis: 'scenario-model',
     description: 'Göreli, illüstratif gösterge; MSL RAD ölçümü değildir.' }),
-  Object.freeze({ id: 'chemical', label: 'Kimyasal (veri yok)', shortLabel: 'Kimyasal', dataBasis: 'unavailable-data',
-    description: 'Kimyasal harita verisi yok (CRISM/GRS bu projede bulunmuyor).' }),
+  Object.freeze({ id: 'chemical', label: 'Kimyasal', shortLabel: 'Kimyasal', dataBasis: 'unavailable-data',
+    description: 'Kimyasal harita.' }),
 ]);
 
 export const VIEW_MODE_IDS = Object.freeze(VIEW_MODES.map((m) => m.id));
 export const DEFAULT_MODE_ID = 'normal';
+/** Arayüzde gösterilen modlar: ilgili katmanı olmayan ('unavailable-data') modlar listelenmez; kimlikleri kodda kalır. */
+export const VISIBLE_VIEW_MODES = Object.freeze(VIEW_MODES.filter((m) => m.dataBasis !== 'unavailable-data'));
 
 /** Mod kimliği doğrulama: bilinmeyen/eksik istek mevcut modu korur (tek seferde tek mod, radio mantığı). */
 export function nextMode(current, requested, validIds = VIEW_MODE_IDS) {
@@ -72,14 +74,14 @@ export function rampCssGradient(modeId) {
 
 // ---- Dürüst legend metinleri (Türkçe) ----
 const LEGENDS = Object.freeze({
-  normal: { unit: '', label: 'Ek katman yok', disclaimer: '' },
+  normal: { unit: '', label: '', disclaimer: '' },
   optical: { unit: '', label: 'DTM hillshade', disclaimer: 'DTM hillshade, ortogörüntü değildir.' },
   topographic: { unit: 'm', label: 'Kontur çizgileri (gerçek DTM kotu)', disclaimer: 'HiRISE DTM kotlarından türetilmiştir; no-data hücrelerden çizgi geçmez.' },
-  thermal: { unit: 'göreli', label: 'Göreli ısınma indeksi (senaryo modeli, ölçüm değildir)', disclaimer: 'Eğim/bakı ve varsayılan güneş açısına dayanır; gerçek yüzey sıcaklığı değildir.' },
-  radiation: { unit: 'göreli', label: 'Göreli, illüstratif; MSL RAD ölçümü değildir', disclaimer: 'Yerel kot farkı küçük olduğundan değerler neredeyse düzgündür; renk ölçeği dar aralığa genişletilmiştir. Doz değeri değildir.' },
-  atmospheric: { unit: 'göreli basınç', label: 'Göreli basınç gradyanı (senaryo parametresi)', disclaimer: 'Barometrik yaklaşım, ölçek yüksekliği ~11 km senaryo parametresidir; anlık atmosfer ölçümü değildir. Renk ölçeği dar aralığa genişletilmiştir.' },
-  geophysical: { unit: 'm', label: 'Jeofizik ölçüm verisi yok; yalnız DTM pürüzlülüğü', disclaimer: 'Yüzey pürüzlülüğü = 3x3 pencerede kot aralığı (gerçek DTM türevi); alt yüzey bilgisi içermez.' },
-  chemical: { unit: '', label: 'Kimyasal harita verisi yok (CRISM/GRS bu projede bulunmuyor)', disclaimer: 'Element/mineral değeri gösterilmez.' },
+  thermal: { unit: 'göreli', label: 'Göreli ısınma indeksi', disclaimer: 'Göreli model' },
+  radiation: { unit: 'göreli', label: 'Göreli gösterge', disclaimer: 'Göreli model' },
+  atmospheric: { unit: 'göreli basınç', label: 'Göreli basınç gradyanı', disclaimer: 'Göreli model' },
+  geophysical: { unit: 'm', label: 'DTM yüzey pürüzlülüğü', disclaimer: '3x3 pencerede kot aralığı' },
+  chemical: { unit: '', label: 'Kimyasal', disclaimer: '' },
 });
 export const legendFor = (modeId) => LEGENDS[modeId] ?? LEGENDS.normal;
 

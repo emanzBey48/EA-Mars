@@ -75,6 +75,7 @@
           <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Yürü</span>
           <span>🎯 Tıkla: Fare Bakışı</span>
           <span><kbd>Space</kbd> Mars Sıçraması</span>
+          <span><kbd>M</kbd> Harita</span>
           <span><kbd>P</kbd> Duraklat</span>
           <span><kbd>Esc</kbd> Çıkış</span>
         </div>
@@ -87,6 +88,7 @@
         <span class="fp-hint-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Yürü</span>
         <span class="fp-hint-item">🎯 Tıkla: Fare Bakışı</span>
         <span class="fp-hint-item"><kbd>Space</kbd> Sıçra</span>
+        <span class="fp-hint-item"><kbd>M</kbd> Harita</span>
         <span class="fp-hint-item"><kbd>P</kbd> Duraklat</span>
         <span class="fp-hint-item"><kbd>Esc</kbd> Fareyi Bırak</span>
       </div>
@@ -189,7 +191,7 @@
         </div>
         <details open class="secondary-options is-collapsed">
           <summary>Harita açıklaması ve kaynak</summary>
-          <p class="muted small">Eflatun tarama no-data/geçersiz hücreleri; koyu boş alan yüklenen DTM altkümesi dışını gösterir. Nokta seçimi bu alanlarda geçilebilirlik anlamına gelmez.</p>
+          <p class="muted small">Eflatun tarama ölçüm kapsamı dışındaki hücreleri gösterir; koyu alan yüklenen DTM altkümesinin dışındadır. Nokta seçimi bu alanlarda geçilebilirlik anlamına gelmez.</p>
           <p class="muted small">Kaynak: USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona. Ürün: USGS Mars 2020 TRN HiRISE DTM Mozaiği; Fergason vd. 2020, <a href="https://doi.org/10.5066/P9REJ9JN" target="_blank" rel="noreferrer">DOI: 10.5066/P9REJ9JN</a>.</p>
         </details>
       </section>
@@ -258,18 +260,18 @@
         <p id="geology-provenance" class="muted small"></p>
         <label class="small"><input id="toggle-archive-traverse" type="checkbox" checked> Arşiv Perseverance sürüş izini göster (MMGIS)</label>
         <p id="archive-traverse-status" class="muted small" aria-live="polite"></p>
-        <p class="muted small">Mor çizgi arşiv sürüş izidir. Sarı düz hat ve koridor keşif senaryosuna aittir. Sürüş izi canlı telemetri veya güvenli rota bilgisi içermez. Kaynak: NASA/JPL Mars 2020 MMGIS. Lisans kaynakta belirtilmemiş.</p>
+        <p class="muted small">Mor çizgi arşiv sürüş izidir. Sarı düz hat ve koridor keşif senaryosuna aittir. Sürüş izi canlı telemetri veya güvenli rota bilgisi içermez. Kaynak: NASA/JPL Mars 2020 MMGIS.</p>
         <div id="layers"></div>
-        <p id="ortho-status" class="muted small" aria-live="polite">HiRISE WMTS Ortomozaik: z17 (0.318 m/px) ve z14 (2.544 m/px) · WMTS projeksiyon aritmetiği · Stage 39A · Lisans: kaynakta belirtilmemiş</p>
-        <p class="muted small">Mars Trek HiRISE ortomozaik katmanı, etkin DTM ile piksel hizası doğrulanınca açılabilir. Kaynak: USGS Astrogeology / NASA MRO HiRISE, NASA JPL Mars Trek. Lisans kaynakta belirtilmemiş.</p>
+        <p id="ortho-status" class="muted small" aria-live="polite">HiRISE WMTS Ortomozaik: z17 (0.318 m/px) ve z14 (2.544 m/px) · WMTS projeksiyon aritmetiği · Stage 39A</p>
+        <p class="muted small">Mars Trek HiRISE ortomozaik katmanı, etkin DTM ile piksel hizası doğrulanınca açılabilir. Kaynak: USGS Astrogeology / NASA MRO HiRISE, NASA JPL Mars Trek.</p>
       </details>
 
       <details open class="card sources-card disclosure is-collapsed">
         <summary><h2 id="sources-title">Kaynaklar ve sınırlar</h2></summary>
-        <p class="muted small">Kaynak, ürün kimliği, çözünürlük, lisans ve kullanım sınırları için <a href="/SOURCES.md" target="_blank" rel="noopener">tam kaynak dökümünü açın</a>. Kaynakta lisans yazmıyorsa “belirtilmemiş” olarak gösterilir.</p>
+        <p class="muted small">Kaynak, ürün kimliği, çözünürlük ve kullanım sınırları için <a href="/SOURCES.md" target="_blank" rel="noopener">tam kaynak dökümünü açın</a>.</p>
         <ul class="small sources-limits">
           <li><b>Yüzey:</b> Yerel HiRISE DTM yaklaşık 1 m/piksel kot ve türetilmiş eğim sağlar. USGS veri yayımında CC0 beyanı vardır; ürün özel düşey datum doğrulaması hâlâ açıktır.</li>
-          <li><b>Görünüm:</b> HiRISE WMTS ortomozaik görsel kaplamadır; lisansı kaynakta belirtilmemiştir ve kayıt belirsizliği saklanmaz. Viking MDIM 2.1 işlenmiş renkli bölgesel bağlamdır, kot veya yerel ortogörüntü değildir.</li>
+          <li><b>Görünüm:</b> HiRISE WMTS ortomozaik görsel kaplamadır; kayıt belirsizliği saklanmaz. Viking MDIM 2.1 işlenmiş renkli bölgesel bağlamdır, kot veya yerel ortogörüntü değildir.</li>
           <li><b>Rota:</b> EVA yürünebilirlik puanı ve kılavuz çizgi planlama göstergesidir; güvenli rota sertifikası değildir. MMGIS rover izi arşiv kaydıdır, insan rotası veya canlı telemetri değildir.</li>
           <li><b>Fizik:</b> 3,71 m/s² Mars yerçekimi genel referanstır. Görsel giysi hareketi ve gökyüzü sunum modelidir; Jezero anlık atmosfer ölçümü veya gerçek suit fiziği değildir.</li>
         </ul>

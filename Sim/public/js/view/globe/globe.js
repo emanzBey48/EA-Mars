@@ -1,4 +1,4 @@
-﻿// Mars küresi (WebGL; WebGL2 yoksa WebGL1). Doku: USGS Astrogeology Viking MDIM 2.1 renkli mozaik
+// Mars küresi (WebGL; WebGL2 yoksa WebGL1). Doku: USGS Astrogeology Viking MDIM 2.1 renkli mozaik
 // (ortogörüntü DEĞİL; sunum amaçlı küresel mozaik). Saf geometri fonksiyonları DOM'suz export edilir.
 
 const DEG = Math.PI / 180;
@@ -27,6 +27,17 @@ export function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2;
 }
 
+// Otomatik dönüş: tek sabit. Kullanıcı dokunmadıkça küre bu sürede bir tam tur döner.
+export const AUTO_SPIN_SECONDS_PER_TURN = 5;
+export const AUTO_SPIN_RAD_PER_S = (2 * Math.PI) / AUTO_SPIN_SECONDS_PER_TURN;
+export const AUTO_SPIN_RESUME_MS = 500;
+export const AUTO_SPIN_RAMP_S = 0.6;
+/** Dönüş çarpanını hedefe (uygun ? 1 : 0) üstel olarak yaklaştırır; ani sıçrama yok. */
+export function autoSpinStep(spin, dt, eligible, rampS = AUTO_SPIN_RAMP_S) {
+  const target = eligible ? 1 : 0;
+  const k = 1 - Math.exp(-Math.max(0, dt) / rampS);
+  return spin + (target - spin) * k;
+}
 // R = Rx(pitch) * Ry(yaw); satır-öncelikli 3x3 [9]. Ry(yaw) pozitif => yüzey sağa kayar.
 export function rotationMatrix(yaw, pitch) {
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -304,6 +315,7 @@ export function createGlobe({ canvas, dataBase = '/data/viking-mdim', onPick, on
   const view = { yaw: 0.6, pitch: 0.35, dist: 3.2 };
   const vel = { yaw: 0, pitch: 0 };
   let dragging = false, lastX = 0, lastY = 0, lastT = 0, moved = 0, idleSince = 0;
+  let spin = 0; // 0..1 otomatik dönüş çarpanı (yumuşak hızlanma)
   let autoPaused = false, active = true, fly = null, w = 1, h = 1, dpr = 1, raf = 0;
 
   function resize() {
@@ -390,18 +402,24 @@ export function createGlobe({ canvas, dataBase = '/data/viking-mdim', onPick, on
 
   let lastFrame = performance.now();
   function frame(now) {
-    raf = requestAnimationFrame(frame);
+    raf = 0;
     if (!active || disposed) { lastFrame = now; return; }
+    raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - lastFrame) / 1000); lastFrame = now;
     if (fly) {
       const t = Math.min(1, (now - fly.t0) / fly.ms), e = easeInOutCubic(t);
       view.yaw = fly.yaw0 + (fly.yaw1 - fly.yaw0) * e; view.pitch = fly.pitch0 + (fly.pitch1 - fly.pitch0) * e;
+      spin = 0;
       view.dist = fly.dist0 + (fly.dist1 - fly.dist0) * e;
       if (t >= 1) { const r = fly.resolve; fly = null; r(); }
-    } else if (!dragging) {
+    } else if (dragging) {
+      spin = 0;
+    } else {
       view.yaw += vel.yaw * dt; view.pitch = Math.max(-1.3, Math.min(1.3, view.pitch + vel.pitch * dt));
       const decay = Math.exp(-2.5 * dt); vel.yaw *= decay; vel.pitch *= decay;
-      if (!autoPaused && now - idleSince > 1200 && Math.hypot(vel.yaw, vel.pitch) < 0.05) view.yaw += 0.07 * dt;
+      const eligible = !autoPaused && active && now - idleSince > AUTO_SPIN_RESUME_MS && Math.hypot(vel.yaw, vel.pitch) < 0.3;
+      spin = autoSpinStep(spin, dt, eligible);
+      view.yaw += AUTO_SPIN_RAD_PER_S * spin * dt;
     }
     resize();
     const aspect = w / h, proj = perspective(FOV, aspect, 0.1, 200), viewM = translationZ(-view.dist);
@@ -466,11 +484,15 @@ export function createGlobe({ canvas, dataBase = '/data/viking-mdim', onPick, on
       });
     },
     resetView() { view.dist = 3.2; },
-    setActive(on) { active = !!on; },
+    setActive(on) {
+      active = !!on;
+      if (!active) { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+      else if (!raf && !disposed) { lastFrame = performance.now(); raf = requestAnimationFrame(frame); }
+    },
     setAutoRotatePaused(on) { autoPaused = !!on; },
     usesFallbackTexture: () => fallbackTexture,
     dispose() {
-      disposed = true; cancelAnimationFrame(raf); ro?.disconnect();
+      disposed = true; if (raf) cancelAnimationFrame(raf); raf = 0; ro?.disconnect();
       canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointercancel', onUp);
       canvas.removeEventListener('pointerleave', onLeave); canvas.removeEventListener('wheel', onWheel);

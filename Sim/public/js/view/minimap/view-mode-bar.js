@@ -1,8 +1,8 @@
 // Minimap altına konacak yatay görüş modu segment çubuğu (radio mantığı: aynı anda tek mod) + aktif mod için legend şeridi.
 // Yalnız DOM sunumu; mod hesabı view-modes.js'te. Temel sınıflar `mw-holo-bar`, ek stil `mw-vm-*` (css/view-modes.css).
-import { VIEW_MODES, DEFAULT_MODE_ID, legendFor, nextMode, rampCssGradient } from './view-modes.js';
+import { VISIBLE_VIEW_MODES as VIEW_MODES, DEFAULT_MODE_ID, legendFor, nextMode, rampCssGradient } from './view-modes.js';
 
-const BADGE = Object.freeze({ 'scenario-model': 'model', 'unavailable-data': 'veri yok' });
+const BADGE = Object.freeze({ 'scenario-model': 'model' });
 
 export function createViewModeBar({ root, onChange = () => {}, initial = DEFAULT_MODE_ID } = {}) {
   if (!root || typeof root.appendChild !== 'function') throw new Error('createViewModeBar: root HTMLElement gerekli');

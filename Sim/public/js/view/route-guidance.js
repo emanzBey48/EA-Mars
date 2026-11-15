@@ -1,4 +1,5 @@
 import { STATUS as WALKABILITY_STATUS } from '../route/cost-model.js';
+import { smoothPolylineCached } from '../geo/smooth-path.js';
 
 const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 
@@ -16,7 +17,11 @@ export function buildPlannedRouteLinePositions({
   liftDisplayM = 0.12,
   heightOffsetM,
   ribbonHalfWidthM = 0,
+  enabled = false,
+  smooth = true,
 } = {}) {
+  // Yeşil/cyan yer çizgisi artık varsayılan olarak çizilmez (tek yön kılavuzu koyu kesikli şeritle verilir); enabled:true ile açılır.
+  if (!enabled) return new Float32Array();
   if (route?.status !== 'ok' || !Array.isArray(route.path) || route.path.length < 2) return new Float32Array();
   if (typeof surfaceProvider?.sampleElevation !== 'function') return new Float32Array();
   const reference = displayConfig?.referenceElevationM;
@@ -29,6 +34,7 @@ export function buildPlannedRouteLinePositions({
     : Math.min(4, Math.max(0.25, cellSize * 0.5));
   const halfWidth = isFiniteNumber(ribbonHalfWidthM) && ribbonHalfWidthM > 0 ? ribbonHalfWidthM : 0;
   const positions = [];
+  const path = smooth ? smoothPolylineCached(route.path) : route.path;
   let previousCenter = null;
   let previousLeft = null;
   let previousRight = null;
@@ -73,8 +79,8 @@ export function buildPlannedRouteLinePositions({
     }
   };
 
-  for (let index = 1; index < route.path.length; index++) {
-    const a = route.path[index - 1], b = route.path[index];
+  for (let index = 1; index < path.length; index++) {
+    const a = path[index - 1], b = path[index];
     if (![a?.xM, a?.yM, b?.xM, b?.yM].every(isFiniteNumber)) {
       previousCenter = null;
       previousLeft = null;
@@ -134,7 +140,7 @@ function currentWalkability(route, position, surface, heatmap) {
   if (status !== WALKABILITY_STATUS.OK) {
     const statusReason = status === WALKABILITY_STATUS.TOO_STEEP
       ? 'Eğim, rota modelindeki senaryo eşiğinde veya üzerinde.'
-      : 'Geçerli yürünebilirlik değeri yok; hücre bilinmiyor/geçilemez.';
+      : 'Yürünebilirlik değeri hesaplanmadı; hücre geçilemez sayılır.';
     return { available: false, status, slopeDeg, slopeWarning: status === WALKABILITY_STATUS.TOO_STEEP, reason: statusReason };
   }
   return {

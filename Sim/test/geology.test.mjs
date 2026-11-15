@@ -357,7 +357,7 @@ test('C3: caveats/uncertainty/attribution follow the index source; SIM 3464 outp
   assert.equal(gs.mapScale, '1:20,000,000');
   assert.doesNotMatch(gs.caveatTr, /1:75|100–200/);
   assert.match(gs.caveatTr, /1:20,000,000/);
-  assert.match(gs.caveatTr, /kaynakta belirtilmemiş/);
+  assert.match(gs.caveatTr, /kaynak ölçeğine bağlıdır/);
   const stated = createGeologyIndex(polys, { source: { title: 'Other', citation: 'x', positional_uncertainty_m: { min: 5, max: 9 }, license: 'CC0' } });
   const ss = toGeologySnapshot(lookup(stated, 0.5, 0.5), stated);
   assert.deepEqual(ss.positionalUncertaintyM, { min: 5, max: 9 });

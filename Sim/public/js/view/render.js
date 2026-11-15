@@ -1,6 +1,15 @@
 // Canvas rendering. Converts local metres -> screen pixels via a camera; never mutates simulation state.
 import { STATUS } from '../surface/layers.js';
 import { horn3x3Gradient } from '../geo/geo.js';
+import { smoothPolylineCached } from '../geo/smooth-path.js';
+
+/** 2B yön kılavuzu stili (ana harita + minimap): koyu kesikli, neon/shadowBlur yok. */
+export const ROUTE_GUIDE_2D = Object.freeze({
+  color: 'rgba(26,22,18,0.75)', lineWidth: 2, dash: Object.freeze([8, 6]),
+  halo: 'rgba(232,220,200,0.32)', haloWidth: 4.5, // yumuşak açık kenar: koyu zeminde okunurluk (parlama değil)
+});
+/** Perseverance arşiv traverse çizgisi 'iz' gibi görünüyordu; 2B çizimlerde kapalı. */
+export const SHOW_ARCHIVE_TRAVERSE_LINE = false;
 
 export class Camera {
   constructor() { this.cx = 0; this.cy = 0; this.pxPerM = 2; this.min = 0.3; this.max = 16; }
@@ -204,10 +213,10 @@ export function render(ctx, w, h, {
     if (!Array.isArray(segment.xy) || segment.xy.length < 2) continue;
     ctx.beginPath();
     segment.xy.forEach(([x, y], i) => { const p = T(x, y); i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy); });
-    ctx.strokeStyle = 'rgba(255,220,90,0.9)'; ctx.lineWidth = 2; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(214,192,150,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]);
   }
 
-  if (archiveTraverse) {
+  if (SHOW_ARCHIVE_TRAVERSE_LINE && archiveTraverse) {
     ctx.strokeStyle = '#ceabff';
     ctx.lineWidth = 2;
     for (const { points } of archiveTraverse.segments) {
@@ -234,46 +243,22 @@ export function render(ctx, w, h, {
   // Corridor capsule outline (visual geometry around segment a->b).
   const ux = b.xM - a.xM, uy = b.yM - a.yM, L = route.routeLengthM || Math.hypot(ux, uy) || 1;
   const dx = ux / L, dy = uy / L, nx = -dy, ny = dx;
-  const pts = [];
-  const base = Math.atan2(ny, nx);
-  for (let k = 0; k <= 16; k++) { const t = base - Math.PI * k / 16; pts.push([b.xM + hw * Math.cos(t), b.yM + hw * Math.sin(t)]); }
-  for (let k = 0; k <= 16; k++) { const t = base + Math.PI - Math.PI * k / 16; pts.push([a.xM + hw * Math.cos(t), a.yM + hw * Math.sin(t)]); }
-  ctx.beginPath();
-  pts.forEach(([x, y], i) => { const p = T(x, y); i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy); });
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(90,200,255,0.16)'; ctx.fill();
-  ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(120,215,255,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.setLineDash([]);
-
+  // Koridor kapsülü (cyan dolgu + kesikli kontur) ve sarı eski rota çizgisi KALDIRILDI: tek yön kılavuzu
+  // aşağıdaki koyu kesikli çizgidir. Oyuncu "trail" çizgisi de kaldırıldı; geçmiş yalnız kalıcı ayak izleriyle gösterilir.
   const hideLegacyStraightLine = (Array.isArray(plannedRoute) && plannedRoute.length > 1) || waypoints.some((wp) => wp.custom);
-  if (!hideLegacyStraightLine) {
-    // Simplified route line
-    const pa = T(a.xM, a.yM), pb = T(b.xM, b.yM);
-    ctx.setLineDash([10, 6]); ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(pa.sx, pa.sy); ctx.lineTo(pb.sx, pb.sy); ctx.stroke(); ctx.setLineDash([]);
-    // Route label at midpoint
-    const pm = T((a.xM + b.xM) / 2, (a.yM + b.yM) / 2);
-    label(ctx, routeNote, pm.sx + 14, pm.sy, '#ffd34d', 'rgba(0,0,0,0.65)', 12);
-  }
+  const guideRoute = hideLegacyStraightLine ? plannedRoute : [{ xM: a.xM, yM: a.yM }, { xM: b.xM, yM: b.yM }];
 
-  // Waypoints
+  // Waypoints (sakin tonlar)
   waypoints.forEach((wp) => {
     const p = T(wp.xM, wp.yM);
-    ctx.beginPath(); ctx.arc(p.sx, p.sy, 7, 0, Math.PI * 2); ctx.fillStyle = '#ffd34d'; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(p.sx, p.sy, 5, 0, Math.PI * 2); ctx.fillStyle = '#d9c9a8'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(26,22,18,0.85)'; ctx.stroke();
     const wpLabel = wp.custom ? wp.label : `${wp.label} (tarihsel waypoint)`;
-    label(ctx, wpLabel, p.sx + 12, p.sy - 12, '#fff', 'rgba(0,0,0,0.65)', 12);
+    label(ctx, wpLabel, p.sx + 10, p.sy - 10, '#efe6d6', 'rgba(26,22,18,0.6)', 12);
   });
 
-  // Planned route & start/goal markers (distinct cyan/aquamarine layer above mission corridor)
-  drawPlannedRoute(ctx, camera, w, h, plannedRoute, routeEndpoints);
-
-  // Player trail
-  if (trail.length > 1) {
-    ctx.beginPath(); trail.forEach((q, i) => { const p = T(q.xM, q.yM); i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy); });
-    const pp = T(astronaut.xM, astronaut.yM); ctx.lineTo(pp.sx, pp.sy);
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
-  }
+  // Yön kılavuzu: koyu kesikli çizgi + S/G işaretleri.
+  drawPlannedRoute(ctx, camera, w, h, guideRoute, routeEndpoints);
 
   // Presentation-only boot soles: each contour was sampled against the active DTM provider upstream.
   if (footprintTrail?.count > 0 && footprintTrail.quads instanceof Float32Array && footprintTrail.instances instanceof Float32Array) {
@@ -342,8 +327,6 @@ function drawGrid(ctx, w, h, camera) {
   const y0 = camera.cy - h / 2 / camera.pxPerM, y1 = camera.cy + h / 2 / camera.pxPerM;
   for (let x = Math.floor(x0 / step) * step; x <= x1; x += step) { const p = camera.toScreen(x, 0, w, h); ctx.beginPath(); ctx.moveTo(p.sx, 0); ctx.lineTo(p.sx, h); ctx.stroke(); }
   for (let y = Math.floor(y0 / step) * step; y <= y1; y += step) { const p = camera.toScreen(0, y, w, h); ctx.beginPath(); ctx.moveTo(0, p.sy); ctx.lineTo(w, p.sy); ctx.stroke(); }
-  ctx.fillStyle = 'rgba(255,200,120,0.85)'; ctx.font = '14px system-ui, sans-serif';
-  ctx.fillText('Raster verisi kullanılamıyor — zemin gösterilmiyor (yalnız metre ızgarası)', 16, h - 50);
 }
 
 function niceStep(v) { const p = 10 ** Math.floor(Math.log10(v)); for (const k of [1, 2, 5, 10]) if (k * p >= v) return k * p; return 10 * p; }
@@ -381,8 +364,10 @@ export function drawPlannedRoute(ctx, camera, w, h, plannedRoute, routeEndpoints
 
   ctx.save();
   if (hasRoute) {
+    // Ham A* köşeleri çizimden önce yumuşatılır (önbellekli; planner çıktısı değişmez).
+    const smooth = smoothPolylineCached(plannedRoute);
     const screenPts = [];
-    for (const pt of plannedRoute) {
+    for (const pt of smooth) {
       const xM = pt?.xM ?? pt?.x;
       const yM = pt?.yM ?? pt?.y;
       if (!Number.isFinite(xM) || !Number.isFinite(yM)) continue;
@@ -391,20 +376,14 @@ export function drawPlannedRoute(ctx, camera, w, h, plannedRoute, routeEndpoints
     if (screenPts.length >= 2) {
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
-      // Dark halo underlay for contrast over bright hillshade slopes
+      // Tek yön kılavuzu: koyu, kesikli, parlamasız.
       ctx.beginPath();
       screenPts.forEach((p, i) => (i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy)));
       ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(8, 28, 34, 0.82)';
-      ctx.lineWidth = 5;
-      ctx.stroke();
-
-      // Primary cyan/aquamarine dashed planned route stroke
-      ctx.beginPath();
-      screenPts.forEach((p, i) => (i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy)));
-      ctx.setLineDash([8, 4]);
-      ctx.strokeStyle = 'rgba(99, 230, 190, 0.92)';
-      ctx.lineWidth = 2.75;
+      ctx.strokeStyle = ROUTE_GUIDE_2D.halo; ctx.lineWidth = ROUTE_GUIDE_2D.haloWidth; ctx.stroke();
+      ctx.setLineDash(ROUTE_GUIDE_2D.dash);
+      ctx.strokeStyle = ROUTE_GUIDE_2D.color;
+      ctx.lineWidth = ROUTE_GUIDE_2D.lineWidth;
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -425,7 +404,7 @@ export function drawPlannedRoute(ctx, camera, w, h, plannedRoute, routeEndpoints
     label(ctx, tag, p.sx + 9, p.sy - 6, fill, 'rgba(0,0,0,0.75)', 11);
   };
 
-  if (startPt) drawEndpoint(startPt, 'S', '#63e6be');
-  if (goalPt) drawEndpoint(goalPt, 'G', '#ffb04a');
+  if (startPt) drawEndpoint(startPt, 'S', '#a9c4a0');
+  if (goalPt) drawEndpoint(goalPt, 'G', '#d9b48a');
   ctx.restore();
 }

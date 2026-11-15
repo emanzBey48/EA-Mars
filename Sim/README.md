@@ -127,7 +127,7 @@ Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/bu
 
 ## Doğrulama
 
-- `node --test test/`: 598/598 (çıkış kodu 0), mevcut çalışma ağacında 15 Kasım 2026 (`stage-final-acceptance.md`).
+- `node --test test/`: 601/601 (çıkış kodu 0), mevcut çalışma ağacında 15 Kasım 2026 (`stage-final-acceptance.md`).
 - `node scripts/preflight.mjs`: HAZIR (hata 0, uyarı 0).
 - `npm run smoke`: bu sürümde çalıştırılmadı; önceki sürüm kayıtları commit mesajlarında. Güncel smoke sonucu için yeniden çalıştırın.
 

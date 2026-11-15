@@ -91,7 +91,7 @@ Kullanışlı parametreler: `?view=3d`, `?scale=1|2|3`, `?shadows=off|low|high`,
 ## 6. Doğrulama durumu
 
 - `node scripts/preflight.mjs`: HAZIR (hata 0, uyarı 0).
-- `node --test test/`: 598/598, çıkış kodu 0 (bu belgeyi yazan oturumda, mevcut çalışma ağacında).
+- `node --test test/`: 601/601, çıkış kodu 0 (bu belgeyi yazan oturumda, mevcut çalışma ağacında).
 - Tarayıcı kabulü: `stage-final-acceptance.md` (PASS/FAIL/NOT-TESTED ve ekran görüntüleri).
 - `npm run smoke`: bu belge yazılırken çalıştırılmadı (başka oturumun portlarıyla çakışmaması için).
 - Aktif/aday DTM etiketleri: sayılar `data/dtm_subset.json`, `data/legacy-hirise/dtm_subset.json` ve ilgili `stage*` raporlarından yeniden okundu. Bu düzeltme turunda uygulama kodu çalıştırılmadı.

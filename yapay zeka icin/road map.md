@@ -7,7 +7,7 @@
 ## Proje kapanış durumu (15 Kasım 2026)
 
 **Kaynak:** dal `codex/efe-visual-realism` @ `53068e6` (çalışma klasörü `C:\Users\efese\Desktop\Nasaspaceapps-efe`; bu bölüm `Nasaspaceapps` ana klasöründeki dal bilgisini değiştirmez). Bu bölümün doğrulaması Efe'nin bu oturumdaki komut çıktılarıdır; bağımsız kabul değildir.
-- `node --test test/` → **598/598, çıkış kodu 0** (mevcut çalışma ağacı; ara çalıştırmada 573/573). `node scripts/preflight.mjs` → **HAZIR** (hata 0, uyarı 0).
+- `node --test test/` → **601/601, çıkış kodu 0** (mevcut çalışma ağacı; ara çalıştırmada 573/573). `node scripts/preflight.mjs` → **HAZIR** (hata 0, uyarı 0).
 - Başsız tarayıcı kabulü (8291 portu): `Sim/stage-final-acceptance.md`. Demo açılışı, 3D birinci şahıs ve eller, rota tercihi değişimi, minimap global/Jezero ve Viking, `?scale=3`, `?horizon=off`, 2D ve WebGL2 fallback **PASS**; no-data hücre reddi, sıçrama/iniş, varış rozeti, Sol 164 galerisi, ortomozaik hizası **NOT-TESTED**.
 - `npm run smoke` bu oturumda **çalıştırılmadı** (Ajan R'nin portları).
 

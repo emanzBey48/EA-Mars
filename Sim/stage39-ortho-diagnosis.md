@@ -1,8 +1,8 @@
 # Stage 39A: HiRISE Ortomozaik Kayıt Teşhisi v2 ve Hizalama Doğrulaması
 
 **Rapor Tarihi:** 14 Kasım 2026  
-**Yazar:** Efe (Marswalk Projesi)  
-**Kayıt ve Hizalama Durumu:** **WMTS Aritmetik Projeksiyon Kaydı Doğrulandı (Ortak TRN Baz Haritası: `JEZ_hirise_soc_006`, ±1.5 m Yerel Belirsizlik; Yarım-Piksel Görsel Kaya Kontrolü Doğrulanmamış)**
+**Yazar:** Alparslan (Entegrasyon & Hizalama Doğrulaması; K3-6 düzeltmesi)  
+**Kayıt ve Hizalama Durumu:** **WMTS Grid Aritmetik Projeksiyon Uyumu Doğrulandı (Ortak TRN Baz Haritası: `JEZ_hirise_soc_006`, ±1.5 m Yerel Belirsizlik; Yarım-Piksel Görsel Kaya Kontrolü Doğrulanmamış; 0.0 m değeri katalog/grid aritmetik tutarlılığıdır, bağımsız ampirik kanıt değildir)**
 
 ---
 

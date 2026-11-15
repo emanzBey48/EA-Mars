@@ -47,12 +47,12 @@ Kullanıcı açılır menüden üç farklı strateji seçebilir:
 2. **En Kısa Mesafe (`shortest`):** Sert eğim sınırını korurken daha kısa mesafeye öncelik veren `route-compare` senaryo önayarını kullanır.
 3. **En Düz / Düşük Eğim (`flattest`, Worker'da kanonik `gentle`):** Eğim ve pürüzlülük cezasını artıran, sert eğim sınırını koruyarak daha düz yüzeylere yönelen `route-compare` senaryo önayarını kullanır.
 
-Tercih değiştirildiğinde, uç noktalar seçiliyse Web Worker'a yalnızca `options.preference` kimliği gönderilir. Worker, kimliği `route-compare` önayarına çözer; maliyet parametreleri UI tarafından gönderilmez.
+Tercih değiştirildiğinde, uç noktalar seçiliyse Web Worker'a yalnızca `options.preference` kimliği gönderilir. Worker, kimliği `route-compare` önayarına çözer; maliyet parametreleri UI tarafından gönderilmez (K3-6 düzeltmesi: önceki taslaktaki `costParams` aktarımı kaldırılmıştır; tercihler salt kimlik üzerinden çözümlenir).
 
 ### 3.3 Zenginleştirilmiş Rota Özet Kartı
 Rota başarıyla hesaplandığında aşağıdaki metrikler dinamik olarak kartta listelenir:
 - **Toplam mesafe:** Metre cinsinden rota uzunluğu.
-- **Tahmini yürüme süresi:** 0,8 m/s senaryo hızlı yürüyüş varsayımıyla dakika ve saniye (ör. `15 dk 13 sn`).
+- **Tahmini yürüme süresi:** Simülasyon yürüme hızı (`config.js SCENARIO.walkSpeedMps = 1,2 m/s`) ile dakika ve saniye (ör. 730 m için simülasyon saati 10 dk 8 sn; 8x zaman hızlandırmasıyla duvar saati ~1 dk 16 sn; K5-11 birleşik hız).
 - **Ortalama yürünebilirlik:** EVA yürünebilirlik puanı (0–100 arası; yeşil $\ge 70$, sarı $\ge 40$, kırmızı $< 40$ renk rozetleriyle).
 - **En dik eğim:** Derece cinsinden rotadaki maksimum eğim ve maliyet çarpanı.
 - **Kot değişimi ($\Delta Z$):** Kot kazanımı, kot kaybı ve net yükseklik farkı (ör. `+3.4 m / −16.8 m (net: −13.4 m)`).
@@ -69,4 +69,4 @@ Rota başarıyla hesaplandığında aşağıdaki metrikler dinamik olarak kartta
 3. **No-Data Koruması:**
    No-data veya DTM kapsamı dışındaki alanlara işaretçi bırakılmasına izin verilmez (fail-closed); bu alanlar sıfır kotuna dönüştürülmez veya geçilebilir kabul edilmez.
 4. **Senaryo Parametreleri:**
-   0,8 m/s yürüme hızı ve tercih ağırlıkları NASA operasyonel sınırı değil, açıkça etiketli senaryo varsayımıdır.
+   1,2 m/s yürüme hızı (`SCENARIO.walkSpeedMps`) ve tercih ağırlıkları NASA operasyonel sınırı değil, açıkça etiketli senaryo varsayımıdır. Eski 0,8 m/s hızı simülasyon tek kaynağıyla (K5-11) eşitlenmiştir.

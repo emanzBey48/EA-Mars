@@ -1261,7 +1261,7 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
         gl.uniformMatrix4fv(locations.viewProjection, false, viewProjection);
         horizonDrawn = true;
       }
-      lap('skyMs');
+      lap('horizonMs');
 
       // Pass 0: Jezero Crater Terrain Mesh
       setIdentityObject(0, [0.78, 0.43, 0.25]);

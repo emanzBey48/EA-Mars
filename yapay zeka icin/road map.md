@@ -36,7 +36,7 @@
 - K3-2 (minimap EDGE_UNKNOWN reddi): **KOD TAMAMLANDI** — Alparslan `c8e2d09` (birleşme `4f741a5`), uyumluluk `b86d58a`. Tarayıcıda hücre reddi kanıtı **NOT-TESTED** (`Sim/stage-final-acceptance.md`).
 - K3-3 (rig test sınırı onayı, Alparslan), K3-4 (rig `left*` adları, Efe): **bu güncellemede kanıt toplanmadı; önceki durum korunur (açık).**
 - K3-5 (datum): **38A TAMAMLANDI** (`2a2b2c2`), **38B TAMAMLANDI** (Alparslan): `Sim/public/js/config.js` içinde `verticalDatum`, `verticalDatumVerified: false`, `verticalDatumEvidence: null` değerleri `data/dtm_subset.json` ile eşitlendi; `scripts/validate-data-integrity.mjs` 0 hata/çıkış kodu 0 verdi; `npm test` 681/681 geçti.
-- K3-6 (rapor metinleri, Alparslan): **bu güncellemede kanıt toplanmadı; önceki durum korunur.** Not: ROUTE_PREFERENCES costParams tablosu `main.js` içinden kaldırılmış; ağırlıklar yalnız `route/route-compare.js` içinde.
+- K3-6 (rapor metinleri, Alparslan): **TAMAMLANDI:** `stage39-ortho-diagnosis.md` yazarı ve 0.0 m aritmetik tanımı düzeltildi; `stage34b-minimap-acceptance.md` içindeki `costParams` aktarımı kaldırılıp 1,2 m/s tek hızına bağlandı; `renderer.js:1264` içinde `horizonMs` ayrıştırıldı.
 - K3-7 (aktif arazi kararı): **AÇIK — karar bekliyor** (bkz. K6 bölümü, c).
 - K3-8 (ortomozaik ↔ aktif DTM hizası): **ÖLÇÜLDÜ, KANITLANAMADI** — `5cca30c`: aktif legacy DTM için high-pass tepe r = 0,021 (`Sim/stage-k3-legacy-analysis.md`). "±1,5 m" değeri yalnız USGS adayı penceresinde ölçüldü (`39A`, `5db4a73`); aktif DTM ile hizalı denmez.
 - K3-9 (analizlerin aktif DTM'de yeniden koşulması): **TAMAMLANDI** — `5cca30c`.
@@ -47,7 +47,7 @@
 - K4 (yarışma sonrası: 41–45): kapsam dışı.
 
 **Bilinen sınırlar ve tutarsızlıklar (ayrıntı `Sim/DEMO_NOTES.md` §3–4):**
-- Rota süresi tahmini 0,8 m/s (`route-service.js:301`, `main.js:348`); simülasyon 1,2 m/s × 8 (`config.js`). Tutarsız.
+- Rota süresi: Tek kaynak olarak simülasyon yürüyüş hızına (1,2 m/s, `SCENARIO.walkSpeedMps`) bağlandı ve simülasyon / duvar saati açık etiketlendi (K5-11, TAMAMLANDI).
 - "En düz" tercihinin maksimum eğimi dengeliden yüksek çıktı (10,1° / 9,8°); tercih adı ölçümle açıklanmıyor.
 - Rota uzunlukları UI (730/731 m) ile devir notu (730,505/732,161 m) arasında; doğrulanmadı.
 - Göz yüksekliği kodda 1,48 m; `e9a0a78` mesajı 1,75 m.
@@ -74,10 +74,10 @@
 | K5-8 (P1) | Impact paragrafı | Efe 0,5 + Kullanıcı 0,2 | 0,7 | Ölçüsüz iddia yok |
 | K5-9 (P1) | Creativity tek slayt | Kullanıcı 0,8 (Efe metin) | 0,8 | Tek slayt, ekran görüntüsü kanıtı |
 | K5-10 (P1) | FPS tek değer (82–88, 54, 23–30 FPS çelişkisi; K2-6 ile) | Alparslan 1,0 | 1,0 | Cihaz ve koşul yazılı, tek değer |
-| K5-11 (P1) | Rota hızı tek değer (0,8 vs 1,2 m/s) | Alparslan 0,3 veya Efe 0,2 | 0,3 | Tek değer ya da açık etiket |
+| K5-11 (P1) | Rota hızı tek değer (0,8 vs 1,2 m/s) | Alparslan / Efe | 0,3 | **TAMAMLANDI:** 1,2 m/s (`SCENARIO.walkSpeedMps`) tek kaynak; simülasyon ve duvar saati açık etiketli |
 | K5-12 (P1) | Ortomozaik ↔ aktif DTM ölçümü (K3-8) | Efe 3,0 | 3,0 | Ölçüm ya da "kanıtlanamadı" |
 | K5-13 (P1) | K1-2 tarayıcı kabulü tamamlama | Alparslan 2,0 | 2,0 | Her madde PASS/FAIL/NOT-TESTED + kanıt |
-| K5-14 (P1) | Rapor metin düzeltmeleri (K3-6) | Alparslan 0,5 + Efe 0,2 | 0,7 | Üç metin düzeltildi |
+| K5-14 (P1) | Rapor metin düzeltmeleri (K3-6) | Alparslan | 0,7 | **TAMAMLANDI:** `stage34b` costParams/1,2 m/s, `stage39` yazar/aritmetik tanımı, `renderer.js` horizonMs düzeltildi |
 | K5-15 (P1) | Repo kökü README ve LICENSE kararı | Efe 0,7 + Kullanıcı 0,2 | 0,9 | Okunabilir README, lisans kararı yazılı |
 | K5-16 (P2) | K2-5 gerçekçilik turu, K2-6 GPU tablosu, K3-3/K3-4 | Efe / Alparslan | 6,5 | Olursa; teslime dahil değil |
 

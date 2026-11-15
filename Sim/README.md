@@ -94,7 +94,7 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 - **Yerel düzlem:** x doğu, y kuzey, metre; orijin Sol 120 / WB1. Equirectangular, küre R = 3396,190 km, merkez meridyen 0°, standart enlem 0°, planetosentrik. Ölçek ekvatorda doğrudur; ~18,4°K'da doğu-batı mesafeleri ~%5,4 fazla çıkar.
 - **Piksel dönüşümü (PixelIsArea):** `X = 4577366,5 + col`, `Y = 1106617,5 − row`.
 - **Aktif DTM (karar bekliyor, K3-7):** Ekranda legacy PDS3 DTEEC yedeği (`data/legacy-hirise/dtm_subset.json`) gösterilir. Çerçeve dosyadan: EQUIRECTANGULAR, PLANETOCENTRIC, EAST, rotasyon 0; küre yarıçapı 3394,8398133163 km; merkez meridyen 77,44°E; standart enlem 15° (`crsText`); map scale 1,0096633268711 m/px; line/sample projection offset 1088495,5 / 3210,5. Etiket datumu: "Mars 2000 Datum (martian equipotential surface)". USGS 1 m adayı (`data/dtm_subset.json`) düşey datum kanıtı olmadığı için reddedilir (`surface/registry.js` `resolveActiveProvider`, neden `needs_review_verticalReference`). Legacy'nin kalması mı, USGS'nin `needs_review` etiketiyle etkinleşmesi mi, ürün kararıdır.
-- **Düşey datum (USGS adayı):** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid). `data/dtm_subset.json` içinde `verticalDatumVerified: false` yazar; uygulama kodunda `config.js` bu değeri `true` gösterir (bkz. aşağıdaki sınırlar).
+- **Düşey datum (USGS adayı):** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid). `data/dtm_subset.json` ve `config.js` içinde `verticalDatumVerified: false` olarak eşitlenmiştir (Stage 38B / K5-6). Mutlak kot iddiası yapılmaz.
 - **No-data:** `0xFF7FFFFB` tam bit deseni `no_data`; geçerli aralık dışı `invalid`. Asla 0 ile değiştirilmez. Eğim, 3×3 pencerede bir hücre bile geçersizse üretilmez.
 - **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere yüklenir; dışı `out_of_bounds` olarak raporlanır. Aktif legacy penceresi 1 884 301 geçerli hücre, 0 no-data; USGS adayı penceresi 1 902 260 geçerli hücre, 0 no-data.
 - **Rota kökeni:** İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değildir. PLACES kullanılmadı.
@@ -112,13 +112,13 @@ Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/bu
 ## Bilinen sınırlar
 
 - **Yürünebilirlik:** Planlama göstergesidir. Güvenli rota sertifikası değildir. Eşikler senaryo parametresidir.
-- **Rota süresi:** Rota panelindeki tahmin 0,8 m/s kullanır; simülasyon 1,2 m/s × 8 kullanır. Bu tutarsızlık bilinmektedir (`route-service.js:301`, `main.js:348`).
+- **Rota süresi:** Tek kaynak olarak simülasyon yürüyüş hızına (1,2 m/s, `SCENARIO.walkSpeedMps`) eşitlenmiştir (K5-11 / `stage-route-eta-note.md`). Simülasyon saati ve duvar saati ayrı etiketlerle sunulur; eski 0,8 m/s sabit değeri kaldırılmıştır.
 - **"En düz" tercihi:** Maksimum eğimi dengeli tercihten düşürmeyebilir (aktif legacy UI özetinde 10,1° ve 9,8°; USGS adayında 9,27° ve 9,81°). Tercih adı ne ölçtüğünü tam açıklamaz.
 - **Aktif DTM ↔ analiz DTM'i:** UI aktif legacy DTM ile çalışır; rota ve eğim analizlerinin çoğu USGS adayı penceresinde yapıldı. Aynı uç noktalarda en kısa rota maks. eğimi UI'de 14,1°, USGS adayında 10,64°. Analizlerin legacy üzerinde yeniden koşulması K3-9'dadır.
 - **Ortomozaik hizası:** ±1,5 m belirsizlik (USGS adayı penceresinde ölçüldü); aktif legacy DTM ile hizası **ölçülmedi**; yarım piksel hizası kanıtlanmadı. `hud.js:104` uyarısı WMTS katmanıyla çelişkili görünebilir.
 - **Viking:** Renk bağlamıdır (232 m/px). Lisans "belirtilmemiş"; teyit bekliyor (K1-4).
 - **MOLA ufku:** Datum doğrulanmadı (`needs_review`); uzak silüet alçak ve bulanık, bölgesel bağlam olarak sunulur.
-- **Datum bayrağı:** `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` (USGS adayı) `false`. Aktif legacy etiketinin datum ifadesi 38A denetiminde incelenmedi. Kanıt eklenene kadar mutlak kot iddiası yapılmaz (K3-5, açık).
+- **Datum bayrağı:** `config.js` içinde `verticalDatumVerified: false` yapılarak `data/dtm_subset.json` ile eşitlendi (Stage 38B / K5-6). Kanıt eklenene kadar mutlak kot iddiası yapılmaz.
 - **Görsel kalite:** Gölge yumuşak; eller kalın; uzak ufuk silüeti alçaktır. Bunlar sunum tercihleridir, ölçülmüş değildir.
 - **Göz yüksekliği:** Kod 1,48 m; bir commit mesajı 1,75 m diyor. Suit ölçümü yoktur.
 - **Atmosfer:** Mars basıncı ve yoğunluğu (NSSDC ortalama/mevsimsel) gösterilir; hareket fiziğine sürükleme eklenmemiştir.
@@ -127,7 +127,7 @@ Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/bu
 
 ## Doğrulama
 
-- `node --test test/`: 612/612 (çıkış kodu 0), mevcut çalışma ağacında 15 Kasım 2026 (`stage-final-acceptance.md`).
+- `node --test test/`: 681/681 (çıkış kodu 0), mevcut çalışma ağacında 15 Kasım 2026.
 - `node scripts/preflight.mjs`: HAZIR (hata 0, uyarı 0).
 - `npm run smoke`: bu sürümde çalıştırılmadı; önceki sürüm kayıtları commit mesajlarında. Güncel smoke sonucu için yeniden çalıştırın.
 

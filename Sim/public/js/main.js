@@ -49,7 +49,15 @@ import { createBiomeChip } from './view/biome-chip.js';
 import { chaikinSmooth } from './simulation/path-smooth-local.js';
 import { createCrewStrip } from './view/crew-strip.js';
 
+import { initI18n } from './app/i18n.js';
+import { createLangSwitch } from './app/lang-switch.js';
+
 const $ = (id) => document.getElementById(id);
+initI18n();
+createLangSwitch();
+window.addEventListener('langchange', () => {
+  try { minimapController.draw(); hudMinimapController?.draw?.(); drawMinimapModeOverlay(); } catch { /* yok say */ }
+});
 const urlParams = new URLSearchParams(window.location.search);
 const debugParams = urlParams;
 const debugEnabled = debugParams.get('debug') === '1' || window.__MARSWALK_ENABLE_DEBUG__ === true;

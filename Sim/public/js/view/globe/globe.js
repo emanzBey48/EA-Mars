@@ -207,6 +207,118 @@ void main(){
   vec3 col = mix(vec3(0.35,0.6,1.0), vec3(1.0,0.55,0.25), g);
   gl_FragColor = vec4(col * g * lit * 0.9, 1.0);
 }`;
+// ---------- Prosedürel uzay arka planı (harici görsel yok; tohumlu, deterministik) ----------
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function hash2(x, y, seed) {
+  let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(seed, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function vnoise(x, y, seed) {
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = hash2(xi, yi, seed), b = hash2(xi + 1, yi, seed), c = hash2(xi, yi + 1, seed), d = hash2(xi + 1, yi + 1, seed);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, y, seed, oct = 4) {
+  let s = 0, amp = 0.5, f = 1, n = 0;
+  for (let i = 0; i < oct; i++) { s += amp * vnoise(x * f, y * f, seed + i * 17); n += amp; amp *= 0.5; f *= 2.03; }
+  return s / n;
+}
+
+export const STAR_COUNT = 3200;
+// Yıldız alanı: çoğu sönük, birkaç parlak; hafif renk sıcaklığı. Dönüş: { pos(xyz*radius), data(size,bright), color(rgb) }.
+export function makeStarField(n = STAR_COUNT, seed = 987654321, radius = 40) {
+  const rnd = mulberry32(seed);
+  const pos = new Float32Array(n * 3), data = new Float32Array(n * 2), color = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const z = rnd() * 2 - 1, a = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
+    pos.set([radius * r * Math.cos(a), radius * z, radius * r * Math.sin(a)], i * 3);
+    const m = rnd();
+    data[i * 2] = 1 + 2.4 * Math.pow(rnd(), 7) + (m > 0.985 ? 0.8 : 0); // boyut (px): çoğu ~1
+    data[i * 2 + 1] = 0.1 + 0.55 * Math.pow(m, 3) + (m > 0.985 ? 0.3 : 0);  // parlaklık: çoğu sönük
+    const t = rnd(); // 0..1 sıcaklık: soluk mavi-beyaz / sıcak beyaz / çok az soluk turuncu
+    const c = t < 0.55 ? [0.80, 0.87, 1.0] : t < 0.95 ? [1.0, 0.96, 0.90] : [1.0, 0.82, 0.64];
+    color.set(c, i * 3);
+  }
+  return { pos, data, color, count: n };
+}
+
+// Samanyolu benzeri soluk çapraz bant + toz şeritleri + çok hafif nebula. RGBA Uint8Array (w*h*4).
+// Her kanal en çok ~0.25 (bant) / ~0.12 (nebula) düzeyinde tutulur; doygunluk düşük.
+export function makeGalaxyPixels(w = 1024, h = 512, seed = 4242) {
+  const out = new Uint8Array(w * h * 4), rnd = mulberry32(seed ^ 0x9e37);
+  const ang = -0.38, ca = Math.cos(ang), sa = Math.sin(ang), asp = w / h;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const u = x / w, v = y / h, px = (u - 0.5) * asp, py = v - 0.5;
+      const along = px * ca + py * sa;
+      let across = -px * sa + py * ca;
+      across += (fbm(u * 3, v * 3, seed + 1, 3) - 0.5) * 0.22; // dalgalı bant
+      const core = Math.exp(-Math.pow(across / 0.11, 2)), halo = Math.exp(-Math.pow(across / 0.3, 2));
+      const lump = 0.55 + 0.9 * fbm(along * 2.6 + 5, across * 2.6, seed + 2, 4);
+      let lum = (0.62 * core + 0.3 * halo) * lump * Math.exp(-along * along * 0.35);
+      const dustN = fbm(u * 14, v * 14, seed + 3, 5), lane = Math.exp(-Math.pow((across - 0.015) / 0.035, 2));
+      lum *= 1 - Math.min(0.85, lane * smooth(0.42, 0.62, dustN) * 1.1);
+      const fine = fbm(u * 40, v * 40, seed + 4, 3); // ince toz şeritleri
+      lum *= 0.82 + 0.3 * fine;
+      const warm = fbm(u * 2.2 + 9, v * 2.2, seed + 5, 3);
+      // koyu mavi-gri <-> hafif mor-kahve
+      let r = 0.17 + 0.10 * warm, g = 0.20 + 0.03 * warm, b = 0.30 - 0.07 * warm;
+      r *= lum; g *= lum; b *= lum;
+      // bant içi ince yıldız tozu
+      if (rnd() < 0.05 * core * lump) { const s = 0.04 + 0.14 * rnd(); r += s; g += s; b += s * 1.05; }
+      // nebula lekeleri (<=0.12)
+      const n1 = blob(u, v, 0.3, 0.68, 0.17, asp) * smooth(0.4, 0.75, fbm(u * 6, v * 6, seed + 6, 4));
+      const n2 = blob(u, v, 0.74, 0.3, 0.14, asp) * smooth(0.4, 0.75, fbm(u * 6 + 3, v * 6, seed + 7, 4));
+      r += 0.10 * n1 + 0.05 * n2; g += 0.035 * n1 + 0.06 * n2; b += 0.08 * n1 + 0.10 * n2;
+      const dither = (rnd() - 0.5) / 255;
+      const i = (y * w + x) * 4;
+      out[i] = Math.max(0, Math.min(255, Math.round((Math.min(0.25, r) + dither) * 255)));
+      out[i + 1] = Math.max(0, Math.min(255, Math.round((Math.min(0.25, g) + dither) * 255)));
+      out[i + 2] = Math.max(0, Math.min(255, Math.round((Math.min(0.25, b) + dither) * 255)));
+      out[i + 3] = 255;
+    }
+  }
+  return out;
+}
+function smooth(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+function blob(u, v, cx, cy, r, asp) { const dx = (u - cx) * asp, dy = v - cy; return Math.exp(-(dx * dx + dy * dy) / (r * r)); }
+
+const BG_VS = `
+attribute vec2 a_p; varying vec2 v_uv;
+void main(){ v_uv = a_p*0.5+0.5; gl_Position = vec4(a_p, 0.9999, 1.0); }`;
+const BG_FS = `
+precision mediump float;
+uniform sampler2D u_bg; uniform vec2 u_off; varying vec2 v_uv;
+void main(){
+  vec3 c = texture2D(u_bg, vec2(v_uv.x, 1.0 - v_uv.y) * 0.94 + 0.03 + u_off).rgb;
+  float vg = length((v_uv - 0.5) * vec2(1.15, 1.0));
+  c *= 1.0 - 0.55 * smoothstep(0.45, 1.05, vg);
+  gl_FragColor = vec4(c + vec3(0.006, 0.008, 0.016), 1.0);
+}`;
+const STAR_VS = `
+attribute vec3 a_pos; attribute vec2 a_data; attribute vec3 a_col;
+uniform mat4 u_proj, u_view, u_rot; uniform float u_dpr, u_time, u_twinkle;
+varying float v_b; varying vec3 v_c;
+void main(){
+  float ph = a_pos.x*40.0 + a_pos.y*17.0 + a_pos.z*9.0;
+  float tw = 1.0 - u_twinkle*0.18*(0.5 + 0.5*sin(u_time*(0.8 + fract(ph)*1.6) + ph));
+  v_b = a_data.y * tw; v_c = a_col;
+  gl_PointSize = a_data.x * u_dpr;
+  gl_Position = u_proj*u_view*(u_rot*vec4(a_pos,1.0));
+}`;
+const STAR_FS = `
+precision mediump float;
+varying float v_b; varying vec3 v_c;
+void main(){
+  float d = length(gl_PointCoord-0.5);
+  float a = exp(-d*d*26.0) + 0.22*smoothstep(0.5,0.0,d);
+  gl_FragColor = vec4(v_c, clamp(a*v_b,0.0,1.0));
+}`;
+
 const POINT_VS = `
 attribute vec3 a_pos; attribute vec2 a_data;
 uniform mat4 u_proj, u_view, u_rot; uniform float u_dpr, u_time, u_twinkle, u_pulse;
@@ -278,14 +390,18 @@ export function createGlobe({ canvas, dataBase = '/data/viking-mdim', onPick, on
   const posBuf = mkBuf(gl.ARRAY_BUFFER, mesh.pos), uvBuf = mkBuf(gl.ARRAY_BUFFER, mesh.uv), idxBuf = mkBuf(gl.ELEMENT_ARRAY_BUFFER, mesh.idx);
 
   // yıldızlar
-  const N = 1400, sd = new Float32Array(N * 3), sdata = new Float32Array(N * 2);
-  let seed = 987654321; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-  for (let i = 0; i < N; i++) {
-    const z = rnd() * 2 - 1, a = rnd() * Math.PI * 2, r = Math.sqrt(1 - z * z);
-    sd.set([40 * r * Math.cos(a), 40 * z, 40 * r * Math.sin(a)], i * 3);
-    sdata[i * 2] = 1 + rnd() * 2.2; sdata[i * 2 + 1] = 0.25 + rnd() * 0.75;
-  }
-  const starPos = mkBuf(gl.ARRAY_BUFFER, sd), starData = mkBuf(gl.ARRAY_BUFFER, sdata);
+  const stars = makeStarField();
+  const N = stars.count;
+  const starPos = mkBuf(gl.ARRAY_BUFFER, stars.pos), starData = mkBuf(gl.ARRAY_BUFFER, stars.data), starCol = mkBuf(gl.ARRAY_BUFFER, stars.color);
+  const starPrg = program(gl, STAR_VS, STAR_FS), bgPrg = program(gl, BG_VS, BG_FS);
+  const reducedMotion = !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const bgQuad = mkBuf(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]));
+  const bgTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, bgTex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, makeGalaxyPixels(1024, 512));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
   const dyn = { pos: gl.createBuffer(), data: gl.createBuffer() };
   const marker = { start: null, end: null };
@@ -428,13 +544,24 @@ export function createGlobe({ canvas, dataBase = '/data/viking-mdim', onPick, on
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // yıldızlar
-    gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-    gl.useProgram(pts.p);
-    setMats(pts, proj, viewM, rot4(rotationMatrix(view.yaw * 0.15, view.pitch * 0.15)));
-    gl.uniform1f(pts.u.u_dpr, dpr); gl.uniform1f(pts.u.u_time, now / 1000); gl.uniform1f(pts.u.u_twinkle, 1); gl.uniform1f(pts.u.u_pulse, 0);
-    gl.uniform1f(pts.u.u_round, 1); gl.uniform3f(pts.u.u_color, 0.85, 0.9, 1);
-    bindAttr(starPos, gl.getAttribLocation(pts.p, 'a_pos'), 3); bindAttr(starData, gl.getAttribLocation(pts.p, 'a_data'), 2);
+    gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+    // galaksi bandı (tek seferlik prosedürel doku; kare başına tek dörtgen)
+    gl.useProgram(bgPrg.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, bgTex); gl.uniform1i(bgPrg.u.u_bg, 0);
+    const par = reducedMotion ? 0 : 1;
+    gl.uniform2f(bgPrg.u.u_off, par * (0.010 * Math.sin(now / 1000 * 0.03) + 0.008 * Math.sin(view.yaw * 0.25)), par * 0.006 * Math.sin(now / 1000 * 0.021));
+    bindAttr(bgQuad, gl.getAttribLocation(bgPrg.p, 'a_p'), 2);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    // yıldızlar: kürenin dönüşünden bağımsız çok yavaş sürüklenme + hafif bağ
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    gl.useProgram(starPrg.p);
+    const drift = reducedMotion ? 0 : now / 1000 * 0.004;
+    setMats(starPrg, proj, viewM, rot4(rotationMatrix(view.yaw * 0.04 + drift, view.pitch * 0.04)));
+    gl.uniform1f(starPrg.u.u_dpr, dpr); gl.uniform1f(starPrg.u.u_time, now / 1000); gl.uniform1f(starPrg.u.u_twinkle, reducedMotion ? 0 : 1);
+    bindAttr(starPos, gl.getAttribLocation(starPrg.p, 'a_pos'), 3); bindAttr(starData, gl.getAttribLocation(starPrg.p, 'a_data'), 2);
+    bindAttr(starCol, gl.getAttribLocation(starPrg.p, 'a_col'), 3);
     gl.drawArrays(gl.POINTS, 0, N);
+    gl.disableVertexAttribArray(gl.getAttribLocation(starPrg.p, 'a_col'));
 
     // gezegen
     gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);

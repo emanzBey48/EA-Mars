@@ -7,7 +7,7 @@
 .mw-globe-title { position: absolute; left: 28px; top: 24px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
 .mw-globe-title strong { font-size: 22px; letter-spacing: 0.28em; font-weight: 600; color: #ffb27a; }
 .mw-globe-title span { font-size: 13px; color: #aebbd0; }
-.mw-globe-hint { position: absolute; left: 28px; bottom: 22px; font-size: 12px; color: #8696ad; pointer-events: none; }
+.mw-globe-hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: 22px; max-width: calc(100% - 400px); text-align: center; font-size: 12px; color: #9aa8bd; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); pointer-events: none; }
 .mw-globe-tip { position: absolute; pointer-events: none; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px;
   background: rgba(8, 12, 22, 0.62); border: 1px solid rgba(110, 220, 255, 0.3); border-radius: 8px; font-size: 12px; max-width: 260px; }
 .mw-globe-tip { z-index: 3; }
@@ -54,6 +54,7 @@
 @media (max-width: 720px) {
   .mw-globe-panel { right: 8px; left: 8px; width: auto; top: auto; bottom: 8px; max-height: 55%; transform: none; }
   .mw-globe-panel--hidden { transform: translateY(120%); }
+  .mw-globe-hint { max-width: calc(100% - 32px); bottom: 12px; }
 }
 
 /* SİMÜLE ET nabız animasyonu */

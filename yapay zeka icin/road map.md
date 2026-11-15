@@ -46,6 +46,34 @@
 
 **Doğrulama notu:** Bu bölümden önceki "Doğrulama durumu" satırındaki 527/527 ve 38/38 sonuçları `b5be052` anına aittir; güncel sayı yukarıdadır. Taban satırı `3e1f570` olarak yazılmıştır; bu oturumda çalışılan dal bundan ileridedir.
 
+## DERECE PLANI (K5) — 15 Kasım 2026
+
+**Tam plan:** `Sim/stage-judging-plan.md` (resmî ölçüt araştırması, ölçüt eşleme, riskler, soru listesi).
+**Resmî kaynak durumu:** spaceappschallenge.org sayfaları bu ortamda açılamadı (TLS sertifika hatası); jüri ölçütleri arama özetinden, teslim kuralları (demo ≤30 sn veya ≤7 slayt) teyit edilmeden kullanılır. **Son teslim saati doğrulanamadı; arama özetine göre 15 Kasım 23:59 olabilir** — K5-1 ilk iş.
+**Ölçütler (arama özeti):** Impact, Creativity, Validity, Relevance, Presentation.
+
+| # | İş | Sahip | Süre (sa) | Kabul |
+|---|---|---|---|---|
+| K5-1 (P0) | Son teslim saati, demo sınırı, challenge başlığını resmî sayfadan teyit et | Kullanıcı elle | 0,3 | Bitiş saati ve "Martian Map" başlığı yazılı |
+| K5-2 (P0) | 7 slaytlık deck (metin Efe, tasarım kullanıcı) | Efe 1,5 + Kullanıcı 2,0 | 3,5 | ≤7 slayt, İngilizce, her sayı DEMO_NOTES'a bağlı |
+| K5-3 (P0) | Yedek demo kaydı (60–90 sn `?demo=1`) ve 2D fallback görüntüsü | Kullanıcı 0,5 + Alparslan 0,5 | 1,0 | Tek dosya, kaynak sürümü yazılı |
+| K5-4 (P0) | 14 kaynaklı atıf listesi; Viking lisans metni elle (K1-4 ile birlikte) | Efe 1,0 + Kullanıcı 0,5 | 1,5 | Tüm kaynak atıflı; uydurma lisans yok |
+| K5-5 (P0) | Proje sayfası metni (özet, sınırlar paragrafı) | Efe 1,0 + Kullanıcı 0,5 | 1,5 | Zorunlu alanlar; her iddia depoya bağlı |
+| K5-6 (P0) | Datum bayrağı: `config.js:56` kanıt yoksa `false` (K3-5 ile) | Alparslan 0,5 | 0,5 | İki kaynak aynı değer |
+| K5-7 (P0) | Aktif arazi kararı (K3-7) ve uygulaması | Kullanıcı karar 0,2 + Alparslan 2,0 | 2,2 | Karar kayıtlı, UI/doküman tutarlı |
+| K5-8 (P1) | Impact paragrafı | Efe 0,5 + Kullanıcı 0,2 | 0,7 | Ölçüsüz iddia yok |
+| K5-9 (P1) | Creativity tek slayt | Kullanıcı 0,8 (Efe metin) | 0,8 | Tek slayt, ekran görüntüsü kanıtı |
+| K5-10 (P1) | FPS tek değer (82–88, 54, 23–30 FPS çelişkisi; K2-6 ile) | Alparslan 1,0 | 1,0 | Cihaz ve koşul yazılı, tek değer |
+| K5-11 (P1) | Rota hızı tek değer (0,8 vs 1,2 m/s) | Alparslan 0,3 veya Efe 0,2 | 0,3 | Tek değer ya da açık etiket |
+| K5-12 (P1) | Ortomozaik ↔ aktif DTM ölçümü (K3-8) | Efe 3,0 | 3,0 | Ölçüm ya da "kanıtlanamadı" |
+| K5-13 (P1) | K1-2 tarayıcı kabulü tamamlama | Alparslan 2,0 | 2,0 | Her madde PASS/FAIL/NOT-TESTED + kanıt |
+| K5-14 (P1) | Rapor metin düzeltmeleri (K3-6) | Alparslan 0,5 + Efe 0,2 | 0,7 | Üç metin düzeltildi |
+| K5-15 (P1) | Repo kökü README ve LICENSE kararı | Efe 0,7 + Kullanıcı 0,2 | 0,9 | Okunabilir README, lisans kararı yazılı |
+| K5-16 (P2) | K2-5 gerçekçilik turu, K2-6 GPU tablosu, K3-3/K3-4 | Efe / Alparslan | 6,5 | Olursa; teslime dahil değil |
+
+**Toplam tahmini:** P0 ≈ 10,5 sa (Efe 3,5; Alparslan 3,0; Kullanıcı 4,0 — kişi toplamı, paralel çalışılırsa takvim kısalır). P1 ≈ 9,4 sa.
+**Sınır:** Puan için iddia şişirilmez; "güvenli rota", "canlı telemetri", "kanıtlı hizalama", "Viking arazi rengi" iddiaları kullanılmaz.
+
 ## Durum etiketleri ve bilgi kaynağı
 
 - **TAMAMLANDI — dosya/kaynakla:** Güncel dosyalar veya birincil kaynak bunu destekliyor.

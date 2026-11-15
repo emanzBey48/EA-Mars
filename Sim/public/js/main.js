@@ -106,7 +106,7 @@ let geologyContactField = null;
 let geologySegmentsLocal = [];
 let geologyLinePositions = new Float32Array();
 let geologyStatus = 'loading';
-let geologyLayerVisible = true;
+let geologyLayerVisible = false;
 let minimapEndpoints = { start: null, end: null };
 let routeWorker = null;
 let routeWorkerId = 0;
@@ -150,6 +150,33 @@ const minimapEndLabel = $('minimap-end');
 const minimapStatus = $('minimap-status');
 const minimapGeologyToggle = $('minimap-toggle-geology');
 const minimapArchiveToggle = $('minimap-toggle-archive');
+const hudToggleGeology = $('hud-toggle-geology');
+const hudToggleArchive = $('hud-toggle-archive');
+
+function setGeologyVisible(visible) {
+  geologyLayerVisible = Boolean(visible);
+  if (geologyToggle) geologyToggle.checked = geologyLayerVisible;
+  if (minimapGeologyToggle) minimapGeologyToggle.checked = geologyLayerVisible;
+  if (hudToggleGeology) {
+    hudToggleGeology.setAttribute('aria-pressed', String(geologyLayerVisible));
+    hudToggleGeology.classList.toggle('is-active', geologyLayerVisible);
+  }
+  refreshMinimapOverlays();
+  updateHud();
+}
+
+function setArchiveVisible(visible) {
+  const isVis = Boolean(visible);
+  const archiveMainToggle = $('toggle-archive-traverse');
+  if (archiveMainToggle) archiveMainToggle.checked = isVis;
+  if (minimapArchiveToggle) minimapArchiveToggle.checked = isVis;
+  if (hudToggleArchive) {
+    hudToggleArchive.setAttribute('aria-pressed', String(isVis));
+    hudToggleArchive.classList.toggle('is-active', isVis);
+  }
+  refreshMinimapOverlays();
+  updateHud();
+}
 const minimapOrthoToggle = $('minimap-toggle-ortho');
 const minimapLayerStatus = $('minimap-layer-status');
 const minimapHeatmapToggle = $('minimap-toggle-heatmap');
@@ -319,10 +346,8 @@ function applyCustomMissionRoute(startPt, endPt, { startLabel = 'Kullanıcı Ba�
     build3dMarkersOnce();
   }
 
-  const archiveMainToggle = $('toggle-archive-traverse');
   if (custom) {
-    if (archiveMainToggle) archiveMainToggle.checked = false;
-    if (minimapArchiveToggle) minimapArchiveToggle.checked = false;
+    setArchiveVisible(false);
   }
 
   resetFootprints();
@@ -965,12 +990,18 @@ minimapHeatmapToggle.addEventListener('change', () => {
 $('minimap-fit').addEventListener('click', () => minimapController.fit());
 $('minimap-clear-points').addEventListener('click', () => clearMissionEndpoints());
 minimapGeologyToggle.addEventListener('change', () => {
-  geologyLayerVisible = minimapGeologyToggle.checked;
-  geologyToggle.checked = geologyLayerVisible;
-  refreshMinimapOverlays();
-  updateHud();
+  setGeologyVisible(minimapGeologyToggle.checked);
 });
-minimapArchiveToggle.addEventListener('change', refreshMinimapOverlays);
+minimapArchiveToggle.addEventListener('change', () => {
+  setArchiveVisible(minimapArchiveToggle.checked);
+});
+hudToggleGeology?.addEventListener('click', () => {
+  setGeologyVisible(!geologyLayerVisible);
+});
+hudToggleArchive?.addEventListener('click', () => {
+  const cur = $('toggle-archive-traverse')?.checked ?? false;
+  setArchiveVisible(!cur);
+});
 minimapOrthoToggle?.addEventListener('change', refreshMinimapOverlays);
 selectOrthoMode?.addEventListener('change', () => {
   const mode = selectOrthoMode.value;
@@ -1745,12 +1776,11 @@ async function loadOrthoMosaics() {
 
 void loadRoverGallery();
 geologyToggle?.addEventListener('change', () => {
-  geologyLayerVisible = geologyToggle.checked;
-  minimapGeologyToggle.checked = geologyLayerVisible;
-  refreshMinimapOverlays();
-  updateHud();
+  setGeologyVisible(geologyToggle.checked);
 });
-$('toggle-archive-traverse').addEventListener('change', refreshMinimapOverlays);
+$('toggle-archive-traverse')?.addEventListener('change', () => {
+  setArchiveVisible($('toggle-archive-traverse').checked);
+});
 void loadGeology();
 void loadHorizonGrid();
 void loadArchiveTraverse();
@@ -1855,9 +1885,9 @@ for (const presetBtn of btnPresetRoutes) {
     const preset = PRESET_MISSION_ROUTES[presetBtn.dataset.preset];
     if (!preset) return;
     for (const btn of btnPresetRoutes) btn.classList.toggle('is-active', btn === presetBtn);
-    const archiveMainToggle = $('toggle-archive-traverse');
-    if (archiveMainToggle) archiveMainToggle.checked = !preset.custom;
-    if (minimapArchiveToggle) minimapArchiveToggle.checked = !preset.custom;
+    if (preset.custom) {
+      setArchiveVisible(false);
+    }
     applyCustomMissionRoute(preset.start, preset.end, {
       startLabel: preset.startLabel,
       endLabel: preset.endLabel,

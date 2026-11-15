@@ -128,6 +128,10 @@
           </div>
         </div>
         <canvas id="hud-minimap-canvas" class="hud-minimap-canvas" aria-label="3D oyun içi minimap"></canvas>
+        <div class="hud-minimap-footer">
+          <button id="hud-toggle-geology" type="button" class="hud-layer-pill" aria-pressed="false" title="Jeoloji sınırlarını göster/gizle (Sarı çizgiler)">🟡 Jeoloji</button>
+          <button id="hud-toggle-archive" type="button" class="hud-layer-pill" aria-pressed="false" title="Arşiv Perseverance sürüş izini göster/gizle (Mor çizgi)">🟣 Arşiv İzi</button>
+        </div>
       </div>
     </section>
 
@@ -153,8 +157,8 @@
           <summary>Katmanlar ve harita ayrıntıları</summary>
         <div class="minimap-layers" aria-label="Minimap katmanları">
           <label><input type="checkbox" checked disabled> HiRISE DTM hillshade</label>
-          <label><input id="minimap-toggle-geology" type="checkbox" checked> Jeoloji sınırları</label>
-          <label><input id="minimap-toggle-archive" type="checkbox" checked> Arşiv sürüş izi</label>
+          <label><input id="minimap-toggle-geology" type="checkbox"> Jeoloji sınırları (sarı)</label>
+          <label><input id="minimap-toggle-archive" type="checkbox"> Arşiv sürüş izi (mor)</label>
           <label><input id="minimap-toggle-ortho" type="checkbox" checked> HiRISE WMTS Ortomozaik (z17 0.32m / z14 2.5m)</label>
           <label><input id="minimap-toggle-heatmap" type="checkbox"> Dengeli EVA yürünebilirlik alanı (planlama göstergesi)</label>
           <label><input type="checkbox" checked disabled> Planlanan rota</label>
@@ -248,10 +252,10 @@
       <details open class="card archive disclosure is-collapsed">
         <summary><h2><span class="tag tag-arch">Arşiv ürünü</span> Katmanlar ve köken</h2></summary>
         <div id="scale-badge-container"></div>
-        <label class="small"><input id="toggle-geology" type="checkbox" checked> Jeoloji sınırlarını göster (indikatiftir)</label>
+        <label class="small"><input id="toggle-geology" type="checkbox"> Jeoloji sınırlarını göster (indikatiftir)</label>
         <div id="geology-status" class="muted small" aria-live="polite"></div>
         <p id="geology-provenance" class="muted small"></p>
-        <label class="small"><input id="toggle-archive-traverse" type="checkbox" checked> Arşiv Perseverance sürüş izini göster (MMGIS)</label>
+        <label class="small"><input id="toggle-archive-traverse" type="checkbox"> Arşiv Perseverance sürüş izini göster (MMGIS)</label>
         <p id="archive-traverse-status" class="muted small" aria-live="polite"></p>
         <p class="muted small">Mor çizgi arşiv sürüş izidir. Sarı düz hat ve koridor keşif senaryosuna aittir. Sürüş izi canlı telemetri veya güvenli rota bilgisi içermez. Kaynak: NASA/JPL Mars 2020 MMGIS. Lisans kaynakta belirtilmemiş.</p>
         <div id="layers"></div>

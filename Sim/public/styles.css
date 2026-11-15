@@ -609,6 +609,50 @@ body.presentation-mode #mapwrap {
 #hud-minimap-canvas:active {
   cursor: grabbing;
 }
+.hud-minimap-footer {
+  display: flex;
+  padding: 4px 6px;
+  background: rgba(18, 16, 22, 0.94);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+.hud-layer-pill {
+  flex: 1;
+  padding: 2.5px 4px;
+  font-size: 9.5px;
+  line-height: 1.25;
+  border-radius: 4px;
+  background: #25222b;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #a8a29e;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+.hud-layer-pill:hover {
+  background: #35303e;
+  color: #f5f5f4;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.hud-layer-pill[aria-pressed="true"]#hud-toggle-geology,
+.hud-layer-pill.is-active#hud-toggle-geology {
+  background: rgba(85, 70, 15, 0.92);
+  border-color: #ffd34d;
+  color: #fef08a;
+  box-shadow: 0 0 6px rgba(255, 211, 77, 0.35);
+  font-weight: 600;
+}
+.hud-layer-pill[aria-pressed="true"]#hud-toggle-archive,
+.hud-layer-pill.is-active#hud-toggle-archive {
+  background: rgba(70, 35, 95, 0.92);
+  border-color: #c084fc;
+  color: #f3e8ff;
+  box-shadow: 0 0 6px rgba(192, 132, 252, 0.35);
+  font-weight: 600;
+}
 body.presentation-mode .hud-minimap-widget {
   left: 14px;
   bottom: 14px;

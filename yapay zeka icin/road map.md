@@ -4,6 +4,48 @@
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Bu belge:** Kodlama planı ve karar kaydıdır; uygulama/test çalıştırma kaydı değildir.
 
+## Proje kapanış durumu (15 Kasım 2026)
+
+**Kaynak:** dal `codex/efe-visual-realism` @ `53068e6` (çalışma klasörü `C:\Users\efese\Desktop\Nasaspaceapps-efe`; bu bölüm `Nasaspaceapps` ana klasöründeki dal bilgisini değiştirmez). Bu bölümün doğrulaması Efe'nin bu oturumdaki komut çıktılarıdır; bağımsız kabul değildir.
+- `node --test test/` → **574/574, çıkış kodu 0** (mevcut çalışma ağacı; ara çalıştırmada 573/573). `node scripts/preflight.mjs` → **HAZIR** (hata 0, uyarı 0).
+- Başsız tarayıcı kabulü (8291 portu): `Sim/stage-final-acceptance.md`. Demo açılışı, 3D birinci şahıs ve eller, rota tercihi değişimi, minimap global/Jezero ve Viking, `?scale=3`, `?horizon=off`, 2D ve WebGL2 fallback **PASS**; no-data hücre reddi, sıçrama/iniş, varış rozeti, Sol 164 galerisi, ortomozaik hizası **NOT-TESTED**.
+- `npm run smoke` bu oturumda **çalıştırılmadı** (Ajan R'nin portları).
+
+**Tamamlanan aşamalar (commit ile):**
+- Rota ve planlama: 23A `c5c5612`, 23B `e6105b9`, 23D `9cd0fd4`, 34A `4e2279e`, 34B `8e955e0` (birleşme `fa5a491`, worker uyumu `52c75aa`), 622f526 (bayat plan düzeltmesi), K3-2 minimap seçim reddi `c8e2d09` (birleşme `4f741a5`).
+- Veri ve kanıt: 29B `0bc0772`, 29C + 31A `b5be052`, 31B kaynak paneli `07318d5` / `e569daf` (birleşme `919b9a8`), 35A `a38e5aa`, 36A `aa589b3`, 37A `190e133`, 39A `5db4a73`.
+- Görünüm ve minimap: 24 `3167130`, 25/27 `246a99d`, 32A `932a0da`, 32B `aa32139`, 33A `872c547`, 33B `4d41a27` (birleşme `3a79d33`), 35B `3dd5ff2`, 36B `f438f8e` (birleşme `b159db3`), 39B `89b7f17`.
+- Sunum: 29A ve 30 `5b7052f`.
+- 3D ve birinci şahıs: 8 `9819da2`, 9/10 `fbc623f`, 11 `8054b1a`, 12 `58660f0`, 13 `653bf73`, 14 `e14b661` / `502d76c`, gerçek birinci şahıs eller `ab426ee`.
+- Görsel gerçekçilik dalı: `0d212dc` (karakter), `db54ff5` (sahne: ton eşleme, gökyüzü, gölge), `ad6ae13` (entegrasyon), `f49e838` (cila).
+- K2 (Efe): kamera hareketi `f7ea37b` (K2-1/K2-2), bölgesel ufuk ve gövde ankrajı `bbf75b6` (K2-3/K2-4; birleşme `5d97844`).
+- Veri katmanları: 19A `c5d0e51`, 20 `48e330b`, 21A `d1abe35`, 22 `4d6bd10`.
+- K1 takip: HUD gözlem düzeltmesi `b69eb2b`; belge kayıtları `1d48600`, `034c15f`, `53068e6`.
+
+**Açık kalanlar:**
+- K1-1 (entegrasyon): kod birleşik; bu oturumda smoke yok. Kabul kısmen (yukarıdaki PASS/NOT-TESTED).
+- K1-2 (tarayıcı kanıtı): tam PASS değil. Açık: sıçrama/iniş pozu, Sol 164 galerisi ve yön düğmesi, gerçek no-data reddi, varış rozeti, hızlı rota yarışı, ortomozaik hizası.
+- K1-3 (belgeler, Efe): bu oturumda tamamlandı: `Sim/DEMO_NOTES.md`, `Sim/README.md`, `Sim/stage-final-acceptance.md`, `Sim/stage-handoff-efe-to-alparslan.md`, bu bölüm.
+- K1-4 (Viking lisans/atıf teyidi, elle, Efe): açık. Manifest hâlâ "belirtilmemiş".
+- K1-5 (demo dondurma, Alparslan): açık; `demo-freeze` etiketi konmadı.
+- K2-5 (son gerçekçilik turu) ve K2-6 (GPU/FPS ölçümü, Alparslan): açık.
+- K3-1 (no-data üzerinde yerçekimi kararı, `sim.js`): açık; bu oturumda kod doğrulanmadı.
+- K3-2 (tarayıcı kanıtı): kod var (`c8e2d09`), tarayıcıda hücre reddi NOT-TESTED.
+- K3-3 (rig test sınırı onayı, Alparslan), K3-4 (rig `left*` adları, Efe): açık.
+- K3-5 (datum): açık. `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` `false`.
+- K3-6 (rapor metinleri): açık. `stage39-ortho-diagnosis.md` "Yazar: Efe" ifadesi ve r≈0,40 zayıf korelasyon; `stage34b` "costParams iletilir" ifadesi. Not: ROUTE_PREFERENCES costParams tablosu `main.js` içinden kaldırılmış; ağırlıklar yalnız `route/route-compare.js` içinde.
+- K4 (yarışma sonrası: 41–45): kapsam dışı.
+
+**Bilinen sınırlar ve tutarsızlıklar (ayrıntı `Sim/DEMO_NOTES.md` §3–4):**
+- Rota süresi tahmini 0,8 m/s (`route-service.js:301`, `main.js:348`); simülasyon 1,2 m/s × 8 (`config.js`). Tutarsız.
+- "En düz" tercihinin maksimum eğimi dengeliden yüksek çıktı (10,1° / 9,8°); tercih adı ölçümle açıklanmıyor.
+- Rota uzunlukları UI (730/731 m) ile devir notu (730,505/732,161 m) arasında; doğrulanmadı.
+- Göz yüksekliği kodda 1,48 m; `e9a0a78` mesajı 1,75 m.
+- Ortomozaik uyarısı (`hud.js:104`) eski JP2 bayrağına bağlı; WMTS katmanıyla çelişkili görünür.
+- Yürünebilirlik eşiği 20° kaynaklı değil (`cost-model.js:39` notu: birincil belge doğrulanmadı).
+
+**Doğrulama notu:** Bu bölümden önceki "Doğrulama durumu" satırındaki 527/527 ve 38/38 sonuçları `b5be052` anına aittir; güncel sayı yukarıdadır. Taban satırı `3e1f570` olarak yazılmıştır; bu oturumda çalışılan dal bundan ileridedir.
+
 ## Durum etiketleri ve bilgi kaynağı
 
 - **TAMAMLANDI — dosya/kaynakla:** Güncel dosyalar veya birincil kaynak bunu destekliyor.

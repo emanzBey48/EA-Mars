@@ -1,147 +1,149 @@
-# Marswalk MVP — Interplanetary Survival Guide: Martian Map
+# Marswalk — Interplanetary Survival Guide: Martian Map
 
-Kullanıcı kontrollü, kısa (60–90 s) bir Jezero yüzey keşif simülasyonu. Astronotu klavyeyle Sol 120 / WB1
-waypoint’inden Sol 164 / Roubion waypoint’ine yürütürsünüz. **Mars fizik motoru, canlı NASA telemetrisi veya
-güvenlik/karar destek aracı değildir.**
+Kullanıcı kontrollü, kısa (60–90 sn) bir Jezero yüzey keşif simülasyonu. Astronotu klavyeyle Sol 120 / WB1 waypoint'inden Sol 164 / Roubion waypoint'ine yürütürsünüz. **Mars fizik motoru, canlı NASA telemetrisi, güvenlik veya karar destek aracı değildir.** Jüri ve sınır notları için `DEMO_NOTES.md`; son kabul kanıtı için `stage-final-acceptance.md` dosyasına bakın.
+
+Proje kökü: `C:\Users\efese\Desktop\Nasaspaceapps\Sim`
+
+## Gereksinimler
+
+- Node.js ≥ 20 (`npm test` için). `npm run smoke` ve tarayıcı betiği için Node ≥ 22 (genel `WebSocket`) ve yerel Edge veya Chrome gerekir.
+- npm paketi kurulmaz; bağımlılık yoktur.
+- Veri: `Sim/data/dtm_subset.f32` (~7,6 MB) Git LFS ile izlenir. Dosya 132 baytlık bir işaretçi ise `git lfs pull` çalıştırın.
 
 ## Çalıştırma
 
-Gereksinim: Node.js ≥ 20 (testler ve tarayıcı duman testi için ≥ 22). npm paketi kurulmaz; bağımlılık yoktur.
-
 ```powershell
-cd "C:\Users\Erdem\OneDrive\Desktop\nasa space apps\Sim"
-npm run prepare-data   # üst klasördeki DTM’den (salt okunur) data/ altına ~7.5 MB pencere çıkarır; bir kez yeterli
-npm start              # http://127.0.0.1:8080/  (PORT ortam değişkeniyle değiştirilebilir)
-npm test               # node:test birim testleri
-npm run smoke          # isteğe bağlı: yerel Edge/Chrome ile başsız uçtan uca kontrol, ekran görüntüleri test-output/
+cd "C:\Users\efese\Desktop\Nasaspaceapps\Sim"
+node scripts/preflight.mjs   # ön uçuş: LFS işaretçisi, veri ve kaynak kontrolleri (HAZIR bekleyin)
+npm start                    # http://127.0.0.1:8080/  (PORT ortam değişkeni ile değiştirilebilir)
+npm test                     # node:test birim testleri
+npm run smoke               # isteğe bağlı: başsız Edge/Chrome ile uçtan uca kontrol (Node ≥ 22); ekran görüntüleri test-output/ içine
 ```
 
-`prepare-data` çalıştırılmamışsa uygulama yine açılır ve hareket çalışır; DTM’ye bağlı göstergeler
-“Kullanılamıyor” durumunu gösterir. Çalışma anında internet veya PLACES dosyası gerekmez.
+`prepare-data` (`node scripts/extract-dtm.mjs`) kaynak USGS DTM GeoTIFF dosyasını ister; bu dosya depoda yoktur. `data/` içindeki hazır çıktılar çalışma için yeterlidir; yalnız veriyi yeniden üretmek gerekirse kullanın.
 
-### Jüri ve Demo Modu (60–90 Saniyelik Örnek Senaryo)
+Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor" durumunu gösterir. Çalışma anında internet veya PLACES dosyası gerekmez.
 
-Jüriye ve kullanıcılara 60–90 saniyede etkileyici, temiz ve odaklanmış bir sunum yapmak için:
-```bash
-npm start
-# Tarayıcıda aç: http://127.0.0.1:8080/?demo=1
-```
-Bu komutla uygulama doğrudan **Sunum Modu**'nda açılır:
-- Sol 120 (WB1) → Sol 164 (Roubion) A* EVA yürünebilirlik rotası otomatik hesaplanır ve gösterilir.
-- 1× gerçek dikey ölçekte (1:1 bilimsel kot farkı) HiRISE ortomozaik dokusu üzerinde 3D birinci şahıs görünüme geçilir.
-- Ekranın sol üstünde en kritik telemetriyi (Konum, İlerleme, Kot, Eğim, Yürünebilirlik Göstergesi, Saat) içeren şık yarı-şeffaf sunum kapsülü gösterilir.
-- Turkuaz kılavuz şerit izlenerek Sol 164'e varıldığında `#arrived-banner` başarı rozeti şık bir biçimde belirir.
-- Sunum modundan çıkmak için `Esc` tuşuna basabilir veya `✕ Kapat` butonuna tıklayabilirsiniz.
+### URL parametreleri (koddan doğrulandı)
 
-## Sunulan Temel Özellikler
+| Parametre | Değerler | Etki |
+|---|---|---|
+| `demo=1` veya `presentation=1` | — | Sunum modunda açar ve örnek görevi otomatik hazırlar (`main.js`). |
+| `view=3d` | — | 3D birinci şahıs görünümünü açar; DTM ve WebGL2 yoksa 2D kalır. |
+| `scale` | `1` (varsayılan), `2`, `3` | Dikey ölçek. 1 gerçek kot (1:1); 2 ve 3 görsel abartıdır ve rozetle belirtilir. |
+| `shadows` | `off`, `low`, `high` (varsayılan) | Güneş gölge haritası çözünürlüğü: 0 / 1024 px / 2048 px. |
+| `horizon` | `off` | Bölgesel MOLA ufkunu kapatır. Diğer değerler ufku açık bırakır. |
+| `debug=1` | — | `window.marswalk` test kancasını açar. Yalnız geliştirme ve test için. |
+| `testWebGL2Failure=1` | (yalnız `debug=1` ile) | WebGL2 hatasını zorlar; 2D fallback'i sınamak için. |
 
-1. **HiRISE 1 m DTM Arazi Tabanı:** USGS Mars 2020 TRN 1 m kot modeli ve Horn 3×3 gradyanıyla türetilen anlık eğim.
-2. **HiRISE 25 cm Kontrollü Ortomozaik:** WMTS z17 (0.318 m/px) ve z14 (2.544 m/px) albedo dokuları; Hibrit / Orto / Hillshade kaplama modları.
-3. **A* EVA Yürünebilirlik Planlayıcısı:** Çok kriterli maliyet fonksiyonuyla (eğim, pürüzlülük, veri geçerliliği) insansı EVA rotası ve minimap ısı haritası. (Planlama göstergesi — güvenli rota sertifikası değildir.)
-4. **1× Gerçek Bilimsel Dikey Ölçek:** Varsayılan 1:1 kot farkı, dinamik ölçek seçici (1×, 2×, 3×) ve astronot rig oranlarının 1:1 kilitlenmesi.
-5. **USGS SIM 3464 Jeoloji Haritası:** 1:75.000 ölçekli formasyon sınırları, haritalanmış kontağa olan anlık mesafe ve belirsizlik bildirimleri.
-6. **Mars Yüzey Yerçekimi Zıplama Balistiği:** 3.71 m/s² yerçekimi altında ~1.3 s uçuş, havada momentum korunumu, inişte yumuşak kamera esnemesi (landing dip).
-7. **Perseverance Ham Fotoğraf Arşivi:** Sol 120 ve Sol 164 duraklarında Navcam/Hazcam/Mastcam-Z fotoğraflarıyla birinci şahıs ufuk yönelimi.
-8. **Sağlam 2D Fallback:** WebGL2 desteği bulunmadığında veya kullanıcı 2D'yi seçtiğinde tüm katmanlar ve rota planlaması 2D Canvas üzerinde kesintisiz çalışır.
-9. **Mars global minimap bağlamı:** Viking MDIM 2.1 renkli karo piramidi, Jezero çevresinde 232 m/piksel kesit ve yakın ölçekte HiRISE DTM hillshade katmanını gösterir. Viking mozaik kot verisi veya ortogörüntü değildir; lisans manifestte belirtilmemiştir.
+## Kontroller (`public/js/input/input.js` ile doğrulandı)
 
-### Viking MDIM 2.1 yerel karo paketi
+- **2D:** WASD veya ok tuşları hareket eder; `P` veya `Space` duraklatır/devam ettirir.
+- **3D:** WASD veya ok tuşları kamera yönüne göre hareket eder; `Space` küçük bir simülasyon sıçraması yapar; `P` duraklatır/devam ettirir. Sahneye tıklamak fare bakışını açar; `Esc` fare kilidini bırakır (tarayıcı davranışı).
+- **Her iki görünümde:** `R` yeniden başlatır; `+` / `-` ve fare tekerleği görünümü yakınlaştırır.
 
-Uygulama, `data/viking-mdim/manifest.json` ve küçük `tiles/` / Jezero bölgesel PNG çıktılarını varsa kullanır. Çıktılar yoksa veya bir karo yüklenemezse global katman `unavailable` olur; yerel HiRISE minimap ve diğer uygulama akışları çalışmayı sürdürür. “Mars globali göster” düğmesi küresel görünümü açar; “Kapsama sığdır” Jezero DTM alanına döner. 232 m/piksel bölgesel mozaik yalnız renkli bağlam sağlar, yerel yürünebilirlik puanı üretmez.
+## Jüri / demo akışı (60–90 sn)
 
-12,7 GB kaynak `Mars_Viking_MDIM21_ClrMosaic_global_232m.tif` uygulamanın çalışması için gerekmez ve git'e eklenmez. Kaynağı hazırlamak gerekirse Sim içindeki git-ignore edilmiş `data-external/` klasöründe tutup ingest betiğine `--input` ile açıkça verin; üretilen küçük karo paketi `data/viking-mdim/` altına yazılır. `.gitignore` altındaki `data/*` kuralı da `data/` içindeki ham TIFF'i yok sayar; allowlist yalnız doğrulanmış DTM fixture'ları, orto karoları ve küçük bölgesel/global ürün çıktıları içindir.
+1. `npm start` ardından `http://127.0.0.1:8080/?demo=1` açın. Sunum modu açılır ve Sol 120 → Sol 164 rotası hesaplanır.
+2. "Örnek Görevi Başlat" ile 3D birinci şahıs görünüm ve turkuaz rota şeridi başlar. WASD ile yürüyün, `Space` ile sıçrayın.
+3. Sunum modundan çıkmak için "Kapat" düğmesini kullanın veya fare kilidi yokken `Esc`'e basın (`main.js:1461`); sağ panelde rota tercihini (dengeli / en kısa / en düz) değiştirip minimap'te "Mars globali göster" ve "Kapsama sığdır" düğmelerini deneyin.
+4. Ayrıntılı sınır ve sayı notları için `DEMO_NOTES.md`.
 
-Karo paketini bilerek yeniden üretmek için Sim klasöründe:
+## Özellikler
 
-```powershell
-node scripts/ingest-viking-mosaic.mjs --input data-external/Mars_Viking_MDIM21_ClrMosaic_global_232m.tif --out data/viking-mdim
-```
-
-## Kontroller
-
-- **2D:** WASD / ok tuşları hareket eder; P veya Space duraklatır/devam ettirir.
-- **3D:** WASD / ok tuşları kamera yönüne göre hareket eder; Space küçük bir simülasyon sıçraması yapar; P duraklatır/devam ettirir. Sahneye tıklamak fare bakışını açar; Esc fare kilidini bırakır.
-- **Her iki görünümde:** R yeniden başlatır; + / − / fare tekerleği yalnız görünümü yakınlaştırır.
-
-3D görünümünü doğrudan açmak için sunucuyu başlattıktan sonra `http://127.0.0.1:8080/?view=3d` adresini kullanın. Bu seçim, doğrulanmış HiRISE DTM ve WebGL2 kullanılabilir, başlangıç konumunda kot biliniyorsa uygulanır; aksi durumda 2D görünüm açık kalır.
+1. **HiRISE 1 m DTM arazi tabanı:** USGS Mars 2020 TRN DTM penceresi; 3×3 Horn gradyanı ile anlık eğim.
+2. **HiRISE 25 cm WMTS ortomozaik kaplaması:** z17 (0,318 m/px) ve z14 (2,544 m/px) karoları; Hibrit / Ortomozaik / Hillshade modları. Hizalama ±1,5 m belirsizlikle gösterilir; yarım piksel hizası kanıtlanmadı.
+3. **A* EVA yürünebilirlik planlayıcısı:** Eğim, pürüzlülük ve veri geçerliliğine dayalı maliyet; minimap'te ısı haritası. Planlama göstergesi; güvenli rota sertifikası değildir.
+4. **Rota tercihleri:** Dengeli, en kısa, en düz (`gentle` / `flattest`). Ağırlıklar `route/route-compare.js` içinde senaryo parametresidir. Eski `main.js` tablosu kaldırıldı.
+5. **Minimap ve sürükle-bırak uçları:** Başlangıç/bitiş seçimi, tercih değişince bayat plan gösterilmez (`route/plan-response-state.js`). No-data ve kenar (EDGE_UNKNOWN) hücreleri seçilemez (kod ve birim testi; tarayıcı kanıtı için `stage-final-acceptance.md`).
+6. **Viking MDIM 2.1 global bağlam:** 232 m/piksel renkli küresel mozaik, z0–z3 karo piramidi; "Mars globali göster" ile küresel görünüm. Viking verisi renk bağlamıdır; kot veya ortogörüntü değildir.
+7. **Bölgesel MOLA ufku:** `data/regional-dem/` (~463 m/piksel, 384×384). Datum `needs_review`; yürünebilirlik puanı üretmez, yerel DTM ile birleştirilmez. `?horizon=off` ile kapatılır.
+8. **1× gerçek dikey ölçek:** Varsayılan; 2× ve 3× görsel abartı seçenekleri ayrı rozetle gösterilir.
+9. **Güneş, gökyüzü ve gölge (görsel):** Mars gökyüzü kubbesi, doğrusal ışık ve ACES ton eşleme, güneş gölge haritası. Sunum parametresidir; ölçülmüş değildir.
+10. **Ayak izleri ve parlak rota şeridi (görsel):** Yürüyüşte DTM'den örneklenen ayak izleri; emissive rota şeridi. İzler regolit mekaniği iddiası taşımaz.
+11. **Birinci şahıs astronot:** Göz hizasında eldiven ve ön kollar; aşağı bakışta gövde kademeli görünür. Yürüme salınımı, nefes ve yumuşak iniş kamera hareketi (`view/3d/camera-motion.js`).
+12. **Mars yerçekimi zıplaması:** 3,71 m/s² (NASA küresel referansı), v0 = 2,4 m/s oyun girdisi; ~1,3 s havada, ~0,78 m tepe; inişte 0,25 s darbe sönümü. Atmosfer sürüklemesi yoktur.
+13. **USGS SIM 3464 jeoloji haritası:** 1:75.000 formasyon sınırları ve kontağa anlık mesafe; belirsizlik bildirimli.
+14. **Perseverance arşiv fotoğrafları ve sürüş izi:** Sol 120 ve Sol 164 durakları için ham JPEG önizlemeleri; arşiv izi rover izidir, insan rotası değildir.
+15. **2D Canvas fallback:** WebGL2 yoksa veya 2D seçilirse tüm katmanlar ve rota planlaması 2D'de çalışır.
 
 ## Yapı
 
 | Dosya | Görev |
 |---|---|
-| `public/js/config.js` | Senaryo değerleri (hız, zaman ölçeği, koridor ±10 m), waypointler, harita çerçevesi, kaynaklar |
-| `public/js/geo/geo.js` | Tek dünya↔piksel adaptörü: equirectangular projeksiyon, PDS grid, yerel metre düzlemi, segment uzaklığı, saf 3×3 Horn gradyan/eğim yardımcısı (`horn3x3Gradient`) |
-| `public/js/surface/layers.js` | Biçimden bağımsız katman ve `SurfaceProvider` sınırı (`GridElevationLayer`, `UnavailableLayer`): `sampleElevation(xM,yM)`, `sampleSlope(xM,yM)`, `sampleSurface(xM,yM)`, açık durumlar (`ok`, `no_data`, `out_of_bounds`, `unavailable`, `invalid`) |
-| `public/js/surface/registry.js` | Katman manifest sözleşmesi, alan bazlı metadata doğrulayıcı (`validateLayerManifest`: `supported`, `needs_review`, `unavailable`, `invalid`) ve `SurfaceProviderRegistry` kayıt/seçim/fallback fabrikası |
-| `public/js/simulation/sim.js` | Oyuncu, senaryo saati, duraklatma/yeniden başlatma, ilerleme, sapma ve derin dondurulmuş kare sözleşmesi (`createWorldSnapshot`, `deepFreeze`) |
-| `public/js/view/render.js` | Saf kanvas çizimi: yalnız değiştirilemez `snapshot` (`WorldSnapshot`), `camera` ve hazırlanmış `terrain` varlığıyla çalışır; canlı `sim`/`layer`/`adapter` almaz ve raster örneklemesi ya da rota matematiği yapmaz |
-| `public/js/input/input.js` | Klavye, fare tekerleği ve kontrol butonları/koridor girdisi bağlama (`bindControls`) |
-| `public/js/view/hud.js` | Statik bilgi kartları, katman panelleri ve yalnız `WorldSnapshot` tüketen canlı HUD/uyarı banner güncellemeleri (`createHud`; DTM örneklemesi veya simülasyon kuralı içermez) |
-| `public/js/main.js` | Uygulama koordinatörü (composition root): her karede `SurfaceProvider` ile örnekleme yapıp tek bir değiştirilemez `WorldSnapshot` üretir ve hem `render` hem `hud`’a verir |
-| `scripts/extract-dtm.mjs` | PDS3 etiketini ayrıştırır, doğrular, DTM penceresini çıkarır, JP2 GeoTIFF başlığını inceler, rota kontrolü |
-| `scripts/smoke-e2e.mjs` | DevTools protokolüyle gerçek tuş basışlı kabul testi (normal çalıştırmada `window.marswalk` olmadığını doğrular, ardından `?debug=1` ile testleri yürütür) |
-| `server.mjs` | Node standart kütüphanesiyle statik sunucu (127.0.0.1) |
+| `public/js/config.js` | Senaryo değerleri (hız 1,2 m/s, zaman hızlandırma ×8, koridor ±10 m, yerçekimi 3,71), waypoint'ler, harita çerçevesi, kaynaklar |
+| `public/js/main.js` | Uygulama koordinatörü: veri yükleme, her karede `WorldSnapshot` üretimi, renderer ve HUD bağlantısı |
+| `public/js/geo/` | Saf geometri: `geo.js` (projeksiyon, Horn gradyanı), `relief-metrics.js`, `viking-mosaic.js`, `trek-raster.js`, `regional-dem.js` |
+| `public/js/surface/` | Raster okuma, manifest doğrulama, `SurfaceProvider` ve fallback seçimi (`layers.js`, `registry.js`) |
+| `public/js/simulation/sim.js` | Oyuncu, senaryo saati, zıplama ve iniş fiziği, snapshot sözleşmesi |
+| `public/js/route/` | A* planlayıcı (`cost-model.js`, `route-service.js`, `pathfinder.worker.js`), `route-compare.js` (tercihler), `plan-response-state.js` |
+| `public/js/view/render.js` | 2D Canvas çizimi (yalnız snapshot ve hazır varlıklar alır) |
+| `public/js/view/3d/` | WebGL2: `renderer.js` (render pass'leri), `camera.js`, `camera-motion.js`, `terrain-mesh.js`, `astronaut-rig.js`, `marker-mesh.js`, `footprint-trail.js`, `route-ribbon.js`, `horizon-mesh.js`, `shadow-map.js`, `sky-model.js`, `terrain-shading.js` |
+| `public/js/view/minimap/minimap.js` | Minimap: Viking global, HiRISE yerel katman, rota planlama |
+| `public/js/view/hud.js` | Snapshot okuyan HUD ve uyarı şeritleri |
+| `public/js/input/input.js` | Klavye, fare tekerleği ve buton bağlamaları (simülasyon kuralı içermez) |
+| `scripts/` | `extract-dtm.mjs`, `preflight.mjs`, `smoke-e2e.mjs`, `relief-report.mjs`, `ingest-viking-mosaic.mjs`, `fetch-regional-dem.mjs`, `validate-ortho-registration.mjs`, `build-sources-list.mjs` |
+| `server.mjs` | Node standart kütüphanesiyle statik sunucu (`127.0.0.1`) |
 
-## Mevcut 3D viewer ve first-person dilimi
+### 3D render pass sözleşmesi
 
-Mevcut kaynakta 2D Canvas MVP'ye ek olarak WebGL2 terrain viewer, göz hizası first-person kamera ve CPU mesh builder bulunur. FPS burada keşif kamerası/kontrolüdür; shooter değildir. Başlangıç verisi doğrulanmış yerel HiRISE DTM fixture'ıdır; yeni veri seti gerekmez.
-
-- **Mevcut 3D paket:** `public/js/view/3d/renderer.js`, `camera.js`, `terrain-mesh.js`, `astronaut-rig.js`, `marker-mesh.js` ve `main.js` entegrasyonu. `marker-mesh.js`, Sol 120 / WB1 ve Sol 164 / Roubion beacon’larıyla basitleştirilmiş rota zemin kılavuzlarını ve senaryo koridoru işaretçilerini üretir; renderer bunları 3D sahnede çizer. Bu rota gerçek Perseverance/PLACES traverse geometrisi değildir ve koridor güvenlik sınırı değildir. Renderer ayrıca rig'in değişmez parça şablonunu ve snapshot'tan üretilen pozu WebGL2'ye aktarır.
-- **Mesh sözleşmesi:** `positions: Float32Array` (local X/Y metre ve sunum Z), `normals: Float32Array`, `indices: Uint32Array`, özgün Mars 2000 kotu için `sourceElevationsM`, yerel bounds ve kaynak/datum/çözünürlük ile valid/atlanan hücre sayısını içeren metadata. Görsel Z, `referenceElevationM` ve `verticalScale` ile hesaplanır; kaynak `zM` değişmez.
-- **No-data/fallback:** No-data/invalid köşeli quad üçgenlenmez; sıfırla doldurma veya boşluk üzerinden köprü kurma yoktur. 2D HiRISE fallback korunur. Stage 9 runtime kabulinde 2D↔3D, WebGL/mesh fallback, unknown elevation ve ilk mesh açılış maliyeti tarayıcıda doğrulanmalı.
-- **Kontroller:** 3D’de WASD/oklar kamera yönüne göre hareket eder; sahneye tıklamak fare bakışını pointer lock ile açar, Esc bırakır; Space kısa simülasyon sıçramasını, P duraklatmayı yapar. 2D’de Space duraklat/devam olarak kalır. R yeniden başlatır.
-- **Hareket modeli:** 3D’de simülasyon yatay hızını senaryo seçimi `walkSpeedMps` belirler; dikey ivme NASA Planet Compare’ın yuvarlatılmış Mars yüzey yerçekimi referansı 3.71 m/s²’dir. Bu küresel referanstır, Jezero yerel ölçümü veya tam insan/suit fiziği değildir. Space sıçrama girdisi oyun varsayımıdır; atmosfer sürüklemesi yoktur.
-- **Yüzey teması ve bilinmeyen kot:** Simülasyon geçerli DTM örneğinde ayak temasını kotla izler. `astronaut.zM` yalnızca o an örneklenen Mars 2000 yüzey kotudur ve örnek geçersiz/bilinmiyorsa `null` kalır. Simüle edilmiş gövde dünya-Z konumu ve hareket durumu ayrı snapshot alanlarıdır. No-data/out-of-bounds durumunda `grounded=false`, HUD yüzey temasının doğrulanamadığını gösterir; varsa önceki dünya-Z referansı yalnız hareket pozunu sürdürür, güncel zemin/kot yerine kullanılmaz.
-- **Rig için hareket snapshot API’si:** `snapshot.astronaut.movement = { timeS, horizontalSpeedMps, verticalSpeedMps, grounded, airborne, phase, groundContactStatus }`. `timeS` senaryo saatidir; hızlar simülasyon zamanı saniyesi başına metre cinsindedir. `groundContactStatus`, o karedeki DTM örnek durumunu; `airborne`, yalnız başlatılmış bir sıçrama/aktif düşey hareket izini belirtir. `bodyWorldZM` bedenin dünya-Z pozudur ve `zM` arşiv yüzey değeriyle karıştırılmamalıdır.
-- **Astronot rig sunumu:** `ASTRONAUT_RIG` yerel X sağ/sol, Y derinlik, Z yukarı eksenlerini ve `-Y` ileri yönünü tanımlar; `forwardHeadingOffsetRad` simülasyon heading’ine eklenir. `poseAstronautRig(movement)` saf ve deterministik poz döndürür; parça `size/center/pivot`, eklem dönüşü ve root pozları renderer’da uygulanır. Dikey sunum ölçeği mesh `displayConfig.verticalScale` değerini izler. First-person’de torso ve kollar alt kadrajda view-model olarak çizilir; bu çizim ikinci fiziksel gövde konumu veya suit biyomekaniği değildir.
-- **Bilinmeyen temas animasyonu:** `groundContactStatus !== 'ok'` iken rig `grounded=false` değerinden tek başına airborne sonucu çıkarmaz; temas bilinmiyorsa sabit `unknown` nötr poz kullanır. Yalnız `airborne=true` sıçrama izi airborne pozunu sürdürür; bilinmeyen temas tek başına yerçekimi düşüşü başlatmaz. Bu durumda retained kamera pozu için first-person kollar/gövde kalabilir, tam dünya rig’i gizlenir. HUD yüzey kotunun bilinmediğini ayrıca gösterir; retained `bodyWorldZM` güncel zemin diye sunulmaz.
-- **Modül sınırı:** Hareket kuralları `simulation/`, klavye/fare olayları `input/`, FPS kamera matematiği `view/3d/camera.js` içinde kalır; `main.js` yüzey örneğini enjekte edip snapshot ve renderer’ı birleştirir. 2D ve WebGL2→2D fallback korunur.
-
-**Renderer rig entegrasyonu:** first-person suit torso/kolları alt-kadraj view-model olarak render edilir. Smoke rig parça çizimini, merkezlerin kamera frustum’unda kalmasını, heading ekseni hizasını, hareket kaynaklı gait’i, pause freeze’i, bilinmeyen temas ile aktif jump ayrımını ve 2D fallback’i kontrol eder; screenshot’ta torso/kolların gerçek kadrajı görsel olarak ayrıca incelendi. `npm test` 18/18 ve `npm run smoke` 32/32 geçti. Rig unknown-contact pozu fiziksel grounded/airborne alanlarını değiştirmez.
-
-**Stage 9 + 10 doğrulama (13 Kasım 2026):** Stage 9 sonrası önceki birleşik HEAD’de `npm test` 16/16 ve `npm run smoke` 28/28 geçti. Renderer rig entegrasyonundan sonra güncel doğrulama `npm test` 18/18 ve `npm run smoke` 32/32’dir.
-
-**Ortogörüntü uyarısı:** JPEG 2000 çözücü olmadığı için `ESP_046060_1985_RED_C_01_ORTHO.JP2` uygulamada gösterilmez; mevcut zemin DTM'den türetilmiş hillshade + kot renklendirmesidir, orto değildir. Decoder/lisans ve JP2 `PixelIsArea` ile PDS piksel merkezi arasındaki yaklaşık yarım-piksel hizalama sorunu ayrı, bloke etmeyen iştir; hizalama doğrulanmadan orto overlay'i yapılmamalıdır.
-
-Görev kabul ölçütleri ve daha ayrıntılı render/snapshot sözleşmesi depo kökündeki `yapay zeka icin/road map.md` ve `AGENTS.md` dosyalarındadır.
+`renderer.js` içinde `renderPass` değerleri: 0 arazi · 1 işaretçi ve rota kılavuzları · 2 astronot rig'i ve birinci şahıs view-model · 3 gökyüzü · 4 gölge derinliği (erken dönüş) · 5 ayak izleri · 6 rota şeridi · 7 bölgesel ufuk. Yeni pass'ler 8 ve sonrası kullanır.
 
 ## Koordinatlar ve veri kararları
 
-- **Yerel düzlem:** x doğu, y kuzey, metre; orijin Sol 120 / WB1. Düzlem, DTM mozaik başlığındaki equirectangular
-  harita düzleminin orijine kaydırılmış hâlidir (küre R = 3396.190 km, merkez meridyen 0.0°E, standart enlem 0.0°, planetosentrik).
-  Bu projeksiyonda ölçek ekvatorda (0°) doğrudur; ~18.4°K’de doğu-batı mesafeleri ≈ %5.4 fazla (1 / cos 18.4°), kuzey-güney mesafeleri doğrudur.
-- **Piksel dönüşümü (GeoTIFF PixelIsArea kuralı):**
-  Hücre merkezi (0 tabanlı satır/sütun):
-  `X = 4577366.5 + col`, `Y = 1106617.5 - row`.
-  Ters dönüşüm: `col = X - 4577366.5`, `row = 1106617.5 - Y`.
-  Hücre indeksi: `Math.round(col)`, `Math.round(row)`.
-- **Düşey datum:** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid; HRSC Level 5 ve CTX LVS DTM referanslı).
-- **Doğrulama:** Waypointler (13647, 13423) ve (14322, 13557) hücrelerine düşüyor; çizgi 687.343 m; 681 örneğin tamamı geçerli,
-  kot −2589.359…−2567.980 m, eğim ort. 4.446°, P90 8.003°, maks. 18.410° (`data/dtm_subset.json` → `routeCheck`).
-- **No-data:** `MISSING_CONSTANT` `0xFF7FFFFB` tam 32-bit bit deseniyle → `no_data`; `VALID_MINIMUM/MAXIMUM` dışı → `invalid`.
-  Asla 0 ile değiştirilmez. Eğim: 3×3 Horn; dokuz hücreden biri geçersizse değer üretilmez.
-- **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere (satır 13147–14822, sütun 12923–14057, 1,902,260 hücre, ~7.6 MB) yüklenir; dışı
-  `out_of_bounds` (“yüklenen alt kümenin dışında”) olarak raporlanır.
-- **Ortogörüntü durumu:** Eski JP2 kullanıcı tarafından geçersiz bildirildi; bağımlılıksız yığında yeni doğrulanmış orto pakete henüz eklenmedi.
-  Zemin, DTM’den türetilmiş gölgeli kabartma + kot renklendirmesidir ve ortogörüntü olarak adlandırılmaz.
-- **Manifest doğrulaması:** `public/js/surface/registry.js` içindeki `validateLayerManifest` CRS, birim, düşey datum kanıtı,
-  lisans/kullanım şartı, sayısal sınır kapsama ve piksel kayıt kuralını zorunlu `expectedFrame` parametresiyle alan bazında denetler (`supported`, `needs_review`, `unavailable`, `invalid`).
-  Belirsiz veya uyumsuz katmanlar sessizce örneklenmez ve kot asla `0` ile doldurulmaz; geçersiz bildirilen eski IMG/JP2 fallback olarak seçilmez,
-  doğrulanmış sağlayıcı yoksa katman açıkça `UnavailableLayer` durumunda kalır.
+- **Yerel düzlem:** x doğu, y kuzey, metre; orijin Sol 120 / WB1. Equirectangular, küre R = 3396,190 km, merkez meridyen 0°, standart enlem 0°, planetosentrik. Ölçek ekvatorda doğrudur; ~18,4°K'da doğu-batı mesafeleri ~%5,4 fazla çıkar.
+- **Piksel dönüşümü (PixelIsArea):** `X = 4577366,5 + col`, `Y = 1106617,5 − row`.
+- **Düşey datum:** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid). `data/dtm_subset.json` içinde `verticalDatumVerified: false` yazar; uygulama kodunda `config.js` bu değeri `true` gösterir (bkz. aşağıdaki sınırlar).
+- **No-data:** `0xFF7FFFFB` tam bit deseni `no_data`; geçerli aralık dışı `invalid`. Asla 0 ile değiştirilmez. Eğim, 3×3 pencerede bir hücre bile geçersizse üretilmez.
+- **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere (1 902 260 hücre, 0 no-data) yüklenir; dışı `out_of_bounds` olarak raporlanır.
+- **Rota kökeni:** İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değildir. PLACES kullanılmadı.
 
 ## Değer etiketleri
 
-- **Arşiv ürünü:** USGS Mars 2020 TRN HiRISE DTM Mozaiği `JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40` (m, MOLA areoid / DeltaGeoid datumu).
-- **Hesaplanan:** oyuncu konumunda en yakın hücre kotu; 3×3 Horn eğimi.
-- **Senaryo/UI:** konum, 1.2 m/s × 8 zaman hızlandırma, senaryo saati, ilerleme, sapma, ±10 m koridor.
-- **Rota kökeni:** İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değil (PLACES kullanılmadı).
+- **Arşiv ürünü:** USGS Mars 2020 TRN HiRISE DTM mozaiği (`JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40`); lisans CC0 1.0 (`SOURCES.md` #1).
+- **Ölçülen:** Pencerede kot aralığı 44,84 m; eğim P50/P90/maks 3,11°/7,54°/35,77° (`stage35-scale-audit.md`).
+- **Senaryo:** hız, zaman hızlandırma, koridor, yürünebilirlik eşikleri (20° vb.), rota tercih ağırlıkları.
+- **Sunum:** gökyüzü ve ton, gölge, ayak izi, şerit, kamera salınımı, giysi malzemesi, abartı seçenekleri.
+
+Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/build-sources-list.mjs` ile üretilir). Kaynakta lisans yazmayan alan **belirtilmemiş** olarak kalır; 14 kaynaktan 13'ünde lisans belirtilmemiştir.
+
+## Bilinen sınırlar
+
+- **Yürünebilirlik:** Planlama göstergesidir. Güvenli rota sertifikası değildir. Eşikler senaryo parametresidir.
+- **Rota süresi:** Rota panelindeki tahmin 0,8 m/s kullanır; simülasyon 1,2 m/s × 8 kullanır. Bu tutarsızlık bilinmektedir (`route-service.js:301`, `main.js:348`).
+- **"En düz" tercihi:** Maksimum eğimi dengeli tercihten düşürmeyebilir (son gözlemde 10,1° ve 9,8°). Tercih adı ne ölçtüğünü tam açıklamaz.
+- **Ortomozaik hizası:** ±1,5 m belirsizlik; yarım piksel hizası kanıtlanmadı. `hud.js:104` uyarısı WMTS katmanıyla çelişkili görünebilir.
+- **Viking:** Renk bağlamıdır (232 m/px). Lisans "belirtilmemiş"; teyit bekliyor (K1-4).
+- **MOLA ufku:** Datum doğrulanmadı (`needs_review`); uzak silüet alçak ve bulanık, bölgesel bağlam olarak sunulur.
+- **Datum bayrağı:** `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` `false`. Kanıt eklenene kadar mutlak kot iddiası yapılmaz (K3-5, açık).
+- **Görsel kalite:** Gölge yumuşak; eller kalın; uzak ufuk silüeti alçaktır. Bunlar sunum tercihleridir, ölçülmüş değildir.
+- **Göz yüksekliği:** Kod 1,48 m; bir commit mesajı 1,75 m diyor. Suit ölçümü yoktur.
+- **Atmosfer:** Mars basıncı ve yoğunluğu (NSSDC ortalama/mevsimsel) gösterilir; hareket fiziğine sürükleme eklenmemiştir.
+- **Render:** Ortogörüntü JP2 çözücüsü yoktur; DTM hillshade ve WMTS karoları kullanılır.
+- **Kabul:** `npm run smoke` ve tam tarayıcı kabulü (sıçrama/iniş, varış rozeti, galeri) `stage-final-acceptance.md` içinde işaretlidir.
+
+## Doğrulama
+
+- `node --test test/`: 574/574 (çıkış kodu 0), mevcut çalışma ağacında 15 Kasım 2026 (`stage-final-acceptance.md`).
+- `node scripts/preflight.mjs`: HAZIR (hata 0, uyarı 0).
+- `npm run smoke`: bu sürümde çalıştırılmadı; önceki sürüm kayıtları commit mesajlarında. Güncel smoke sonucu için yeniden çalıştırın.
+
+## Viking MDIM 2.1 yerel karo paketi
+
+Uygulama `data/viking-mdim/manifest.json` ve küçük `tiles/` ile Jezero bölgesel PNG çıktılarını varsa kullanır. Çıktılar yoksa veya bir karo yüklenemezse global katman `unavailable` olur; yerel HiRISE minimap ve diğer akışlar çalışmayı sürdürür. "Mars globali göster" küresel görünümü açar; "Kapsama sığdır" Jezero'ya döner. 232 m/piksel bölgesel mozaik yalnız renkli bağlam sağlar; yerel yürünebilirlik puanı üretmez.
+
+12,7 GB kaynak `Mars_Viking_MDIM21_ClrMosaic_global_232m.tif` uygulamanın çalışması için gerekmez ve git'e eklenmez. Kaynağı hazırlamak için `data-external/` klasörüne koyup ingest betiğine `--input` ile açıkça verin:
+
+```powershell
+node scripts/ingest-viking-mosaic.mjs --input data-external/Mars_Viking_MDIM21_ClrMosaic_global_232m.tif --out data/viking-mdim
+```
 
 ## Kaynaklar
 
 - USGS Astropedia TRN HiRISE DTM: https://doi.org/10.5066/P9REJ9JN
 - Fergason vd. 2020 (LPSC #2020): https://www.hou.usra.edu/meetings/lpsc2020/pdf/2020.pdf
-- NASA Mars Yerçekimi Referansı: https://solarsystem.nasa.gov/planet-compare/?intent=121
+- NASA Mars yerçekimi referansı (Planet Compare): https://solarsystem.nasa.gov/planet-compare/?intent=121
 - Mars 2020 Initial Reports: https://pds-geosciences.wustl.edu/missions/mars2020/Mars%202020%20Initial%20Reports%201-4%20April%202022.pdf
-- PLACES: https://pds-geosciences.wustl.edu/missions/mars2020/places.htm
+- PLACES (kullanılmadı): https://pds-geosciences.wustl.edu/missions/mars2020/places.htm
 
-Görüntü/veri: NASA / JPL-Caltech / University of Arizona / USGS Astrogeology Science Center.
+Görüntü ve veri: NASA / JPL-Caltech / University of Arizona / USGS Astrogeology Science Center (ürün bazında atıflar `SOURCES.md` dosyasındadır).

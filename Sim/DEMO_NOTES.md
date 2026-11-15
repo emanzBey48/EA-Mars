@@ -12,10 +12,11 @@ DTM etiketleri: **[AKTİF]** = ekranda gösterilen arazi (legacy PDS3 DTEEC yede
 | Değer | Etiket | Kaynak ve birim | Sınır |
 |---|---|---|---|
 | Yüzey yerçekimi 3,71 m/s² | ÖLÇÜM (literatür değeri) | NASA Planet Compare, küresel yuvarlatılmış değer (`SOURCES.md` #10) | Jezero yerel ölçümü değil. NSSDC Mars Fact Sheet 3,73 m/s² verir (`SOURCES.md` #11); fark yuvarlama/kaynak farkıdır, doğrulanmadı. |
-| Zıplama yayı ~1,29 s, tepe ~0,78 m | HESAP | `2·v0/g`, `v0²/(2g)`, `v0 = 2,4 m/s` (oyun girdisi) | v0 oyun varsayımı; suit/insan performansı değildir. |
-| İniş darbe sönümü 0,25 s; kamera dip ~0,055 m | SENARYO / SUNUM | `config.js` (`landingRecoveryDurationS`); ölçülen maks. kare farkı 0,0549 m (`stage-camera-motion-audit.md`) | Görsel yumuşatma. |
-| Yürüme hızı 1,2 m/s × zaman hızlandırma 8 | SENARYO | `config.js`; simülasyon saatinde 1,2 m/s, duvar saatinde ~9,6 m/s | Gerçek astronot hızı iddiası değil; 687–730 m'lik rotayı 60–90 s'ye sığdırmak için. |
-| Rota tahmini süresi 0,8 m/s | SENARYO (çelişki) | `route-service.js:301` (0,8 m/s) ve `main.js:348` (sabit metin) | Simülasyonun 1,2 m/s'siyle **tutarsız**; bkz. §4. |
+| Zıplama yayı ~1,29 s sim-saniyesi, tepe ~0,78 m | HESAP | `2·v0/g`, `v0²/(2g)`, `v0 = 2,4 m/s` (oyun girdisi) | v0 oyun varsayımı; suit/insan performansı değildir. |
+| Zıplama duvar saatinde ~0,6 s (uçuş zaman hızı 2×; 1,29 sim-s ÷ 2 ≈ 0,65 s; yumuşatma payı dahil ölçülen ~0,60 s) | HESAP / SUNUM | `config.js` (`airborneTimeScale`, `timeScaleSmoothingWallS`); `stage-airborne-timescale-note.md` | Fizik sim-saniyesinde aynı; yalnız sunum hızı değişir. 2×, kaynaksız sunum seçimidir. |
+| İniş darbe sönümü 0,25 sim-s (uçuş zaman hızında ~0,13 s duvar); kamera dip ~0,055 m | SENARYO / SUNUM | `config.js` (`landingRecoveryDurationS`); ölçülen maks. kare farkı 0,0549 m (`stage-camera-motion-audit.md`) | Görsel yumuşatma. |
+| Yürüme hızı 1,2 m/s × zaman hızlandırma 8 (uçuşta 2) | SENARYO | `config.js`; yürürken simülasyon saatinde 1,2 m/s, duvar saatinde ~9,6 m/s; havada duvar saatinde ~2,4 m/s | Gerçek astronot hızı iddiası değil; 687–730 m'lik rotayı 60–90 s'ye sığdırmak için. |
+| Rota tahmini süresi = düz yol / 1,2 m/s (simülasyon saati); duvar saati = simülasyon saati / 8 | HESAP (senaryo hızı) | `config.js` `SCENARIO.walkSpeedMps` → `pathfinder.worker.js` → `route-service.js` `stats.durationAssumption`; arayüz `main.js` `renderRouteSummary` | Hız senaryo değeridir, eğim/giysi modellenmez. 0,8 m/s tutarsızlığı giderildi; bkz. §4 ve `stage-route-eta-note.md`. |
 | **[AKTİF, UI] Legacy PDS3 DTEEC DTM:** 1669×1129 hücre, ~1,0097 m/px; 1 884 301 geçerli, 0 no-data | ÖLÇÜM | `data/legacy-hirise/dtm_subset.json` (`label`, `windowStats`) | **Yedek (fallback); gösterilen arazi budur.** USGS adayı reddedilip bu etkinleştiriliyor (`surface/registry.js` `resolveActiveProvider`, neden `needs_review_verticalReference`). Karar bekliyor (K3-7). |
 | **[ADAY, analiz] USGS Mars 2020 TRN 1 m:** 1676×1135 hücre, 1 m/px; 1 902 260 geçerli, 0 no-data | ÖLÇÜM | `data/dtm_subset.json` (`window`, `windowStats`), `stage35-scale-audit.md` | **UI'de kullanılmıyor** (`needs_review`, düşey datum kanıtı yok). Kabartma, rota doğrulama ve ortomozaik ölçümleri bu pencerede yapıldı. Kaynak mozaik 21488×21400. |
 | [ADAY] Pencerede kot aralığı 44,84 m; eğim P50/P90/maks 3,11°/7,54°/35,77° | HESAP | `stage35-scale-audit.md` (Horn 3×3, USGS adayı penceresi) | Aday pencere istatistiği; küresel veya rota ölçüsü değil. Aktif legacy penceresinde eğim dağılımı **ölçülmedi** (kot aralığı, `windowStats`: −2592,83…−2546,74 m = 46,09 m). |
@@ -44,7 +45,7 @@ DTM etiketleri: **[AKTİF]** = ekranda gösterilen arazi (legacy PDS3 DTEEC yede
 2. "Örnek Görevi Başlat (Sol 120 → Sol 164)" — A* rotası hesaplanır. Hesaplama süresi ölçülmedi.
 3. 3D birinci şahıs: **W/A/S/D** yürür, turkuaz şerit rotayı gösterir, **Space** küçük bir senaryo sıçraması yapar, **P** duraklatır, **Esc** fare kilidini bırakır. Ufuk, gölge ve ortomozaik kaplama aynı sahnededir.
 4. Sağ panel (sunum modu kapalıyken): rota tercihi (dengeli / en kısa / en düz) değişince özet yeniden hesaplanır; minimap "Mars globali göster" ile Viking bağlamına, "Kapsama sığdır" ile Jezero'ya döner.
-5. Sol 164'e varılınca varış rozeti belirir (README tarifi; bu belgenin kabulünde gözlenmedi). Doğrudan çizgi ~687 m (USGS adayı ölçümü), A* rotası ~730 m (UI özeti, aktif legacy DTM); yürüme süresi (1,2 m/s × 8 ≈ 9,6 m/s duvar saati) yaklaşık 60–90 sn'dir (HESAP).
+5. Sol 164'e varılınca varış rozeti belirir (README tarifi; bu belgenin kabulünde gözlenmedi). Doğrudan çizgi ~687 m (USGS adayı ölçümü), A* rotası ~730 m (UI özeti, aktif legacy DTM); yürüme süresi (1,2 m/s × 8 ≈ 9,6 m/s duvar saati) yaklaşık 60–90 sn'dir (HESAP). Arayüzdeki "Tahmini yürüme süresi" simülasyon saatidir (730 m ≈ 10 dk 8 sn); duvar saati satırı ayrıca ≈ 1 dk 16 sn gösterir.
 6. Gösterilemiyorsa: `?view=3d` yerine varsayılan 2D görünüm açık kalır; WebGL2 yoksa 2D Canvas kesintisiz çalışır.
 
 Kullanışlı parametreler: `?view=3d`, `?scale=1|2|3`, `?shadows=off|low|high`, `?horizon=off`.
@@ -65,8 +66,8 @@ Kullanışlı parametreler: `?view=3d`, `?scale=1|2|3`, `?shadows=off|low|high`,
 
 - **Aktif DTM ile analiz DTM'i farklı (karar bekliyor, K3-7 / K3-9):** UI aktif legacy DTM'i gösterir; kabartma (35A), rota doğrulama (23C), tercih tablosu, ortomozaik hizası (39A/21B) ve MOLA karşılaştırması (37A) USGS 1 m adayında yapıldı. Aynı uç noktalarda sonuçlar farklı: en kısa rotanın maks. eğimi UI'de 14,1°, USGS adayında 10,64°; en düz UI'de 10,1°, USGS adayında 9,27°; dengeli ise iki DTM'de yakın (UI 9,8°, USGS 9,81°). Analizler legacy üzerinde yeniden koşulmadı.
 
-- **Rota süresi 0,8 m/s, simülasyon 1,2 m/s:** `route-service.js:301` ve `main.js:348` (sabit metin) ile `config.js:5` çelişir.
-- **Rota uzunlukları:** UI'de en kısa 730 m / en düz 731 m; devir notunda 730,505 m / 732,161 m. Aynı uçlar ve yuvarlama doğrulanmadı.
+- **Rota süresi (ÇÖZÜLDÜ, stage-route-eta):** Önceden süre 0,8 m/s ile hesaplanıp sabit metinle gösteriliyordu; simülasyon 1,2 m/s kullanıyordu (730 m: arayüz ~15 dk, simülasyon ~10 dk). Artık süre worker sınırında `config.js` `SCENARIO.walkSpeedMps` ile hesaplanır, `durationAssumption` kaynağını yazar ve arayüz "simülasyon saati" ile duvar saatini ayrı gösterir. Ayrıntı: `stage-route-eta-note.md`.
+- **Rota uzunlukları (açıklandı, yuvarlama değil):** Arayüz tek kuralla tamsayı metre gösterir (`toFixed(0)`). UI'deki 730 m (en kısa) ve 731 m (en düz) aktif legacy DTM'den gelir (729,66 m ve 731,09 m). Devir notundaki 730,505 m ve 732,161 m USGS adayı penceresinden gelir; fark DTM kaynaklıdır, biçimlendirmeden değil.
 - **Göz yüksekliği:** kodda 1,48 m; `e9a0a78` commit mesajı 1,75 m diyor. Kod esas alınır.
 - **Datum:** `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` `verticalDatumVerified: false`. Kanıt yoksa `false` olmalıdır (K3-5, açık). Aktif legacy etiketinin datum ifadesi (`label.note`: "Mars 2000 Datum") 38A denetiminde incelenmedi.
 - **`stage39-ortho-diagnosis.md`** "Yazar: Efe" diyor; devir notu bu raporun Efe'ye ait olmadığını yazıyor (K3-6, açık).
@@ -83,7 +84,7 @@ Kullanışlı parametreler: `?view=3d`, `?scale=1|2|3`, `?shadows=off|low|high`,
 8. **Ufuk gerçek kot mu?** Bölgesel bağlam (MOLA, ~463 m/px); datum `needs_review`, yürünebilirlik için kullanılmaz.
 9. **Gerçek ölçek mi abartı mı?** Varsayılan 1× gerçek dikey ölçektir. 2× ve 3× görsel abartıdır ve rozetle belirtilir.
 10. **Ayak izleri ve adım hızı ölçülmüş mü?** Hayır. Ayak izi görseldir; adım uzunluğu ve Froude modeli varsayımdır.
-11. **Neden 8× hız?** Rotayı 60–90 saniyelik demoya sığdırmak için. Gerçek yürüyüş hızı iddiası değildir. (Rota süre tahmini 0,8 m/s kullanır; bu tutarsızlık §4'te açıktır.)
+11. **Neden 8× hız?** Rotayı 60–90 saniyelik demoya sığdırmak için. Gerçek yürüyüş hızı iddiası değildir. (Rota süre tahmini de simülasyonla aynı 1,2 m/s senaryo hızını kullanır; duvar saati simülasyon saati / 8'dir.)
 12. **Lisans sorunu var mı?** Evet: 13 kaynakta lisans kaynakta belirtilmemiştir. Teslim öncesi teyit gerekir; uydurulmuş lisans yoktur.
 13. **Bu kullanıcıya yön verir mi?** Hayır. Güvenlik veya karar desteği değildir.
 14. **Hangi arazi verisini görüyoruz?** Ekranda PDS3 DTEEC (legacy) yedek DTM görünür: 1669×1129 hücre, ~1,01 m/px. Daha yeni USGS Mars 2020 TRN 1 m penceresi (1676×1135) düşey datum kanıtı olmadığı için etkinleştirilmedi (`needs_review`); analizlerin çoğu o pencerede yapıldı. Bu yüzden sayılar [AKTİF] veya [ADAY] olarak etiketli; hangi verinin kalacağı bir ürün kararıdır (K3-7).

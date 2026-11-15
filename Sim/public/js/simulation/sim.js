@@ -7,6 +7,28 @@ const EMPTY_GEOLOGY_SNAPSHOT = toGeologySnapshot(null, null);
 
 export const PHASE = Object.freeze({ READY: 'ready', RUNNING: 'running', PAUSED: 'paused', ARRIVED: 'arrived' });
 
+/**
+ * Flight clock scale. Missing (undefined/null) keeps the walking clock, i.e. no slowdown.
+ * Otherwise it must be finite and within [1, timeScale]; anything else is a configuration error and throws.
+ */
+export function resolveAirborneTimeScale(scenario) {
+  const base = scenario.timeScale;
+  const air = scenario.airborneTimeScale ?? base;
+  if (!Number.isFinite(air) || air < 1 || air > base) {
+    throw new RangeError(`airborneTimeScale must be finite and within [1, timeScale=${base}]; got ${air}`);
+  }
+  return air;
+}
+
+/** Smoothing time constant (wall seconds) for clock-scale changes. Missing means an instant switch (0). */
+export function resolveClockSmoothingWallS(scenario) {
+  const tau = scenario.timeScaleSmoothingWallS ?? 0;
+  if (!Number.isFinite(tau) || tau < 0) {
+    throw new RangeError(`timeScaleSmoothingWallS must be finite and >= 0; got ${tau}`);
+  }
+  return tau;
+}
+
 export class MarswalkSim {
   /**
    * @param {{a:{x:number,y:number}, b:{x:number,y:number}}} route  finite straight segment in local metres
@@ -15,6 +37,8 @@ export class MarswalkSim {
   constructor(route, scenario) {
     this.route = route;
     this.scenario = { ...scenario };
+    this.airborneTimeScale = resolveAirborneTimeScale(scenario);
+    this.clockSmoothingWallS = resolveClockSmoothingWallS(scenario);
     this.corridorHalfWidthM = scenario.corridorHalfWidthM;
     const pad = scenario.roamLimitM;
     this.bounds = {
@@ -39,7 +63,25 @@ export class MarswalkSim {
     this.heightAboveReferenceM = 0;
     this.horizontalVelocityXMps = 0;
     this.horizontalVelocityYMps = 0;
+    this.timeScaleEffective = this.scenario.timeScale; // current smoothed scenario-clock scale (sim s per wall s)
     this.trail = [{ x: this.pos.x, y: this.pos.y }];
+  }
+
+  /**
+   * Advances the scenario clock by `dt` wall seconds and returns the simulated seconds elapsed.
+   * The scale relaxes exponentially from its current value toward `airborneTimeScale` (flight clock)
+   * or `timeScale` (walking clock) with time constant `clockSmoothingWallS`. The returned value is the exact
+   * integral of that relaxation over the step, so the simulated time depends only on wall time, not on
+   * how it is split into frames. Physics runs in simulated seconds and is not affected by the clock choice.
+   */
+  advanceSimClock(dt, flightClock) {
+    const target = flightClock ? this.airborneTimeScale : this.scenario.timeScale;
+    const tau = this.clockSmoothingWallS;
+    const s0 = this.timeScaleEffective;
+    const k = tau > 0 ? -Math.expm1(-dt / tau) : 1; // 1 - exp(-dt / tau)
+    const dtSim = target * dt + (s0 - target) * tau * k;
+    this.timeScaleEffective = target + (s0 - target) * (1 - k);
+    return dtSim;
   }
 
   togglePause() {
@@ -112,7 +154,6 @@ export class MarswalkSim {
    */
   stepFirstPerson(dtWall, input = {}, surface = {}) {
     const dt = Math.max(0, Math.min(0.1, dtWall));
-    const dtSim = dt * this.scenario.timeScale;
     const moveX = Number.isFinite(input.moveX) ? input.moveX : 0;
     const moveY = Number.isFinite(input.moveY) ? input.moveY : 0;
     const moveLength = Math.hypot(moveX, moveY);
@@ -131,6 +172,12 @@ export class MarswalkSim {
     if (this.phase !== PHASE.RUNNING) return;
 
     if (Number.isFinite(input.headingRad)) this.headingRad = input.headingRad;
+
+    // Flight clock: slowed while airborne, during landing recovery, and for a jump that starts this frame.
+    // The jump predicate mirrors the jump block below; landingRecovery here is the start-of-frame value, and
+    // the recovery timer is inert while that flag is false, so the two agree.
+    const jumpStarts = Boolean(input.jump) && this.grounded && !this.landingRecovery && sampleKnown && this.bodyWorldZReferenceM !== null;
+    const dtSim = this.advanceSimClock(dt, this.airborne || this.landingRecovery || jumpStarts);
 
     // Landing recovery timer: elapsed in scenario time
     if (this.landingRecovery && dtSim > 0) {
@@ -374,6 +421,7 @@ export function createWorldSnapshot({
         airborne: sim.airborne,
         landingRecovery: sim.landingRecovery ?? false,
         landingRecoveryFrac: sim.landingRecoveryFrac ?? 0,
+        timeScaleEffective: sim.timeScaleEffective, // smoothed scenario-clock scale (sim s per wall s)
         gaitDistanceM: sim.distanceWalkedM,
         phase: sim.phase,
         groundContactStatus: elevation.status,

@@ -11,6 +11,13 @@ export const SCENARIO = {
   landingRecoveryDurationS: 0.25,
   // Scenario clock runs this many times faster than wall-clock time, so the ~687 m link fits a short demo.
   timeScale: 8,
+  // Presentation parameter (NOT sourced): while airborne or in landing recovery the scenario clock runs this many
+  // times faster than wall time instead of timeScale, so the ~1.3 s hop lasts ~0.65 s on screen. Physics is unchanged.
+  // Must satisfy 1 <= airborneTimeScale <= timeScale (sim.js throws otherwise).
+  airborneTimeScale: 2,
+  // Exponential smoothing time constant (wall s) for switching between the walking and flight clocks, so the
+  // on-screen speed does not snap at takeoff or touchdown. Costs a little flight time (see stage note).
+  timeScaleSmoothingWallS: 0.02,
   // Route corridor half-width on each side of the line (m). Demo assumption, NOT a NASA operational limit.
   corridorHalfWidthM: 10,
   corridorHalfWidthMinM: 1,

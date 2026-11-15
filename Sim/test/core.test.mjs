@@ -603,10 +603,13 @@ test('Stage 12: Mid-air horizontal momentum conservation — ballistic transit w
   assert.equal(sim.airborne, true);
   assert.equal(sim.horizontalVelocityXMps, takeoffVx, 'No mid-air thrusters/aerodynamic braking on Mars');
 
-  // Verify position advances horizontally by conserved momentum
+  // Verify position advances horizontally by conserved momentum. The flight clock is smoothed toward
+  // airborneTimeScale, so the scenario time advanced in this step is measured, not assumed to be dtWall * timeScale.
   const posXBefore = sim.pos.x;
+  const simBefore = sim.simTimeS;
   sim.stepFirstPerson(dtWall, {}, known);
-  const dtSim = dtWall * SCENARIO.timeScale;
+  const dtSim = sim.simTimeS - simBefore;
+  assert.ok(dtSim > 0);
   assert.ok(Math.abs((sim.pos.x - posXBefore) - takeoffVx * dtSim) < 1e-6);
 });
 
@@ -653,9 +656,16 @@ test('Stage 12: Landing impact recovery — recovery state active, jump blocked,
   assert.equal(sim.airborne, false, 'Jump must be blocked during landing recovery');
   assert.equal(sim.grounded, true);
 
-  // Advance time past landingRecoveryDurationS
-  const remainingWallTime = (sim.landingRecoveryTimerS / SCENARIO.timeScale) + 0.05;
-  sim.stepFirstPerson(remainingWallTime, {}, known);
+  // Advance wall time until the recovery timer expires. Recovery runs on the flight clock (airborneTimeScale),
+  // not on the walking clock, so it takes ~landingRecoveryDurationS / airborneTimeScale wall seconds.
+  let recoveryFrames = 0;
+  while (sim.landingRecovery && recoveryFrames < 1000) {
+    sim.stepFirstPerson(dtWall, {}, known);
+    recoveryFrames++;
+  }
+  const recoverySpentWallS = recoveryFrames * dtWall;
+  assert.ok(Math.abs(recoverySpentWallS - SCENARIO.landingRecoveryDurationS / SCENARIO.airborneTimeScale) < 0.02,
+    `recovery wall time ${recoverySpentWallS} s ~ 0.25 s / airborneTimeScale`);
   assert.equal(sim.landingRecovery, false);
   assert.equal(sim.landingRecoveryTimerS, 0);
   assert.equal(sim.landingRecoveryFrac, 0);

@@ -29,7 +29,7 @@ import { buildPlannedRouteLinePositions, derivePlannedRouteGuidance } from './vi
 import { createFootprintTrail } from './view/3d/footprint-trail.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 import { createMinimap } from './view/minimap/minimap.js';
-import { classifyPlanResponse } from './view/minimap/plan-response-state.js';
+import { classifyPlanResponse } from './route/plan-response-state.js';
 
 const $ = (id) => document.getElementById(id);
 const urlParams = new URLSearchParams(window.location.search);

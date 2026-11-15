@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPlanResponse } from '../public/js/view/minimap/plan-response-state.js';
+import { classifyPlanResponse } from '../public/js/route/plan-response-state.js';
 
 const base = {
   responseId: 12,

@@ -1,5 +1,6 @@
 // Interactive 2D minimap presentation for an already-prepared terrain image.
 // This view never samples a provider or computes route costs. Missing/outside coverage stays blank.
+import { STATUS as ROUTE_CELL_STATUS } from '../../route/cost-model.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -157,6 +158,23 @@ export function createMinimap({
     const offset = (row * width + col) * 4;
     // buildTerrainImage paints non-OK cells as (255,0,255) or (90,0,90).
     if (data[offset + 1] === 0 && data[offset] === data[offset + 2]) return 'Bu hücre no-data veya geçersiz; başka bir nokta seçin.';
+    const heatmap = state.planning.heatmap;
+    if (!(heatmap?.status instanceof Uint8Array) || !Number.isSafeInteger(heatmap.rows) ||
+        !Number.isSafeInteger(heatmap.cols) || heatmap.status.length !== heatmap.rows * heatmap.cols ||
+        !Number.isFinite(heatmap.nwXM) || !Number.isFinite(heatmap.nwYM) ||
+        !Number.isFinite(heatmap.cellSizeM) || heatmap.cellSizeM <= 0) {
+      return 'Planlama hücreleri henüz hazır değil; nokta seçilemez.';
+    }
+    const planCol = Math.floor((xM - heatmap.nwXM) / heatmap.cellSizeM);
+    const planRow = Math.floor((heatmap.nwYM - yM) / heatmap.cellSizeM);
+    if (planCol < 0 || planCol >= heatmap.cols || planRow < 0 || planRow >= heatmap.rows) {
+      return 'Nokta planlama ızgarasının dışında.';
+    }
+    const planCellStatus = heatmap.status[planRow * heatmap.cols + planCol];
+    if (planCellStatus === ROUTE_CELL_STATUS.EDGE_UNKNOWN) {
+      return 'Bu hücrenin komşu yüzey durumu bilinmiyor; başka bir nokta seçin.';
+    }
+    if (planCellStatus !== ROUTE_CELL_STATUS.OK) return 'Bu hücre EVA planlaması için kapalı; başka bir nokta seçin.';
     return '';
   }
 

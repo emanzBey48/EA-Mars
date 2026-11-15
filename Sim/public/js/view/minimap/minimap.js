@@ -3,6 +3,11 @@
 import { STATUS as ROUTE_CELL_STATUS } from '../../route/cost-model.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+// Route glow is a wide, low-alpha underlay. A per-segment shadowBlur made every redraw expensive.
+const ROUTE_HALO_WIDTH_PX = 20;
+const ROUTE_HALO_ALPHA = 0.2;
+// Route dash animation is throttled; interaction redraws are not.
+const ROUTE_ANIMATION_INTERVAL_MS = 1000 / 15;
 
 function routeScoreColor(score) {
   if (!Number.isFinite(score)) return '#63e6ff';
@@ -81,8 +86,29 @@ export function createMinimap({
     height: 0,
     destroyed: false,
     selectionMessage: '',
+    drawPending: false,
   };
   let routeAnimationFrame = null;
+  let lastRouteDrawMs = -Infinity;
+  const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  // Hidden minimap (display:none panel, hidden tab) is not drawn; drawPending defers it until shown.
+  function isShown() {
+    if (typeof document !== 'undefined' && document.hidden) return false;
+    if (typeof canvas.getClientRects === 'function') return canvas.getClientRects().length > 0;
+    return true;
+  }
+  function scheduleRouteAnimation() {
+    if (routeAnimationFrame !== null || typeof requestAnimationFrame !== 'function') return;
+    routeAnimationFrame = requestAnimationFrame(() => {
+      routeAnimationFrame = null;
+      if (state.destroyed || !state.planning.route?.length) return;
+      if (nowMs() - lastRouteDrawMs < ROUTE_ANIMATION_INTERVAL_MS) { scheduleRouteAnimation(); return; }
+      draw();
+    });
+  }
+  function onVisibilityChange() {
+    if (!document.hidden && state.drawPending) draw();
+  }
 
   const bounds = () => state.terrain?.bounds ?? null;
   const validBounds = (b) => b && [b.nwXM, b.nwYM, b.widthM, b.heightM].every(Number.isFinite) && b.widthM > 0 && b.heightM > 0;
@@ -338,6 +364,8 @@ export function createMinimap({
 
   function draw() {
     if (state.destroyed) return;
+    if (!isShown()) { state.drawPending = true; return; }
+    state.drawPending = false;
     resize();
     ctx.clearRect(0, 0, state.width, state.height);
     ctx.fillStyle = '#17191d';
@@ -422,20 +450,35 @@ export function createMinimap({
       const route = state.planning.route;
       const scores = state.planning.segments;
       const hasAlignedScores = Array.isArray(scores) && scores.length === route.length - 1;
-      const phase = (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.012;
+      const now = nowMs();
+      const phase = now * 0.012;
+      lastRouteDrawMs = now;
+      const segments = [];
+      for (let i = 1; i < route.length; i++) {
+        segments.push({
+          a: worldToScreen(route[i - 1].xM, route[i - 1].yM),
+          b: worldToScreen(route[i].xM, route[i].yM),
+          color: routeScoreColor(hasAlignedScores ? scores[i - 1]?.score : null),
+        });
+      }
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      for (let i = 1; i < route.length; i++) {
-        const a = worldToScreen(route[i - 1].xM, route[i - 1].yM);
-        const b = worldToScreen(route[i].xM, route[i].yM);
-        const color = routeScoreColor(hasAlignedScores ? scores[i - 1]?.score : null);
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-        ctx.strokeStyle = color; ctx.lineWidth = 8; ctx.shadowBlur = 8; ctx.shadowColor = color;
-        ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-        ctx.shadowBlur = 0; ctx.strokeStyle = color; ctx.lineWidth = 3.2;
-        ctx.setLineDash([7, 6]); ctx.lineDashOffset = -phase; ctx.stroke();
+      // Pass 1: halo (no shadowBlur). Pass 2: solid body. Pass 3: dashed core. Colors per segment are kept.
+      ctx.globalAlpha = ROUTE_HALO_ALPHA; ctx.lineWidth = ROUTE_HALO_WIDTH_PX;
+      for (const s of segments) {
+        ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y);
+        ctx.strokeStyle = s.color; ctx.stroke();
+      }
+      ctx.globalAlpha = 1; ctx.lineWidth = 8;
+      for (const s of segments) {
+        ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y);
+        ctx.strokeStyle = s.color; ctx.stroke();
+      }
+      ctx.lineWidth = 3.2; ctx.setLineDash([7, 6]); ctx.lineDashOffset = -phase;
+      for (const s of segments) {
+        ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y);
+        ctx.strokeStyle = s.color; ctx.stroke();
       }
       ctx.setLineDash([]); ctx.restore();
     }
@@ -523,9 +566,7 @@ export function createMinimap({
       ctx.fillStyle = '#e9fbff';
       ctx.font = '9px system-ui, sans-serif';
       ctx.fillText(legend, 16, state.height - 47, Math.max(1, state.width - 32));
-      if (routeAnimationFrame === null && typeof requestAnimationFrame === 'function') {
-        routeAnimationFrame = requestAnimationFrame(() => { routeAnimationFrame = null; draw(); });
-      }
+      scheduleRouteAnimation();
     }
   }
 
@@ -672,6 +713,8 @@ export function createMinimap({
   canvas.addEventListener('wheel', onWheel, { passive: false });
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(draw) : null;
   resizeObserver?.observe(canvas);
+  const observesVisibility = typeof document !== 'undefined' && typeof document.addEventListener === 'function';
+  if (observesVisibility) document.addEventListener('visibilitychange', onVisibilityChange);
 
   cacheTerrainMask();
   if (validBounds(bounds())) fitLocal(); else draw();
@@ -728,6 +771,7 @@ export function createMinimap({
       routeAnimationFrame = null;
       canvas.style.cursor = '';
       resizeObserver?.disconnect();
+      if (observesVisibility) document.removeEventListener('visibilitychange', onVisibilityChange);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);

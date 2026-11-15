@@ -43,15 +43,20 @@ function fakeTerrain(paint = () => VALID_RGB) {
 /** Records every fillText call; all other 2D context calls are no-ops. */
 function fakeCtx() {
   const texts = [];
-  const target = { measureText: () => ({ width: 10 }), texts, fillCalls: 0, fillStyles: [] };
+  const target = { measureText: () => ({ width: 10 }), texts, fillCalls: 0, fillStyles: [], shadowBlur: 0, shadowBlurWrites: [], strokeCount: 0 };
   const ctx = new Proxy(target, {
     get(t, prop) {
       if (prop in t) return t[prop];
       if (prop === 'fillText') return (text) => { texts.push(text); };
       if (prop === 'fill') return () => { t.fillCalls++; t.fillStyles.push(t.fillStyle); };
+      if (prop === 'stroke') return () => { t.strokeCount++; };
       return () => undefined;
     },
-    set(t, prop, value) { t[prop] = value; return true; },
+    set(t, prop, value) {
+      if (prop === 'shadowBlur') t.shadowBlurWrites.push(value);
+      t[prop] = value;
+      return true;
+    },
   });
   return ctx;
 }
@@ -69,6 +74,9 @@ function fakeCanvas() {
     addEventListener(type, fn) { listeners.set(type, fn); },
     removeEventListener(type) { listeners.delete(type); },
     dispatch(type, event) { listeners.get(type)?.({ button: 0, pointerId: 1, ...event }); },
+    // Shown by default; tests set `shown = false` to model a display:none ancestor.
+    shown: true,
+    getClientRects: () => (canvas.shown ? [{}] : []),
   };
   return { canvas, ctx };
 }
@@ -201,4 +209,109 @@ test('minimap renders ground-sampled footprint quads and clears them with an emp
     mini.setOverlays({ footprintTrail: { count: 0, quads: new Float32Array(), instances: new Float32Array() } });
     assert.ok(!ctx.fillStyles.slice(afterDraw).includes('#24130e'), 'empty reset trail draws no footprint');
   } finally { restore(); }
+});
+
+// Route fixture: 3 points -> 2 segments, scores aligned with segments.
+const ROUTE_PLANNING = () => ({
+  route: [{ xM: -8, yM: -8 }, { xM: 0, yM: 0 }, { xM: 8, yM: -2 }],
+  segments: [{ score: 80 }, { score: 20 }],
+});
+const STROKES_PER_ROUTE_DRAW = 6; // halo + body + dashed core, one stroke per segment each
+
+test('minimap route: segments never set a positive shadowBlur and no shadow stays active', () => {
+  const { mini, ctx, restore } = setupMinimap({ terrain: fakeTerrain() });
+  try {
+    mini.setPlanning(ROUTE_PLANNING());
+    assert.ok(ctx.strokeCount >= STROKES_PER_ROUTE_DRAW, 'route segments are stroked');
+    assert.ok(ctx.shadowBlurWrites.every((v) => v === 0), `shadowBlur is never raised (saw ${JSON.stringify(ctx.shadowBlurWrites)})`);
+    assert.equal(ctx.shadowBlur, 0, 'no shadow is left active after drawing');
+  } finally { restore(); }
+});
+
+test('minimap route: a route change redraws immediately while the minimap is shown', () => {
+  const { mini, ctx, restore } = setupMinimap({ terrain: fakeTerrain() });
+  try {
+    const before = ctx.strokeCount;
+    mini.setPlanning(ROUTE_PLANNING());
+    assert.equal(ctx.strokeCount - before, STROKES_PER_ROUTE_DRAW, 'one full route draw');
+    const second = ctx.strokeCount;
+    mini.setPlanning({ route: [{ xM: 0, yM: 0 }, { xM: 4, yM: 4 }], segments: [{ score: 50 }] });
+    assert.equal(ctx.strokeCount - second, 3, 'new single-segment route is drawn at once');
+  } finally { restore(); }
+});
+
+test('minimap: a hidden canvas (display:none ancestor) is not drawn; shown again it redraws', () => {
+  const { mini, canvas, ctx, restore } = setupMinimap({ terrain: fakeTerrain() });
+  try {
+    canvas.shown = false;
+    const hiddenStart = ctx.strokeCount;
+    mini.setPlanning(ROUTE_PLANNING());
+    mini.draw();
+    assert.equal(ctx.strokeCount, hiddenStart, 'no strokes while hidden');
+    canvas.shown = true;
+    mini.draw();
+    assert.ok(ctx.strokeCount - hiddenStart >= STROKES_PER_ROUTE_DRAW, 'the pending state is drawn once shown');
+  } finally { restore(); }
+});
+
+test('minimap: hidden document skips drawing and visibilitychange redraws', () => {
+  const previousDocument = globalThis.document;
+  const doc = {
+    hidden: true,
+    listeners: new Map(),
+    addEventListener(type, fn) { this.listeners.set(type, fn); },
+    removeEventListener(type) { this.listeners.delete(type); },
+  };
+  globalThis.document = doc;
+  let restore = () => {};
+  try {
+    const built = setupMinimap({ terrain: fakeTerrain() });
+    restore = built.restore;
+    const { mini, ctx } = built;
+    mini.setPlanning(ROUTE_PLANNING());
+    assert.equal(ctx.strokeCount, 0, 'a hidden document draws nothing');
+    doc.hidden = false;
+    doc.listeners.get('visibilitychange')();
+    assert.ok(ctx.strokeCount >= STROKES_PER_ROUTE_DRAW, 'the pending state is drawn when the document becomes visible');
+  } finally {
+    restore();
+    if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
+  }
+});
+
+test('minimap route animation: redraws at about 15 Hz while shown and stops while hidden', () => {
+  const previousRaf = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
+  const previousCaf = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame');
+  const previousPerf = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  const queue = [];
+  const clock = { t: 1000 };
+  Object.defineProperty(globalThis, 'requestAnimationFrame', { value: (fn) => { queue.push(fn); return queue.length; }, configurable: true, writable: true });
+  Object.defineProperty(globalThis, 'cancelAnimationFrame', { value: () => {}, configurable: true, writable: true });
+  Object.defineProperty(globalThis, 'performance', { value: { now: () => clock.t }, configurable: true, writable: true });
+  const { mini, canvas, ctx, restore } = setupMinimap({ terrain: fakeTerrain() });
+  // One 60 Hz frame: advance the fake clock and run the frame callbacks queued so far.
+  const frames = (count) => {
+    for (let i = 0; i < count; i++) {
+      clock.t += 1000 / 60;
+      for (const fn of queue.splice(0)) fn();
+    }
+  };
+  try {
+    mini.setPlanning(ROUTE_PLANNING()); // immediate draw; schedules the animation
+    const start = ctx.strokeCount;
+    frames(60); // one simulated second
+    const drawsPerSecond = (ctx.strokeCount - start) / STROKES_PER_ROUTE_DRAW;
+    assert.ok(drawsPerSecond >= 13 && drawsPerSecond <= 17, `about 15 redraws per second, got ${drawsPerSecond}`);
+
+    canvas.shown = false;
+    frames(2); // at most one in-flight frame callback may still fire
+    const hiddenStart = ctx.strokeCount;
+    frames(60);
+    assert.equal(ctx.strokeCount, hiddenStart, 'animation draws nothing while hidden');
+  } finally {
+    restore();
+    for (const [name, desc] of [['requestAnimationFrame', previousRaf], ['cancelAnimationFrame', previousCaf], ['performance', previousPerf]]) {
+      if (desc) Object.defineProperty(globalThis, name, desc); else delete globalThis[name];
+    }
+  }
 });

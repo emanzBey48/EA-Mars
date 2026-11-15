@@ -1,11 +1,12 @@
 // Presentation-only astronaut part geometry and deterministic pose generation.
 import { SCENARIO } from '../../config.js';
 
-// `leftWristRing` / `rightWristRing` are the suit's metallic wrist coupling rings; they sit between the
-// sleeve and the glove, so a first-person view-model sees them as part of the glove assembly.
+// Stage 17 (K2): the first-person camera sits inside the helmet, so the ALWAYS-visible view model is
+// only the gloved hands, forearms and their metallic wrist rings. Torso, chest pack (PLSS), helmet and
+// visor are never drawn in first person (they would stand in front of the eye). `leftWristRing` /
+// `rightWristRing` are the coupling rings between sleeve and glove, drawn with the glove assembly.
+// Hand poses come from `firstPersonHandParts`, not from the world pose.
 export const FIRST_PERSON_RIG_PARTS = Object.freeze([
-  'torso',
-  'chestPack',
   'leftArm',
   'rightArm',
   'leftGlove',
@@ -15,15 +16,28 @@ export const FIRST_PERSON_RIG_PARTS = Object.freeze([
 ]);
 
 /**
- * Aşama 16 (provisional until the Aşama 15 camera/scale contract is frozen): parts a first-person
+ * Stage 17 (K2): parts drawn in first person ONLY while the player looks down, faded in first (torso
+ * and chest band), before the legs. Their poses come from the world pose at the physical body anchor,
+ * which is the same anchor the camera-independent world rig uses. The backpack (PLSS) is behind the
+ * eye and is never listed; the helmet and visor stay hidden.
+ */
+export const FIRST_PERSON_LOOK_DOWN_UPPER_PARTS = Object.freeze([
+  'neckRing', 'torso', 'chestPack', 'waistRing',
+]);
+
+/**
+ * Stage 16 (provisional until the Aşama 15 camera/scale contract is frozen): parts a first-person
  * renderer may draw ONLY while the player looks down, so legs and boots can appear in the lower frame.
- * Data only; `FIRST_PERSON_RIG_PARTS` (what the renderer draws today) is intentionally unchanged
- * except for the wrist rings. Their poses are always present in `poseAstronautRig(...).parts`.
- * The ankle rings are the metallic couplings between leg and boot.
+ * The ankle rings are the metallic couplings between leg and boot. Their poses are always present in
+ * `poseAstronautRig(...).parts`.
  */
 export const FIRST_PERSON_LOWER_BODY_PARTS = Object.freeze([
   'leftLeg', 'rightLeg', 'leftBoot', 'rightBoot', 'leftAnkleRing', 'rightAnkleRing',
 ]);
+
+// Stage 17 (K2) presentation parameters (tasarım/sunum parametresi; not suit or body measurements).
+// Legs begin to fade in only after this fraction of the look-down range has been passed.
+const FP_LEG_FADE_START = 0.35;
 
 // Presentation stride (visual design constant) and arm-swing share of the leg swing. See metadata note.
 const PRESENTATION_STRIDE_LENGTH_M = 6;
@@ -108,17 +122,20 @@ export const ASTRONAUT_RIG = deepFreeze({
     },
     firstPersonParts: FIRST_PERSON_RIG_PARTS,
     firstPersonLowerBodyParts: FIRST_PERSON_LOWER_BODY_PARTS,
-    // Suggestion for the integration owner only (Aşama 17); provisional, not wired to any renderer.
-    // Draw the lower-body parts only when the view pitch is at least `minLookDownPitchRad` below the
-    // horizon, fading in until `fullLookDownPitchRad`; they must not cover the normal-view frame.
+    firstPersonLookDownUpperParts: FIRST_PERSON_LOOK_DOWN_UPPER_PARTS,
+    // Stage 17 (K2): drawn by the renderer. Upper parts (torso, chest band) appear with the look-down
+    // fraction and hand over to the legs and boots, which start only after `legFadeStartFraction` of that
+    // range; at full look-down the chest has faded out so it cannot hide the legs.
     // Per-part hip/ankle hinge pivots are `parts[id].pivot`; neutral boot sole sits at z = 0.01.
     firstPersonLowerBody: {
       parts: FIRST_PERSON_LOWER_BODY_PARTS,
+      upperParts: FIRST_PERSON_LOOK_DOWN_UPPER_PARTS,
       visibleOnlyWhenLookingDown: true,
       minLookDownPitchRad: 0.6,
       fullLookDownPitchRad: 1.0,
-      provisional: true,
-      note: 'suggestion only; thresholds are not tied to camera.js conventions',
+      legFadeStartFraction: FP_LEG_FADE_START,
+      provisional: false,
+      note: 'presentation thresholds (tasarım/sunum parametresi); not tied to camera.js conventions',
     },
   },
   geometry: createUnitBoxGeometry(),
@@ -162,6 +179,9 @@ const RIGID_FOLLOWERS = Object.freeze({
 });
 const FOLLOWER_IDS = Object.freeze(Object.keys(RIGID_FOLLOWERS));
 const PART_IDS = Object.freeze(Object.keys(ASTRONAUT_RIG.parts));
+// Stage 17 (K2): the sun shadow caster always uses the complete world body, including parts that the
+// first-person camera never draws (torso, PLSS, helmet, visor). The renderer's shadow pass iterates this list.
+export const RIG_SHADOW_CASTER_PARTS = PART_IDS;
 
 const TAU = 2 * Math.PI;
 const MOVING_SPEED_EPSILON_MPS = 0.04;
@@ -189,6 +209,17 @@ const VM_RECOVERY_DIP_PITCH_RAD = 0.01;
 const IDLE_DRIFT_HZ = 0.07;
 const IDLE_DRIFT_X = 0.004;
 const IDLE_DRIFT_YAW_RAD = 0.004;
+
+// Stage 17 (K2) first-person hands: camera-attached view model (tasarım/sunum parametresi, not biomechanics).
+// The forearms are carried forward near-horizontal (hold pitch, negative = forward). Only half of the
+// world-rig arm swing/flight pitch is kept, so walking still counter-swings without leaving the lower
+// frame. The total pitch is clamped so the hands stay in front of the eye for every gait/flight pose.
+const FP_HAND_HOLD_PITCH_RAD = -1.5;
+const FP_HAND_SWING_SHARE = 0.5;
+const FP_HAND_PITCH_MIN_RAD = -1.6; // beyond about -1.57 the glove rises above the shoulder into the frame centre
+const FP_HAND_PITCH_MAX_RAD = -1.3;
+// Same clamp as camera.js first-person pitch (85 deg), so the view model follows the camera exactly.
+const FP_PITCH_LIMIT_RAD = (85 * Math.PI) / 180;
 
 // Transition windows on vertical speed (m/s), design constants mirroring the ~2.4 m/s scenario jump
 // impulse (SCENARIO.jumpImpulseMps). With the scenario clock at 8x a 60 fps frame spans ~0.5 m/s of
@@ -626,6 +657,108 @@ function buildFirstPersonViewModel(pose, timeS, horizontalSpeedMps, verticalSpee
     rotationRad: [pitchRad + dipPitchRad, 0, rollRad],
     breathPhaseRad,
     stepPhaseRad: gaitPhaseRad,
+  });
+}
+
+// Stage 17 (K2): rig-frame height of the eye (helmet centre). Camera eye height is 1.48 m in camera.js.
+const FP_EYE_RIG_Z_M = ASTRONAUT_RIG.parts.helmet.center[2];
+
+function clampRange(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Stage 17 (K2): first-person hand parts (arms, gloves, wrist rings) as a camera-attached view model.
+ * Pure function of the WORLD pose parts (`poseAstronautRig(...).parts`); the world pose itself is unchanged,
+ * so shadows and the third-person rig are unaffected. Arm pitch = hold pitch + share of the world swing,
+ * roll/yaw keep the same share, and each glove keeps its own wrist angle relative to its arm. Poses are
+ * rig-local: use them with `firstPersonRootPose`, whose origin is the eye.
+ *
+ * @param {Record<string,{offset:number[], rotationRad:number[]}>} worldParts
+ * @returns {Record<string,{offset:[number,number,number], rotationRad:[number,number,number]}>}
+ */
+export function firstPersonHandParts(worldParts) {
+  const out = {};
+  for (const side of ['left', 'right']) {
+    const armId = `${side}Arm`;
+    const gloveId = `${side}Glove`;
+    const worldArm = worldParts?.[armId];
+    const worldGlove = worldParts?.[gloveId];
+    if (!worldArm || !worldGlove) throw new TypeError(`firstPersonHandParts requires ${armId} and ${gloveId}`);
+    const armRot = [
+      clampRange(FP_HAND_HOLD_PITCH_RAD + FP_HAND_SWING_SHARE * worldArm.rotationRad[0], FP_HAND_PITCH_MIN_RAD, FP_HAND_PITCH_MAX_RAD),
+      FP_HAND_SWING_SHARE * worldArm.rotationRad[1],
+      FP_HAND_SWING_SHARE * worldArm.rotationRad[2],
+    ];
+    const grip = localRotationOf(worldArm.rotationRad, worldGlove.rotationRad);
+    out[armId] = hingedPart3D(armId, armRot);
+    out[gloveId] = chainedLimbPart(gloveId, armId, armRot, grip);
+  }
+  for (const side of ['left', 'right']) {
+    const ringId = `${side}WristRing`;
+    out[ringId] = rigidFollowPart(ringId, `${side}Arm`, out[`${side}Arm`]);
+  }
+  return out;
+}
+
+/**
+ * Stage 17 (K2): root transform of the camera-attached view model. The rig origin is moved to the eye
+ * (rig z = FP_EYE_RIG_Z_M), so the rig rotates about the eye: rotation about rig X by -pitch makes the
+ * hands follow the camera up and down (positive rotation looks down, forward is -Y). Breath/step/landing
+ * terms from `viewModel` stay small presentation offsets. Pure: no camera or renderer state is read.
+ *
+ * @param {{pitchRad?:number, dynamicPitchOffsetRad?:number, viewModel?:{offset:number[], rotationRad:number[]}}} input
+ * @returns {{rootOffset:[number,number,number], rootRotationRad:[number,number,number]}}
+ */
+export function firstPersonRootPose({ pitchRad = 0, dynamicPitchOffsetRad = 0, viewModel } = {}) {
+  if (!Number.isFinite(pitchRad) || !Number.isFinite(dynamicPitchOffsetRad)) {
+    throw new TypeError('pitchRad and dynamicPitchOffsetRad must be finite');
+  }
+  const pitch = clampRange(pitchRad + dynamicPitchOffsetRad, -FP_PITCH_LIMIT_RAD, FP_PITCH_LIMIT_RAD);
+  const off = viewModel?.offset ?? [0, 0, 0];
+  const rot = viewModel?.rotationRad ?? [0, 0, 0];
+  return deepFreeze({
+    rootOffset: [off[0], off[1], off[2] - FP_EYE_RIG_Z_M],
+    rootRotationRad: [rot[0] - pitch, rot[1], rot[2]],
+  });
+}
+
+/**
+ * Stage 17 (K2): fade weights for the look-down layers. The upper parts (neck ring, torso, chest band)
+ * appear first with the look-down fraction. The legs start only after FP_LEG_FADE_START of that range,
+ * and the upper parts hand over to them: the torso sits on the same vertical line of sight as the legs
+ * (both centred on the eye's forward axis), so an opaque torso would hide the legs at every steep angle.
+ * upperAlpha = t * (1 - legAlpha) keeps the sequence chest -> legs and fades the chest out as they arrive.
+ * Linear leg weight, so legAlpha stays in [0, 1] and the upper weight never exceeds t.
+ * @param {number} lookDownFraction in [0, 1] from `firstPersonLookDownFraction`
+ * @returns {{upperAlpha:number, legAlpha:number}}
+ */
+export function firstPersonLookDownLayers(lookDownFraction) {
+  if (!Number.isFinite(lookDownFraction)) throw new TypeError('lookDownFraction must be finite');
+  const t = clampRange(lookDownFraction, 0, 1);
+  const legAlpha = clampRange((t - FP_LEG_FADE_START) / (1 - FP_LEG_FADE_START), 0, 1);
+  return deepFreeze({ upperAlpha: t * (1 - legAlpha), legAlpha });
+}
+
+/**
+ * Stage 17 (K2): which first-person parts the renderer draws this frame, and with what alpha. Pure.
+ * The hands are always drawn (camera-attached). Torso and chest band need look-down and a valid DTM
+ * contact sample; legs and boots also need a non-zero leg fade. The backpack, helmet, visor and soles
+ * are never in the plan. The world-pose shadow caster is not part of this plan (it draws every part).
+ * @param {{lookDownFraction?:number, bodyContactKnown?:boolean}} input
+ */
+export function firstPersonDrawPlan({ lookDownFraction = 0, bodyContactKnown = false } = {}) {
+  const look = Number.isFinite(lookDownFraction) ? clampRange(lookDownFraction, 0, 1) : 0;
+  const bodyVisible = Boolean(bodyContactKnown) && look > 0;
+  const layers = firstPersonLookDownLayers(look);
+  const legAlpha = bodyVisible ? layers.legAlpha : 0;
+  const upperAlpha = bodyVisible ? layers.upperAlpha : 0;
+  return deepFreeze({
+    hands: FIRST_PERSON_RIG_PARTS,
+    upper: upperAlpha > 0 ? FIRST_PERSON_LOOK_DOWN_UPPER_PARTS : [],
+    upperAlpha,
+    legs: legAlpha > 0 ? FIRST_PERSON_LOWER_BODY_PARTS : [],
+    legAlpha,
   });
 }
 

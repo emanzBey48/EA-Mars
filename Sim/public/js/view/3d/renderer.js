@@ -10,7 +10,10 @@
 // changes elevation, slope, no-data cells, routes or mesh geometry.
 
 import { firstPersonLookDownFraction, getCameraPosition, getViewProjectionMatrix } from './camera.js';
-import { ASTRONAUT_RIG, FIRST_PERSON_LOWER_BODY_PARTS, FIRST_PERSON_RIG_PARTS, createRigGeometryAtlas, poseAstronautRig, resolvePartMaterial } from './astronaut-rig.js';
+import {
+  ASTRONAUT_RIG, RIG_SHADOW_CASTER_PARTS, createRigGeometryAtlas, firstPersonDrawPlan, firstPersonHandParts,
+  firstPersonRootPose, poseAstronautRig, resolvePartMaterial,
+} from './astronaut-rig.js';
 import { MARS_LIGHTING_GLSL, MARS_SUN_ANGULAR_DIAMETER_ARCMIN, SKY_PARAMS, luminance, marsSunIrradiance } from './sky-model.js';
 import { TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS } from './terrain-shading.js';
 import {
@@ -421,13 +424,6 @@ function setRigMaterialUniforms(gl, locations, id) {
   gl.uniform2f(locations.partRoughMetal, material.roughness, material.metallic);
 }
 
-// Presentation-frame placement only; camera eye height and physical lower-body anchor remain 1.48 m.
-const FIRST_PERSON_VIEW_MODEL_ROOT_BELOW_EYE_M = 1.05;
-// Keep the presentation-only upper-body model in front of the near plane. Placing its cuboids
-// around the eye anchor makes them straddle the camera and cover the central view at all pitches.
-const FIRST_PERSON_VIEW_MODEL_FORWARD_M = 0.85;
-const FIRST_PERSON_VIEW_MODEL_SCALE = 0.65;
-
 function rotateEuler([x, y, z], [rx, ry, rz]) {
   const cx = Math.cos(rx), sx = Math.sin(rx);
   [y, z] = [cx * y - sx * z, sx * y + cx * z];
@@ -448,13 +444,25 @@ function rigPartWorldCenter(part, partPose, pose, objectOffset, headingRad, vert
   ];
 }
 
-function pointInClip(point, viewProjection) {
+function clipCoordinates(point, viewProjection) {
   const [x, y, z] = point;
-  const cx = viewProjection[0] * x + viewProjection[4] * y + viewProjection[8] * z + viewProjection[12];
-  const cy = viewProjection[1] * x + viewProjection[5] * y + viewProjection[9] * z + viewProjection[13];
-  const cz = viewProjection[2] * x + viewProjection[6] * y + viewProjection[10] * z + viewProjection[14];
-  const cw = viewProjection[3] * x + viewProjection[7] * y + viewProjection[11] * z + viewProjection[15];
+  return [
+    viewProjection[0] * x + viewProjection[4] * y + viewProjection[8] * z + viewProjection[12],
+    viewProjection[1] * x + viewProjection[5] * y + viewProjection[9] * z + viewProjection[13],
+    viewProjection[2] * x + viewProjection[6] * y + viewProjection[10] * z + viewProjection[14],
+    viewProjection[3] * x + viewProjection[7] * y + viewProjection[11] * z + viewProjection[15],
+  ];
+}
+
+function pointInClip(point, viewProjection) {
+  const [cx, cy, cz, cw] = clipCoordinates(point, viewProjection);
   return cw > 0 && Math.abs(cx) <= cw && Math.abs(cy) <= cw && cz >= -cw && cz <= cw;
+}
+
+// Normalised device coordinates [x, y] in [-1, 1] (y up), or null behind the camera.
+function pointNdc(point, viewProjection) {
+  const [cx, cy, , cw] = clipCoordinates(point, viewProjection);
+  return cw > 0 ? [cx / cw, cy / cw] : null;
 }
 
 /**
@@ -1029,7 +1037,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
             gl.vertexAttrib3f(locations.color, 1, 1, 1);
             gl.uniform3fv(locations.rootOffset, framePose.rootOffset);
             gl.uniform3fv(locations.rootRotationRad, framePose.rootRotationRad);
-            for (const id of Object.keys(ASTRONAUT_RIG.parts)) {
+            // Stage 17 (K2): the caster is the full world body, never the first-person subset.
+            for (const id of RIG_SHADOW_CASTER_PARTS) {
               const part = ASTRONAUT_RIG.parts[id];
               const partPose = framePose.parts[id];
               if (!part || !partPose) continue;
@@ -1250,105 +1259,88 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
       let rigPartsDrawn = [];
       let firstPersonVisibleParts = [];
       let rigPresentation = 'world';
+      let firstPersonHandNdc = null;
       if (canDrawRig) {
         rigPose = framePose;
         rigPresentation = firstPerson ? 'first-person-view-model' : 'world';
         const headingRad = rigHeadingRad;
-        // In both first-person and world modes, the astronaut suit maintains 1:1 human proportions.
-        // Z-axis of body geometry is not stretched; ground contact altitude is positioned by objectOffset.
+        // The suit keeps 1:1 human proportions in both modes (no vertical stretch).
         const rigVerticalScale = 1;
-        let objectOffset;
-        if (firstPerson) {
-          // This is a camera-relative visual overlay, not a second physical body position. A forward
-          // offset keeps the suit cuboids out of the near plane while their eye-relative Z leaves them
-          // in the lower frame. The world rig and look-down legs retain their physical anchors.
-          objectOffset = [
-            camera.xM + Math.cos(camera.yawRad) * FIRST_PERSON_VIEW_MODEL_FORWARD_M,
-            camera.yM + Math.sin(camera.yawRad) * FIRST_PERSON_VIEW_MODEL_FORWARD_M,
-            camera.zDisplay - FIRST_PERSON_VIEW_MODEL_ROOT_BELOW_EYE_M * rigVerticalScale,
-          ];
-        } else {
-          objectOffset = worldRigOffset;
-        }
-        // The view-model terms are additive presentation motion for the upper body only.
-        // Keep the world rig and the first-person legs anchored to the unmodified pose.
-        const upperBodyPose = firstPerson ? {
-          rootOffset: rigPose.rootOffset.map((value, i) => value + rigPose.viewModel.offset[i]),
-          rootRotationRad: rigPose.rootRotationRad.map((value, i) => value + rigPose.viewModel.rotationRad[i]),
-        } : rigPose;
-        const partIds = firstPerson ? FIRST_PERSON_RIG_PARTS : Object.keys(ASTRONAUT_RIG.parts);
         gl.uniform1i(locations.renderPass, 2);
-        gl.uniform3fv(locations.objectOffset, objectOffset);
         gl.uniform1f(locations.headingRad, headingRad);
         gl.uniform1f(locations.verticalScale, rigVerticalScale);
         gl.uniform3f(locations.baseColor, 1, 1, 1);
-        // Third-person rig receives terrain/self shadows; the camera-attached view model does not.
-        gl.uniform1f(locations.receiveShadow, firstPerson ? 0 : 1);
         gl.bindVertexArray(astronaut.vao);
         gl.disableVertexAttribArray(locations.color);
-        if (firstPerson) gl.disable(gl.DEPTH_TEST); // Deliberate lower-frame suit overlay; terrain cannot hide it.
         gl.uniform1f(locations.alpha, 1);
-        for (const id of partIds) {
-          const part = ASTRONAUT_RIG.parts[id];
-          const partPose = rigPose.parts[id];
-          const presentationScale = firstPerson ? FIRST_PERSON_VIEW_MODEL_SCALE : 1;
-          const presentedPart = firstPerson ? {
-            ...part,
-            size: part.size.map((value) => value * presentationScale),
-            center: part.center.map((value) => value * presentationScale),
-          } : part;
-          const presentedPartPose = firstPerson ? {
-            ...partPose, offset: partPose.offset.map((value) => value * presentationScale),
-          } : partPose;
-          const presentedRootPose = firstPerson ? {
-            ...upperBodyPose, rootOffset: upperBodyPose.rootOffset.map((value) => value * presentationScale),
-          } : upperBodyPose;
-          gl.uniform3fv(locations.partSize, presentedPart.size);
-          gl.uniform3fv(locations.partCenter, presentedPart.center);
-          gl.uniform3fv(locations.partOffset, presentedPartPose.offset);
-          gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
-          gl.uniform3fv(locations.rootOffset, presentedRootPose.rootOffset);
-          gl.uniform3fv(locations.rootRotationRad, presentedRootPose.rootRotationRad);
-          setRigMaterialUniforms(gl, locations, id);
-          gl.vertexAttrib3fv(locations.color, part.colorRgb);
-          drawRigPart(gl, astronaut, part);
-          rigPartsDrawn.push(id);
-          const worldCenter = rigPartWorldCenter(presentedPart, presentedPartPose, presentedRootPose, objectOffset, headingRad, rigVerticalScale);
-          if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
-        }
+        // Draws rig parts sharing one origin and root pose; `collectVisible` records parts whose centre is in the frustum.
+        const drawRigList = (ids, poseParts, rootPose, origin, { alpha = 1, collectVisible = false } = {}) => {
+          gl.uniform1f(locations.alpha, alpha);
+          gl.uniform3fv(locations.objectOffset, origin);
+          gl.uniform3fv(locations.rootOffset, rootPose.rootOffset);
+          gl.uniform3fv(locations.rootRotationRad, rootPose.rootRotationRad);
+          for (const id of ids) {
+            const part = ASTRONAUT_RIG.parts[id];
+            const partPose = poseParts[id];
+            gl.uniform3fv(locations.partSize, part.size);
+            gl.uniform3fv(locations.partCenter, part.center);
+            gl.uniform3fv(locations.partOffset, partPose.offset);
+            gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
+            setRigMaterialUniforms(gl, locations, id);
+            gl.vertexAttrib3fv(locations.color, part.colorRgb);
+            drawRigPart(gl, astronaut, part);
+            rigPartsDrawn.push(id);
+            if (collectVisible && pointInClip(rigPartWorldCenter(part, partPose, rootPose, origin, headingRad, rigVerticalScale), viewProjection)) {
+              firstPersonVisibleParts.push(id);
+            }
+          }
+        };
+
         if (firstPerson) {
-          gl.enable(gl.DEPTH_TEST);
+          // Physical body anchor: torso and legs stand here in world space; the camera does not own them.
+          const bodyOrigin = [camera.xM, camera.yM, camera.zDisplay - camera.eyeHeightM];
           const lowerBody = ASTRONAUT_RIG.metadata.firstPersonLowerBody;
           const lookDown = firstPersonLookDownFraction(camera, lowerBody.minLookDownPitchRad, lowerBody.fullLookDownPitchRad);
-          // Boots require current valid DTM contact; a retained airborne anchor is never treated as ground.
-          if (elevationKnown && lookDown > 0) {
-            const lowerBodyOffset = [objectOffset[0], objectOffset[1], camera.zDisplay - camera.eyeHeightM];
-            gl.uniform3fv(locations.objectOffset, lowerBodyOffset);
-            gl.uniform1f(locations.alpha, lookDown);
+          // Torso and legs require current valid DTM contact; a retained airborne anchor is never treated as ground.
+          // They appear only while looking down: the chest band first, then the legs and boots.
+          const plan = firstPersonDrawPlan({ lookDownFraction: lookDown, bodyContactKnown: elevationKnown });
+          gl.uniform1f(locations.receiveShadow, 0);
+          gl.enable(gl.DEPTH_TEST);
+          if (plan.upper.length > 0 || plan.legs.length > 0) {
+            const bodyRoot = { rootOffset: rigPose.rootOffset, rootRotationRad: rigPose.rootRotationRad };
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-            for (const id of FIRST_PERSON_LOWER_BODY_PARTS) {
-              const part = ASTRONAUT_RIG.parts[id];
-              const partPose = rigPose.parts[id];
-              gl.uniform3fv(locations.partSize, part.size);
-              gl.uniform3fv(locations.partCenter, part.center);
-              gl.uniform3fv(locations.partOffset, partPose.offset);
-              gl.uniform3fv(locations.partRotationRad, partPose.rotationRad);
-              gl.uniform3fv(locations.rootOffset, rigPose.rootOffset);
-              gl.uniform3fv(locations.rootRotationRad, rigPose.rootRotationRad);
-              setRigMaterialUniforms(gl, locations, id);
-              gl.vertexAttrib3fv(locations.color, part.colorRgb);
-              drawRigPart(gl, astronaut, part);
-              rigPartsDrawn.push(id);
-              const worldCenter = rigPartWorldCenter(part, partPose, rigPose, lowerBodyOffset, headingRad, rigVerticalScale);
-              if (pointInClip(worldCenter, viewProjection)) firstPersonVisibleParts.push(id);
+            if (plan.upper.length > 0) {
+              drawRigList(plan.upper, rigPose.parts, bodyRoot, bodyOrigin, { alpha: plan.upperAlpha, collectVisible: true });
+            }
+            if (plan.legs.length > 0) {
+              drawRigList(plan.legs, rigPose.parts, bodyRoot, bodyOrigin, { alpha: plan.legAlpha, collectVisible: true });
             }
             gl.disable(gl.BLEND);
           }
-          gl.uniform1f(locations.alpha, 1);
+          // Camera-attached hands: rig origin at the eye, rotated by camera pitch, so they stay in the lower
+          // frame while looking up or down. Depth is cleared so the hands are never hidden by the world,
+          // while their own parts still depth-test against each other.
+          const handRoot = firstPersonRootPose({
+            pitchRad: camera.pitchRad,
+            dynamicPitchOffsetRad: camera.dynamicPitchOffsetRad,
+            viewModel: rigPose.viewModel,
+          });
+          const handParts = firstPersonHandParts(rigPose.parts);
+          const eyeOrigin = [camera.xM, camera.yM, camera.zDisplay];
+          gl.depthMask(true);
+          gl.clear(gl.DEPTH_BUFFER_BIT);
+          drawRigList(plan.hands, handParts, handRoot, eyeOrigin, { collectVisible: true });
+          const glovePoint = (id) => rigPartWorldCenter(ASTRONAUT_RIG.parts[id], handParts[id], handRoot, eyeOrigin, headingRad, rigVerticalScale);
+          firstPersonHandNdc = ['leftGlove', 'rightGlove'].map((id) => pointNdc(glovePoint(id), viewProjection));
+          firstPersonViewModelDrawn = rigPartsDrawn.length > 0;
+        } else {
+          // Third-person world rig receives terrain/self shadows.
+          gl.uniform1f(locations.receiveShadow, 1);
+          drawRigList(Object.keys(ASTRONAUT_RIG.parts), rigPose.parts, rigPose, worldRigOffset);
+          avatarDrawn = rigPartsDrawn.length > 0;
         }
-        firstPersonViewModelDrawn = firstPerson && rigPartsDrawn.length > 0;
-        avatarDrawn = !firstPerson && rigPartsDrawn.length > 0;
+        gl.uniform1f(locations.alpha, 1);
       }
       gl.bindVertexArray(null);
       gl.activeTexture(gl.TEXTURE0);
@@ -1374,6 +1366,8 @@ export function createTerrainRenderer(canvas, { clearColor = [0.055, 0.06, 0.075
           rigPresentation,
           rigPartsDrawn,
           firstPersonVisibleParts: rigPresentation === 'first-person-view-model' ? firstPersonVisibleParts : [],
+          // Stage 17 (K2): glove centres as [x, y] NDC (y up), null when behind the camera; first person only.
+          firstPersonHandNdc,
           rigGaitPhaseRad: rigPose?.gaitPhaseRad ?? null,
           rigGaitFrequencyHz: rigPose?.gaitFrequencyHz ?? null,
           rigHeadingRad: rigPose ? ((Number.isFinite(camera.yawRad) ? camera.yawRad : player.headingRad) + ASTRONAUT_RIG.metadata.forwardHeadingOffsetRad) : null,

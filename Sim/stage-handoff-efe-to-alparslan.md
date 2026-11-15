@@ -53,7 +53,7 @@ Yeni pass gerekirse 8 ve sonrası kullanılır. Pass 4 erken döner; pass 7'nin 
 | Birim testleri | 574/574 | `node --test test/` (çıkış kodu 0) |
 | Ön uçuş | HAZIR, hata 0, uyarı 0 | `node scripts/preflight.mjs` |
 | Tarayıcı | PASS: D1, D2, D2b, R1, M1, F1, H1, H2, S1, X1, X2. NOT-TESTED: M2, sıçrama, varış rozeti, galeri, ortho hizası | `stage-final-acceptance.md` |
-| Rota (UI) | Dengeli 730 m / 9,8°; en kısa 730 m / 14,1°; en düz 731 m / 10,1° | Tarayıcı özeti; devir notundaki 730,505 / 732,161 m ile eşleşmiyor |
+| Rota (UI, **[AKTİF] legacy DTM**) | Dengeli 730 m / 9,8°; en kısa 730 m / 14,1°; en düz 731 m / 10,1° | Tarayıcı özeti. Bu bölümdeki 730,505 / 732,161 m ve 9,81° / 10,64° / 9,27° değerleri **[ADAY] USGS 1 m** penceresinde worker ölçümüdür (`stage-perf-and-preference-review.md`); iki DTM farklı sonuç verir. |
 
 ## 6. Açık işler ve sahipler
 
@@ -72,6 +72,9 @@ Yeni pass gerekirse 8 ve sonrası kullanılır. Pass 4 erken döner; pass 7'nin 
 - K3-6: `stage39-ortho-diagnosis.md` "Yazar: Efe" ifadesi düzeltilecek; bu rapor Efe'nin değildir. Ayrıca "0,0 m projeksiyon sapması" aritmetik tutarlılıktır, bağımsız kanıt değildir; korelasyon r≈0,40 zayıftır. `stage34b` raporundaki "costParams iletilir" ifadesi düzeltme öncesinden kalmadır.
 
 **Açık veri/karar:**
+- **Aktif arazi = legacy fallback; karar bekleyen konu (K3-7):** Ekranda gösterilen arazi legacy PDS3 DTEEC yedek DTM'dir (`data/legacy-hirise/`, 1669×1129, ~1,0097 m/px). USGS 1 m adayı (`data/dtm_subset.json`, 1676×1135) `needs_review_verticalReference` nedeniyle fail-closed reddedilip legacy'ye düşülüyor (`surface/registry.js` `resolveActiveProvider`). Karar: legacy kalsın mı, yoksa USGS 1 m 'datum doğrulanmadı' etiketiyle (`needs_review`) mi etkinleştirilsin? 38B ile bağlantılı; ürün kararı kullanıcıdadır.
+- **Ortomozaik ↔ aktif DTM hizası ölçülmedi (K3-8):** 21B/39A ölçümleri USGS adayı penceresinde yapıldı. Legacy DTEEC farklı çerçeve (yarıçap 3394,84 km, merkez 77,44°E, standart enlem 15°; USGS: 3396,19 km, 0°E, 0°). Köprü ve ölçüm yapılana kadar hizalı denmez.
+- **Analizlerin aktif DTM'de yeniden koşulması (K3-9):** kabartma (35A), rota doğrulama (23C), tercih tablosu, `relief-report` ve ufuk dikiş ölçümü (37A) USGS adayında yapıldı.
 - Datum: `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` `false`. Kanıt yoksa `false` olmalı (K3-5).
 - Göz yüksekliği: kod 1,48 m (`camera.js:9`); `e9a0a78` mesajı 1,75 m. Kod esas alındı.
 - Ortomozaik uyarı metni (`hud.js:104`) eski JP2 bayrağına bağlı; WMTS katmanı ayrı sunulurken iki çelişkili mesaj görünüyor.

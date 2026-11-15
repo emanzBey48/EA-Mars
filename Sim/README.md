@@ -8,7 +8,7 @@ Proje kökü: `C:\Users\efese\Desktop\Nasaspaceapps\Sim`
 
 - Node.js ≥ 20 (`npm test` için). `npm run smoke` ve tarayıcı betiği için Node ≥ 22 (genel `WebSocket`) ve yerel Edge veya Chrome gerekir.
 - npm paketi kurulmaz; bağımlılık yoktur.
-- Veri: `Sim/data/dtm_subset.f32` (~7,6 MB) Git LFS ile izlenir. Dosya 132 baytlık bir işaretçi ise `git lfs pull` çalıştırın.
+- Veri: ekranda gösterilen (aktif) arazi `Sim/data/legacy-hirise/dtm_subset.f32` (~7,5 MB, legacy PDS3 yedek); analiz adayı `Sim/data/dtm_subset.f32` (~7,6 MB, USGS 1 m). İkisi de Git LFS ile izlenir. Dosya 132 baytlık bir işaretçi ise `git lfs pull` çalıştırın.
 
 ## Çalıştırma
 
@@ -51,8 +51,8 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 
 ## Özellikler
 
-1. **HiRISE 1 m DTM arazi tabanı:** USGS Mars 2020 TRN DTM penceresi; 3×3 Horn gradyanı ile anlık eğim.
-2. **HiRISE 25 cm WMTS ortomozaik kaplaması:** z17 (0,318 m/px) ve z14 (2,544 m/px) karoları; Hibrit / Ortomozaik / Hillshade modları. Hizalama ±1,5 m belirsizlikle gösterilir; yarım piksel hizası kanıtlanmadı.
+1. **HiRISE DTM arazi tabanı (aktif: legacy yedek):** Gösterilen arazi PDS3 DTEEC DTM penceresidir (1669×1129, ~1,01 m/px). USGS Mars 2020 TRN 1 m penceresi (1676×1135) düşey datum kanıtı olmadığı için `needs_review` kalır, UI'de kullanılmaz ve analiz belgelerinde ölçülmüştür. 3×3 Horn gradyanı ile anlık eğim.
+2. **HiRISE 25 cm WMTS ortomozaik kaplaması:** z17 (0,318 m/px) ve z14 (2,544 m/px) karoları; Hibrit / Ortomozaik / Hillshade modları. Hizalama ±1,5 m belirsizlikle gösterilir; yarım piksel hizası kanıtlanmadı. Hizası USGS adayı penceresinde ölçüldü; aktif legacy DTM ile hizası ölçülmedi (K3-8).
 3. **A* EVA yürünebilirlik planlayıcısı:** Eğim, pürüzlülük ve veri geçerliliğine dayalı maliyet; minimap'te ısı haritası. Planlama göstergesi; güvenli rota sertifikası değildir.
 4. **Rota tercihleri:** Dengeli, en kısa, en düz (`gentle` / `flattest`). Ağırlıklar `route/route-compare.js` içinde senaryo parametresidir. Eski `main.js` tablosu kaldırıldı.
 5. **Minimap ve sürükle-bırak uçları:** Başlangıç/bitiş seçimi, tercih değişince bayat plan gösterilmez (`route/plan-response-state.js`). No-data ve kenar (EDGE_UNKNOWN) hücreleri seçilemez (kod ve birim testi; tarayıcı kanıtı için `stage-final-acceptance.md`).
@@ -93,15 +93,17 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 
 - **Yerel düzlem:** x doğu, y kuzey, metre; orijin Sol 120 / WB1. Equirectangular, küre R = 3396,190 km, merkez meridyen 0°, standart enlem 0°, planetosentrik. Ölçek ekvatorda doğrudur; ~18,4°K'da doğu-batı mesafeleri ~%5,4 fazla çıkar.
 - **Piksel dönüşümü (PixelIsArea):** `X = 4577366,5 + col`, `Y = 1106617,5 − row`.
-- **Düşey datum:** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid). `data/dtm_subset.json` içinde `verticalDatumVerified: false` yazar; uygulama kodunda `config.js` bu değeri `true` gösterir (bkz. aşağıdaki sınırlar).
+- **Aktif DTM (karar bekliyor, K3-7):** Ekranda legacy PDS3 DTEEC yedeği (`data/legacy-hirise/dtm_subset.json`) gösterilir. Çerçeve dosyadan: EQUIRECTANGULAR, PLANETOCENTRIC, EAST, rotasyon 0; küre yarıçapı 3394,8398133163 km; merkez meridyen 77,44°E; standart enlem 15° (`crsText`); map scale 1,0096633268711 m/px; line/sample projection offset 1088495,5 / 3210,5. Etiket datumu: "Mars 2000 Datum (martian equipotential surface)". USGS 1 m adayı (`data/dtm_subset.json`) düşey datum kanıtı olmadığı için reddedilir (`surface/registry.js` `resolveActiveProvider`, neden `needs_review_verticalReference`). Legacy'nin kalması mı, USGS'nin `needs_review` etiketiyle etkinleşmesi mi, ürün kararıdır.
+- **Düşey datum (USGS adayı):** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid). `data/dtm_subset.json` içinde `verticalDatumVerified: false` yazar; uygulama kodunda `config.js` bu değeri `true` gösterir (bkz. aşağıdaki sınırlar).
 - **No-data:** `0xFF7FFFFB` tam bit deseni `no_data`; geçerli aralık dışı `invalid`. Asla 0 ile değiştirilmez. Eğim, 3×3 pencerede bir hücre bile geçersizse üretilmez.
-- **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere (1 902 260 hücre, 0 no-data) yüklenir; dışı `out_of_bounds` olarak raporlanır.
+- **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere yüklenir; dışı `out_of_bounds` olarak raporlanır. Aktif legacy penceresi 1 884 301 geçerli hücre, 0 no-data; USGS adayı penceresi 1 902 260 geçerli hücre, 0 no-data.
 - **Rota kökeni:** İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değildir. PLACES kullanılmadı.
 
 ## Değer etiketleri
 
-- **Arşiv ürünü:** USGS Mars 2020 TRN HiRISE DTM mozaiği (`JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40`); lisans CC0 1.0 (`SOURCES.md` #1).
-- **Ölçülen:** Pencerede kot aralığı 44,84 m; eğim P50/P90/maks 3,11°/7,54°/35,77° (`stage35-scale-audit.md`).
+- **Analiz adayı (UI'de değil):** USGS Mars 2020 TRN HiRISE DTM mozaiği (`JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40`); lisans CC0 1.0 (`SOURCES.md` #1).
+- **Aktif yedek:** Legacy PDS3 DTEEC DTM (`DTEEC_045994_1985_046060_1985_U01`); lisans belirtilmemiş (`SOURCES.md` #2).
+- **Ölçülen [ADAY]:** USGS adayı penceresinde kot aralığı 44,84 m; eğim P50/P90/maks 3,11°/7,54°/35,77° (`stage35-scale-audit.md`). Aktif legacy penceresinde bu eğim dağılımı ölçülmedi.
 - **Senaryo:** hız, zaman hızlandırma, koridor, yürünebilirlik eşikleri (20° vb.), rota tercih ağırlıkları.
 - **Sunum:** gökyüzü ve ton, gölge, ayak izi, şerit, kamera salınımı, giysi malzemesi, abartı seçenekleri.
 
@@ -111,11 +113,12 @@ Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/bu
 
 - **Yürünebilirlik:** Planlama göstergesidir. Güvenli rota sertifikası değildir. Eşikler senaryo parametresidir.
 - **Rota süresi:** Rota panelindeki tahmin 0,8 m/s kullanır; simülasyon 1,2 m/s × 8 kullanır. Bu tutarsızlık bilinmektedir (`route-service.js:301`, `main.js:348`).
-- **"En düz" tercihi:** Maksimum eğimi dengeli tercihten düşürmeyebilir (son gözlemde 10,1° ve 9,8°). Tercih adı ne ölçtüğünü tam açıklamaz.
-- **Ortomozaik hizası:** ±1,5 m belirsizlik; yarım piksel hizası kanıtlanmadı. `hud.js:104` uyarısı WMTS katmanıyla çelişkili görünebilir.
+- **"En düz" tercihi:** Maksimum eğimi dengeli tercihten düşürmeyebilir (aktif legacy UI özetinde 10,1° ve 9,8°; USGS adayında 9,27° ve 9,81°). Tercih adı ne ölçtüğünü tam açıklamaz.
+- **Aktif DTM ↔ analiz DTM'i:** UI aktif legacy DTM ile çalışır; rota ve eğim analizlerinin çoğu USGS adayı penceresinde yapıldı. Aynı uç noktalarda en kısa rota maks. eğimi UI'de 14,1°, USGS adayında 10,64°. Analizlerin legacy üzerinde yeniden koşulması K3-9'dadır.
+- **Ortomozaik hizası:** ±1,5 m belirsizlik (USGS adayı penceresinde ölçüldü); aktif legacy DTM ile hizası **ölçülmedi**; yarım piksel hizası kanıtlanmadı. `hud.js:104` uyarısı WMTS katmanıyla çelişkili görünebilir.
 - **Viking:** Renk bağlamıdır (232 m/px). Lisans "belirtilmemiş"; teyit bekliyor (K1-4).
 - **MOLA ufku:** Datum doğrulanmadı (`needs_review`); uzak silüet alçak ve bulanık, bölgesel bağlam olarak sunulur.
-- **Datum bayrağı:** `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` `false`. Kanıt eklenene kadar mutlak kot iddiası yapılmaz (K3-5, açık).
+- **Datum bayrağı:** `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` (USGS adayı) `false`. Aktif legacy etiketinin datum ifadesi 38A denetiminde incelenmedi. Kanıt eklenene kadar mutlak kot iddiası yapılmaz (K3-5, açık).
 - **Görsel kalite:** Gölge yumuşak; eller kalın; uzak ufuk silüeti alçaktır. Bunlar sunum tercihleridir, ölçülmüş değildir.
 - **Göz yüksekliği:** Kod 1,48 m; bir commit mesajı 1,75 m diyor. Suit ölçümü yoktur.
 - **Atmosfer:** Mars basıncı ve yoğunluğu (NSSDC ortalama/mevsimsel) gösterilir; hareket fiziğine sürükleme eklenmemiştir.

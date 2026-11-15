@@ -97,7 +97,7 @@ Yerel DTM: `Sim/data/dtm_subset.f32` (1135 sütun × 1676 satır, 1 m, planetose
 2. Trek MOLA ürününün enlem konvansiyonu (küre mi jeodetik mi) için resmi belge yok; bu ölçüm dolaylı.
 3. Lisans: ImageServer `copyrightText` boş → "belirtilmemiş". Atıf metni ürün adını yansıtır.
 4. Görev metnindeki "1,3 × 1,1 km" yerel DTM pencere tanımı ölçümle uyuşmuyor (1,135 × 1,676 km).
-5. Legacy `Sim/data/legacy-hirise/dtm_subset.f32` (7.537.204 bayt) kök `dtm_subset.f32`'den (7.609.040 bayt) farklı; bu turda kullanılmadı, incelenmedi. Kök dosya (uygulamanın kullandığı) esas alındı.
+5. Legacy `Sim/data/legacy-hirise/dtm_subset.f32` (7.537.204 bayt) kök `dtm_subset.f32`'den (7.609.040 bayt) farklı; bu turda kullanılmadı, incelenmedi. Bu turdaki ölçümler kök dosyayı (USGS 1 m adayı, `needs_review`) esas aldı. **Düzeltme (15 Kasım 2026, 38A/perf incelemesi sonrası):** uygulama arayüzünde fiilen gösterilen arazi bu **legacy** dosyadır (kayıt sistemi USGS adayını datum kanıtı olmadığı için fail-closed reddeder); yani bu raporun MOLA↔DTM karşılaştırması aday pencerede yapılmıştır, ekranda görülen araziyle bire bir aynı değildir (bkz. `stage38-integrity-audit.md`, `DEMO_NOTES.md`, yol haritası K3-7/K3-9).
 6. Git: bu ortamda `git` çalıştırılamadı (PATH'te yok). Commit/push yapılmadı (görev gereği zaten yapılmayacaktı). Değişiklik kontrolü dosya zaman damgalarıyla yapıldı.
 7. Ağ istekleri (trek.nasa.gov, toplam 9): 2 (ilk, ayrıştırma hatasıyla biten koşum) + 3 (CLI başarılı) + 4 (bağımsız betik, 2'si önbellekten). Aralar ≥1,1 s.
 

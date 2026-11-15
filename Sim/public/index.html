@@ -115,14 +115,15 @@
 
     <aside id="panel">
       <section class="card minimap-card" aria-labelledby="minimap-title">
-        <h2 id="minimap-title">2D Jezero minimap</h2>
-        <p class="muted small minimap-intro">Arşiv HiRISE DTM hillshade görünümü. Sürükleyin; tekerlekle yakınlaştırın.</p>
-        <canvas id="minimap-canvas" aria-label="Sürüklenebilir ve yakınlaştırılabilir Jezero DTM minimap"></canvas>
+        <h2 id="minimap-title">2D Mars ve Jezero minimap</h2>
+        <p class="muted small minimap-intro">Viking MDIM 2.1 küresel renk mozaiği bölgesel bağlam içindir (kot veya ortogörüntü değildir). Jezero yakınında HiRISE DTM hillshade görünür. Sürükleyin; tekerlekle yakınlaştırın.</p>
+        <canvas id="minimap-canvas" aria-label="Viking MDIM 2.1 küresel bağlamı ve Jezero HiRISE DTM minimap"></canvas>
         <div class="minimap-controls" role="group" aria-label="Minimap kontrolleri">
           <button id="minimap-pick-start" type="button">Başlangıç seç</button>
           <button id="minimap-pick-end" type="button">Bitiş seç</button>
           <button id="minimap-clear-points" type="button">Noktaları temizle</button>
           <button id="minimap-fit" type="button">Kapsama sığdır</button>
+          <button id="minimap-fit-global" type="button" disabled>Mars globali göster</button>
         </div>
         <div class="minimap-layers" aria-label="Minimap katmanları">
           <label><input type="checkbox" checked disabled> HiRISE DTM hillshade</label>
@@ -132,7 +133,8 @@
           <label><input id="minimap-toggle-heatmap" type="checkbox"> Dengeli EVA yürünebilirlik alanı (planlama göstergesi)</label>
           <label><input type="checkbox" checked disabled> Planlanan rota</label>
         </div>
-        <p id="minimap-layer-status" class="muted small" aria-live="polite">Jeoloji: yükleniyor · Arşiv izi: yükleniyor</p>
+        <p class="muted small">Katman anahtarı: Viking renk mozaiği bölgesel bağlamdır (232 m/px; orto/kot değil); HiRISE DTM hillshade yerel yüzey ayrıntısını gösterir.</p>
+        <p id="minimap-layer-status" class="muted small" aria-live="polite">Jeoloji: yükleniyor · Arşiv izi: yükleniyor · Viking global: yükleniyor</p>
         <p class="muted small">Jeoloji sınırları 1:75.000 ölçekli indikatiftir ve yaklaşık 100–200 m konum belirsizliği taşır. Arşiv izi geçmiş MMGIS sürüş kaydıdır; canlı telemetri veya rota önerisi değildir.</p>
         <dl class="minimap-endpoints">
           <dt>Başlangıç</dt><dd id="minimap-start">Seçilmedi</dd>

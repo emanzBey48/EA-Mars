@@ -43,6 +43,19 @@ Bu komutla uygulama doğrudan **Sunum Modu**'nda açılır:
 6. **Mars Yüzey Yerçekimi Zıplama Balistiği:** 3.71 m/s² yerçekimi altında ~1.3 s uçuş, havada momentum korunumu, inişte yumuşak kamera esnemesi (landing dip).
 7. **Perseverance Ham Fotoğraf Arşivi:** Sol 120 ve Sol 164 duraklarında Navcam/Hazcam/Mastcam-Z fotoğraflarıyla birinci şahıs ufuk yönelimi.
 8. **Sağlam 2D Fallback:** WebGL2 desteği bulunmadığında veya kullanıcı 2D'yi seçtiğinde tüm katmanlar ve rota planlaması 2D Canvas üzerinde kesintisiz çalışır.
+9. **Mars global minimap bağlamı:** Viking MDIM 2.1 renkli karo piramidi, Jezero çevresinde 232 m/piksel kesit ve yakın ölçekte HiRISE DTM hillshade katmanını gösterir. Viking mozaik kot verisi veya ortogörüntü değildir; lisans manifestte belirtilmemiştir.
+
+### Viking MDIM 2.1 yerel karo paketi
+
+Uygulama, `data/viking-mdim/manifest.json` ve küçük `tiles/` / Jezero bölgesel PNG çıktılarını varsa kullanır. Çıktılar yoksa veya bir karo yüklenemezse global katman `unavailable` olur; yerel HiRISE minimap ve diğer uygulama akışları çalışmayı sürdürür. “Mars globali göster” düğmesi küresel görünümü açar; “Kapsama sığdır” Jezero DTM alanına döner. 232 m/piksel bölgesel mozaik yalnız renkli bağlam sağlar, yerel yürünebilirlik puanı üretmez.
+
+12,7 GB kaynak `Mars_Viking_MDIM21_ClrMosaic_global_232m.tif` uygulamanın çalışması için gerekmez ve git'e eklenmez. Kaynağı hazırlamak gerekirse Sim içindeki git-ignore edilmiş `data-external/` klasöründe tutup ingest betiğine `--input` ile açıkça verin; üretilen küçük karo paketi `data/viking-mdim/` altına yazılır. `.gitignore` altındaki `data/*` kuralı da `data/` içindeki ham TIFF'i yok sayar; allowlist yalnız doğrulanmış DTM fixture'ları, orto karoları ve küçük bölgesel/global ürün çıktıları içindir.
+
+Karo paketini bilerek yeniden üretmek için Sim klasöründe:
+
+```powershell
+node scripts/ingest-viking-mosaic.mjs --input data-external/Mars_Viking_MDIM21_ClrMosaic_global_232m.tif --out data/viking-mdim
+```
 
 ## Kontroller
 

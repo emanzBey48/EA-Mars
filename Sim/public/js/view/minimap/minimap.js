@@ -34,6 +34,7 @@ export function createMinimap({
 
   const state = {
     terrain,
+    globalBase: null,
     terrainPixels: null,
     terrainPixelsReadable: false,
     descriptor,
@@ -52,7 +53,7 @@ export function createMinimap({
     centerXM: 0,
     centerYM: 0,
     pxPerM: 1,
-    minPxPerM: 0.02,
+    minPxPerM: 0.00001,
     maxPxPerM: 64,
     dragging: false,
     draggingEndpoint: null,
@@ -72,6 +73,7 @@ export function createMinimap({
 
   const bounds = () => state.terrain?.bounds ?? null;
   const validBounds = (b) => b && [b.nwXM, b.nwYM, b.widthM, b.heightM].every(Number.isFinite) && b.widthM > 0 && b.heightM > 0;
+  let preserveUserViewOnTerrainLoad = false;
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -89,9 +91,25 @@ export function createMinimap({
     ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
   }
 
-  function fit() {
+  function fitLocal() {
     const b = bounds();
     if (!validBounds(b)) return;
+    resize();
+    state.centerXM = b.nwXM + b.widthM / 2;
+    state.centerYM = b.nwYM - b.heightM / 2;
+    state.pxPerM = clamp(Math.min(state.width / b.widthM, state.height / b.heightM) * 0.94, state.minPxPerM, state.maxPxPerM);
+    draw();
+  }
+
+  function fit() {
+    preserveUserViewOnTerrainLoad = true;
+    fitLocal();
+  }
+
+  function fitGlobal() {
+    const b = state.globalBase?.bounds;
+    if (!validBounds(b)) return;
+    preserveUserViewOnTerrainLoad = true;
     resize();
     state.centerXM = b.nwXM + b.widthM / 2;
     state.centerYM = b.nwYM - b.heightM / 2;
@@ -135,6 +153,45 @@ export function createMinimap({
       x: state.width / 2 + (xM - state.centerXM) * state.pxPerM,
       y: state.height / 2 - (yM - state.centerYM) * state.pxPerM,
     };
+  }
+
+  function visibleWorldBounds() {
+    const halfWidth = state.width / (2 * state.pxPerM);
+    const halfHeight = state.height / (2 * state.pxPerM);
+    return {
+      minX: state.centerXM - halfWidth,
+      maxX: state.centerXM + halfWidth,
+      minY: state.centerYM - halfHeight,
+      maxY: state.centerYM + halfHeight,
+    };
+  }
+
+  function drawWorldImage(image, imageBounds) {
+    if (!image || !validBounds(imageBounds)) return;
+    const view = visibleWorldBounds();
+    const left = Math.max(imageBounds.nwXM, view.minX);
+    const right = Math.min(imageBounds.nwXM + imageBounds.widthM, view.maxX);
+    const top = Math.min(imageBounds.nwYM, view.maxY);
+    const bottom = Math.max(imageBounds.nwYM - imageBounds.heightM, view.minY);
+    if (!(right > left && top > bottom)) return;
+    const sx = (left - imageBounds.nwXM) / imageBounds.widthM * image.width;
+    const sy = (imageBounds.nwYM - top) / imageBounds.heightM * image.height;
+    const sw = (right - left) / imageBounds.widthM * image.width;
+    const sh = (top - bottom) / imageBounds.heightM * image.height;
+    const p = worldToScreen(left, top);
+    ctx.drawImage(image, sx, sy, sw, sh, p.x, p.y, (right - left) * state.pxPerM, (top - bottom) * state.pxPerM);
+  }
+
+  function drawGlobalBase() {
+    const base = state.globalBase;
+    if (!base || !Array.isArray(base.levels) || base.levels.length === 0) return;
+    const targetMPerPx = 1 / state.pxPerM;
+    const level = base.levels.reduce((best, item) =>
+      Math.abs(Math.log(item.mPerPx / targetMPerPx)) < Math.abs(Math.log(best.mPerPx / targetMPerPx)) ? item : best,
+    );
+    ctx.imageSmoothingEnabled = true;
+    for (const tile of level.tiles) drawWorldImage(tile.image, tile.bounds);
+    if (base.regional) drawWorldImage(base.regional.image, base.regional.bounds);
   }
 
   function screenToWorld(x, y) {
@@ -219,8 +276,10 @@ export function createMinimap({
 
   function drawAttribution() {
     const d = state.descriptor;
-    const title = d?.title ?? 'HiRISE DTM';
-    const attribution = d?.attribution ?? 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona';
+    const title = state.globalBase
+      ? `Viking MDIM 2.1 · ${Math.round(state.globalBase.nativeMPerPx)} m/px · lisans: ${state.globalBase.license}`
+      : (d?.title ?? 'HiRISE DTM');
+    const attribution = state.globalBase?.attribution ?? d?.attribution ?? 'USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona';
     const text = `${title} · ${attribution}`;
     ctx.font = '11px system-ui, sans-serif';
     const maxWidth = Math.max(40, state.width - 20);
@@ -231,6 +290,22 @@ export function createMinimap({
     ctx.fillText(shown, 16, 26);
   }
 
+  function drawGlobalKey() {
+    const base = state.globalBase;
+    if (!base) return;
+    const mPerPx = 1 / state.pxPerM;
+    const localAvailable = Boolean(state.terrain?.canvas && validBounds(bounds()));
+    const text = mPerPx < base.nativeMPerPx
+      ? `Viking ${Math.round(base.nativeMPerPx)} m/px: yerel ayrıntı yok${localAvailable ? '; HiRISE DTM üstte' : ''}. Orto/kot verisi değildir.`
+      : `Viking MDIM renk mozaiği: bağlam katmanı, orto/kot verisi değildir.${localAvailable ? ' HiRISE DTM yerel ayrıntı verir.' : ''}`;
+    const maxWidth = Math.max(40, state.width - 20);
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(10, 12, 16, .78)';
+    ctx.fillRect(10, 37, Math.min(maxWidth, 410), 20);
+    ctx.fillStyle = '#eee';
+    ctx.fillText(text, 16, 51, maxWidth - 12);
+  }
+
   function draw() {
     if (state.destroyed) return;
     resize();
@@ -239,14 +314,19 @@ export function createMinimap({
     ctx.fillRect(0, 0, state.width, state.height);
 
     const b = bounds();
+    if (state.globalBase) drawGlobalBase();
     if (validBounds(b) && state.terrain?.canvas) {
       const topLeft = worldToScreen(b.nwXM, b.nwYM);
       ctx.imageSmoothingEnabled = state.pxPerM < 1.5;
       ctx.drawImage(state.terrain.canvas, topLeft.x, topLeft.y, b.widthM * state.pxPerM, b.heightM * state.pxPerM);
-    } else {
+    } else if (!state.globalBase) {
       ctx.fillStyle = '#ddd';
       ctx.font = '14px system-ui, sans-serif';
       ctx.fillText('HiRISE yüzey katmanı kullanılamıyor', 16, 42);
+    } else {
+      ctx.fillStyle = '#eee';
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.fillText('HiRISE DTM yok; Viking MDIM yalnız 232 m/piksel renkli bağlam sağlar.', 16, 42);
     }
 
     if (state.overlays.orthoVisible && state.overlays.orthoOverlay && state.overlays.orthoOverlay.mode !== 'hillshade') {
@@ -368,6 +448,7 @@ export function createMinimap({
     drawNorth();
     drawScale();
     drawAttribution();
+    drawGlobalKey();
 
     if (state.selectionMode) {
       ctx.fillStyle = 'rgba(0,0,0,.72)';
@@ -377,7 +458,7 @@ export function createMinimap({
       ctx.fillText(`${state.selectionMode === 'start' ? 'Başlangıç' : 'Bitiş'} noktasını seçin`, 16, 55);
     }
     if (state.selectionMessage) {
-      const y = state.selectionMode ? 86 : 39;
+      const y = state.selectionMode ? 86 : (state.globalBase ? 66 : 39);
       ctx.font = '12px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(70, 22, 20, .92)';
       ctx.fillRect(10, y, Math.min(state.width - 20, ctx.measureText(state.selectionMessage).width + 14), 24);
@@ -431,6 +512,7 @@ export function createMinimap({
     }
 
     if (state.dragging && event.pointerId === state.pointerId) {
+      preserveUserViewOnTerrainLoad = true;
       state.centerXM -= (p.x - state.lastX) / state.pxPerM;
       state.centerYM += (p.y - state.lastY) / state.pxPerM;
       state.lastX = p.x;
@@ -499,6 +581,7 @@ export function createMinimap({
 
   function onWheel(event) {
     event.preventDefault();
+    preserveUserViewOnTerrainLoad = true;
     const p = localPointer(event);
     const before = screenToWorld(p.x, p.y);
     const factor = Math.exp(-event.deltaY * 0.0015);
@@ -529,7 +612,7 @@ export function createMinimap({
   resizeObserver?.observe(canvas);
 
   cacheTerrainMask();
-  if (validBounds(bounds())) fit(); else draw();
+  if (validBounds(bounds())) fitLocal(); else draw();
 
   return Object.freeze({
     draw,
@@ -538,7 +621,11 @@ export function createMinimap({
       state.terrain = nextTerrain ?? null;
       cacheTerrainMask();
       state.selectionMessage = '';
-      if (validBounds(bounds())) fit(); else draw();
+      if (validBounds(bounds()) && !preserveUserViewOnTerrainLoad) fitLocal(); else draw();
+    },
+    setGlobalBase(nextBase) {
+      state.globalBase = nextBase ?? null;
+      draw();
     },
     setDescriptor(nextDescriptor) { state.descriptor = nextDescriptor ?? null; draw(); },
     setSelectionMode(mode) { state.selectionMode = mode === 'start' || mode === 'end' ? mode : null; draw(); },
@@ -567,6 +654,7 @@ export function createMinimap({
       draw();
     },
     getView() { return Object.freeze({ centerXM: state.centerXM, centerYM: state.centerYM, pxPerM: state.pxPerM }); },
+    fitGlobal,
     destroy() {
       state.destroyed = true;
       canvas.style.cursor = '';

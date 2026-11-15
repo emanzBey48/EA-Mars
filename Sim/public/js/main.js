@@ -87,6 +87,10 @@ const footprintTrail = createFootprintTrail({ sampleElevation: (xM, yM) => layer
 let footprintTrailSnapshot = footprintTrail.getSnapshot();
 let lastMinimapFootprintRefreshS = -Infinity;
 let orthoOverlay = null;
+let vikingBaseStatus = 'loading';
+let vikingBaseAttribution = null;
+let vikingBaseLicense = null;
+let vikingBaseNativeMPerPx = null;
 
 const mapWrap = $('mapwrap');
 const canvas2d = $('map');
@@ -102,6 +106,7 @@ const fpReticle = $('fp-reticle');
 const fpHudHint = $('fp-hud-hint');
 const geologyToggle = $('toggle-geology');
 const minimapCanvas = $('minimap-canvas');
+const minimapGlobalButton = $('minimap-fit-global');
 const minimapStartLabel = $('minimap-start');
 const minimapEndLabel = $('minimap-end');
 const minimapStatus = $('minimap-status');
@@ -203,6 +208,109 @@ const minimapController = createMinimap({
   onPointSelected: ({ kind, xM, yM, byDrag }) => showSelectedPoint(kind, { xM, yM }, Boolean(byDrag)),
   onCellClick: (point) => explainMinimapCell(point),
 });
+
+minimapGlobalButton?.addEventListener('click', () => minimapController.fitGlobal());
+if (minimapGlobalButton) minimapGlobalButton.disabled = true;
+loadVikingMinimapBase().then((base) => {
+  vikingBaseStatus = 'ready';
+  vikingBaseAttribution = base.attribution;
+  vikingBaseLicense = base.license;
+  vikingBaseNativeMPerPx = base.nativeMPerPx;
+  minimapController.setGlobalBase(base);
+  if (minimapGlobalButton) minimapGlobalButton.disabled = false;
+  refreshMinimapOverlays();
+}).catch((error) => {
+  vikingBaseStatus = 'unavailable';
+  vikingBaseAttribution = null;
+  vikingBaseLicense = null;
+  vikingBaseNativeMPerPx = null;
+  minimapController.setGlobalBase(null);
+  if (minimapGlobalButton) minimapGlobalButton.disabled = true;
+  refreshMinimapOverlays();
+  console.warn(`Viking global minimap katmanı kullanılamıyor: ${error.message}`);
+});
+
+function localBoundsFromGeo(lonWest, lonEast, latNorth, latSouth) {
+  const nw = adapter.latLonToLocal(latNorth, lonWest);
+  const se = adapter.latLonToLocal(latSouth, lonEast);
+  return { nwXM: nw.x, nwYM: nw.y, widthM: se.x - nw.x, heightM: nw.y - se.y };
+}
+
+function loadVikingImage(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`PNG karosu yüklenemedi: ${source}`));
+    image.src = source;
+  });
+}
+
+async function loadVikingMinimapBase() {
+  const response = await fetch('data/viking-mdim/manifest.json');
+  if (!response.ok) throw new Error(`manifest HTTP ${response.status}`);
+  const manifest = await response.json();
+  const projection = manifest?.projection;
+  const sourceRadiusM = manifest?.source?.headerSummary?.radiusM;
+  if (manifest?.schema !== 'marswalk.viking-mdim-pyramid.v1' || manifest?.scheme?.tileSize !== 256 ||
+      !Number.isSafeInteger(manifest?.maxLevelSelection?.chosen) || manifest.maxLevelSelection.chosen < 0 ||
+      !String(manifest?.scheme?.pathOrder ?? '').includes('tiles/{z}/{row}/{col}.png') || !Array.isArray(manifest?.levels) ||
+      !Number.isFinite(projection?.nativeMPerPx) || projection.nativeMPerPx <= 0 ||
+      !String(projection?.type ?? '').toLowerCase().includes('plate carree') ||
+      !Array.isArray(projection.lonRangeDeg) || projection.lonRangeDeg.length !== 2 || !projection.lonRangeDeg.every(Number.isFinite) ||
+      !Array.isArray(projection.latRangeDeg) || projection.latRangeDeg.length !== 2 || !projection.latRangeDeg.every(Number.isFinite) ||
+      projection.lonRangeDeg[1] <= projection.lonRangeDeg[0] || projection.latRangeDeg[0] <= projection.latRangeDeg[1] ||
+      !Number.isFinite(sourceRadiusM) || Math.abs(sourceRadiusM - MAP_FRAME.radiusKm * 1000) > 1e-3 ||
+      !String(manifest?.noData?.rule ?? '').includes('never averaged') ||
+      !manifest.notes?.some((note) => note.includes('ortogörüntü değildir') && note.includes('yükseklik verisi değildir')) ||
+      typeof manifest.attribution !== 'string' || typeof manifest.license !== 'string' ||
+      typeof manifest?.regional?.file !== 'string' || !Array.isArray(manifest.regional.sizePx) ||
+      manifest.regional.sizePx.length !== 2 || !manifest.regional.sizePx.every(Number.isSafeInteger) ||
+      !Array.isArray(manifest.regional.lonBoundsDeg) || manifest.regional.lonBoundsDeg.length !== 2 || !manifest.regional.lonBoundsDeg.every(Number.isFinite) ||
+      !Array.isArray(manifest.regional.latBoundsDeg) || manifest.regional.latBoundsDeg.length !== 2 || !manifest.regional.latBoundsDeg.every(Number.isFinite)) {
+    throw new Error('manifest şeması, koordinat çerçevesi veya no-data/ürün açıklaması beklenenle uyuşmuyor');
+  }
+  const [lonMin, lonMax] = projection.lonRangeDeg;
+  const [latTop, latBottom] = projection.latRangeDeg;
+  const worldBounds = localBoundsFromGeo(lonMin, lonMax, Math.max(latTop, latBottom), Math.min(latTop, latBottom));
+  const readyLevels = manifest.levels.filter((item) => item.written && item.z <= manifest.maxLevelSelection.chosen);
+  if (!readyLevels.some((item) => item.z === 0)) throw new Error('global z0 karoları manifestte yazılı değil');
+  const levels = await Promise.all(readyLevels.map(async (item) => {
+    const [worldWidth, worldHeight] = item.worldPx ?? [];
+    if (!Number.isInteger(item.z) || !Number.isInteger(item.cols) || !Number.isInteger(item.rows) ||
+        !Number.isFinite(item.mPerPx) || item.mPerPx <= 0 || worldWidth !== item.cols * manifest.scheme.tileSize ||
+        worldHeight !== item.rows * manifest.scheme.tileSize) throw new Error(`Viking z${item.z} karo düzeni geçersiz`);
+    const rows = await Promise.all(Array.from({ length: item.rows }, async (_, row) => Promise.all(
+      Array.from({ length: item.cols }, async (_, col) => {
+        const image = await loadVikingImage(`data/viking-mdim/tiles/${item.z}/${row}/${col}.png`);
+        if (image.width !== manifest.scheme.tileSize || image.height !== manifest.scheme.tileSize) {
+          throw new Error(`Viking z${item.z}/${row}/${col} karo boyutu geçersiz`);
+        }
+        const lonWest = lonMin + col * manifest.scheme.tileSize / worldWidth * (lonMax - lonMin);
+        const lonEast = lonMin + (col + 1) * manifest.scheme.tileSize / worldWidth * (lonMax - lonMin);
+        const latNorth = latTop + row * manifest.scheme.tileSize / worldHeight * (latBottom - latTop);
+        const latSouth = latTop + (row + 1) * manifest.scheme.tileSize / worldHeight * (latBottom - latTop);
+        return { image, bounds: localBoundsFromGeo(lonWest, lonEast, latNorth, latSouth) };
+      }),
+    )));
+    return { z: item.z, mPerPx: item.mPerPx, tiles: rows.flat() };
+  }));
+  const regional = manifest.regional;
+  const regionalImage = await loadVikingImage(`data/viking-mdim/${regional.file}`);
+  if (regionalImage.width !== regional.sizePx?.[0] || regionalImage.height !== regional.sizePx?.[1]) {
+    throw new Error('Viking bölgesel kesit boyutu manifestle uyuşmuyor');
+  }
+  const lonWest = Math.min(...regional.lonBoundsDeg), lonEast = Math.max(...regional.lonBoundsDeg);
+  const latSouth = Math.min(...regional.latBoundsDeg), latNorth = Math.max(...regional.latBoundsDeg);
+  return {
+    levels,
+    bounds: worldBounds,
+    regional: { image: regionalImage, bounds: localBoundsFromGeo(lonWest, lonEast, latNorth, latSouth) },
+    nativeMPerPx: projection.nativeMPerPx,
+    attribution: manifest.attribution,
+    license: manifest.license,
+  };
+}
 
 function updateRouteButton() {
   const endpointsReady = Boolean(layers.dtm.available && minimapEndpoints.start && minimapEndpoints.end);
@@ -455,7 +563,10 @@ function refreshMinimapOverlays() {
   });
   const geologyText = geologyStatus === 'ready' ? 'hazır' : geologyStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
   const archiveText = archiveTraverseStatus === 'ready' ? 'hazır' : archiveTraverseStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
-  minimapLayerStatus.textContent = `Jeoloji: ${geologyText} · Arşiv izi: ${archiveText}`;
+  const vikingText = vikingBaseStatus === 'ready'
+    ? `Viking MDIM 2.1: hazır · ${Math.round(vikingBaseNativeMPerPx)} m/px · lisans: ${vikingBaseLicense} · ${vikingBaseAttribution}`
+    : `Viking global: ${vikingBaseStatus}`;
+  minimapLayerStatus.textContent = `Jeoloji: ${geologyText} · Arşiv izi: ${archiveText} · ${vikingText}`;
 }
 
 function setMinimapPickMode(kind) {

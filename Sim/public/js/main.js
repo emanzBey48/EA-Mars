@@ -14,6 +14,7 @@ import { createDefaultSurfaceRegistry } from './surface/registry.js';
 import { MarswalkSim, createWorldSnapshot } from './simulation/sim.js';
 import { Camera, buildTerrainImage, buildTerrainImageFromGrid, render } from './view/render.js';
 import { buildPlannerWindowInput, prepareRouteGrid, ROUTE_GRID_MODE } from './route/legacy-grid-plan.js';
+import { cropDemWindowForEndpoints } from './route/region-window.js';
 import {
   cameraRelativeMovement, createFirstPersonCamera, lookCamera, setFirstPersonLook, setFirstPersonPose, zoomCamera,
 } from './view/3d/camera.js';
@@ -32,6 +33,7 @@ import { buildPlannedRouteLinePositions, derivePlannedRouteGuidance } from './vi
 import { createFootprintTrail } from './view/3d/footprint-trail.js';
 import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3d } from './view/traverse-layer.js';
 import { createMinimap } from './view/minimap/minimap.js';
+import { createMarsGlobe } from './view/globe/mars-globe.js';
 import { classifyPlanResponse } from './route/plan-response-state.js';
 
 const $ = (id) => document.getElementById(id);
@@ -117,6 +119,7 @@ let latestExplainId = null;
 let endpointRevision = 0;
 const routeWorkerRequests = new Map();
 let routeHeatmap = null;
+let fullRouteHeatmap = null;
 let activeRoute = null;
 let plannedRouteLinePositions = new Float32Array();
 let plannedRouteRibbon = null;
@@ -200,6 +203,18 @@ const hudMinimapFollowBtn = $('hud-minimap-follow');
 const hudMinimapOpenSetupBtn = $('hud-minimap-open-setup');
 const hudMinimapCanvas = $('hud-minimap-canvas');
 const missionSetupOverlay = $('mission-setup-overlay');
+const missionSetupModal = missionSetupOverlay?.querySelector('.mission-setup-modal');
+const setupGlobeStage = $('setup-globe-stage');
+const setupGlobeCanvas = $('setup-globe-canvas');
+const setupGlobeStatus = $('setup-globe-status');
+const setupGlobeSelection = $('setup-globe-selection');
+const setupLocalStage = $('setup-local-stage');
+const setupGlobeFocusBtn = $('setup-globe-focus');
+const setupGlobePickStartBtn = $('setup-globe-pick-start');
+const setupGlobePickEndBtn = $('setup-globe-pick-end');
+const setupGlobeZoomOutBtn = $('setup-globe-zoom-out');
+const setupGlobeZoomInBtn = $('setup-globe-zoom-in');
+const setupBackToGlobeBtn = $('setup-back-to-globe');
 const btnCloseSetup = $('btn-close-setup');
 const setupStepBanner = $('setup-step-banner');
 const setupMapSlot = $('setup-map-slot');
@@ -214,6 +229,11 @@ const btnPresetRoutes = Array.from(document.querySelectorAll('.btn-preset-route'
 let presentationModeActive = false;
 let pendingDemoTour = false;
 let missionSetupOpen = false;
+let missionSetupStage = 'globe';
+let globeController = null;
+let globeEndpoints = { start: null, end: null };
+let globeSelectionMode = 'start';
+let globeRegionActive = false;
 let pendingAutoPlan = false;
 let hudMinimapFollow = true;
 let hudMinimapAcc = 0;
@@ -225,7 +245,7 @@ const minimapController = createMinimap({
   canvas: minimapCanvas,
   terrain,
   descriptor: MAP_FRAME,
-  onPointSelected: ({ kind, xM, yM, byDrag }) => showSelectedPoint(kind, { xM, yM }, Boolean(byDrag)),
+  onPointSelected: ({ kind, xM, yM, byDrag }) => handleLocalPointSelected(kind, { xM, yM }, Boolean(byDrag)),
   onCellClick: (point) => explainMinimapCell(point),
 });
 
@@ -260,6 +280,63 @@ function syncMinimapCorridor() {
   hudMinimapController?.setCorridor(corridor);
 }
 
+function showMissionSetupStage(stage) {
+  missionSetupStage = stage === 'local' ? 'local' : 'globe';
+  if (missionSetupModal) missionSetupModal.dataset.stage = missionSetupStage;
+  if (setupGlobeStage) setupGlobeStage.hidden = missionSetupStage !== 'globe';
+  if (setupLocalStage) setupLocalStage.hidden = missionSetupStage !== 'local';
+  updateMissionSetupUi();
+  if (missionSetupStage === 'globe') requestAnimationFrame(() => globeController?.resize());
+  if (missionSetupStage === 'local') requestAnimationFrame(() => minimapController.fit());
+}
+
+function setGlobeSelectionMode(kind) {
+  globeSelectionMode = kind === 'end' ? 'end' : 'start';
+  globeController?.setSelectionMode(globeSelectionMode);
+  setupGlobePickStartBtn?.setAttribute('aria-pressed', String(globeSelectionMode === 'start'));
+  setupGlobePickEndBtn?.setAttribute('aria-pressed', String(globeSelectionMode === 'end'));
+}
+
+function globePointLabel(point) {
+  return `${Math.abs(point.latDeg).toFixed(4)}°${point.latDeg >= 0 ? 'K' : 'G'}, ${Math.abs(point.lonDeg).toFixed(4)}°${point.lonDeg >= 0 ? 'D' : 'B'}`;
+}
+
+function applyGlobeEndpoints() {
+  if (!globeEndpoints.start || !globeEndpoints.end) return;
+  if (!layers.dtm.available || !terrain) {
+    setupGlobeSelection.textContent = 'A ve B kaydedildi. Bu aralık için doğrulanmış yerel DTM yok; rota ve yüzey simülasyonu başlatılamaz.';
+    return;
+  }
+  const start = adapter.latLonToLocal(globeEndpoints.start.latDeg, globeEndpoints.start.lonDeg);
+  const end = adapter.latLonToLocal(globeEndpoints.end.latDeg, globeEndpoints.end.lonDeg);
+  const startPoint = { xM: start.x, yM: start.y };
+  const endPoint = { xM: end.x, yM: end.y };
+  const startRejection = minimapController.selectionRejection(startPoint.xM, startPoint.yM);
+  const endRejection = minimapController.selectionRejection(endPoint.xM, endPoint.yM);
+  if (startRejection || endRejection) {
+    setupGlobeSelection.textContent = `A ${globePointLabel(globeEndpoints.start)} → B ${globePointLabel(globeEndpoints.end)}. ${startRejection || endRejection} Küresel renk görüntüsünden EVA rotası üretilmez; Jezero ayrıntılı haritasında geçerli noktalar seçebilirsiniz.`;
+    return;
+  }
+  if (!initializeRouteWorker({ start: startPoint, end: endPoint })) return;
+  clearMissionEndpoints('Kürede seçilen noktalar yerel DTM alanında doğrulandı.');
+  showSelectedPoint('start', startPoint, false, { autoPlan: false, applyRoute: false });
+  showSelectedPoint('end', endPoint, false, { autoPlan: true, applyRoute: true });
+  setupGlobeSelection.textContent = 'A ve B yerel DTM ve planlama hücrelerinde doğrulandı; rota hesabı seçilen aralık çevresindeki sınırlı DTM penceresiyle yapılıyor.';
+  showMissionSetupStage('local');
+}
+
+function handleGlobeSelect({ kind, latDeg, lonDeg }) {
+  if (kind !== 'start' && kind !== 'end') return;
+  if (!Number.isFinite(latDeg) || !Number.isFinite(lonDeg) || Math.abs(latDeg) > 90 || lonDeg < -180 || lonDeg >= 180) return;
+  globeEndpoints = { ...globeEndpoints, [kind]: { latDeg, lonDeg } };
+  globeController?.setEndpoints(globeEndpoints);
+  clearMissionEndpoints('Kürede A/B seçimi değişti; yerel veri doğrulaması bekleniyor.');
+  if (kind === 'start' && !globeEndpoints.end) setGlobeSelectionMode('end');
+  setupGlobeSelection.textContent = `A: ${globeEndpoints.start ? globePointLabel(globeEndpoints.start) : 'seçilmedi'} · B: ${globeEndpoints.end ? globePointLabel(globeEndpoints.end) : 'seçilmedi'}.`;
+  if (globeEndpoints.start && globeEndpoints.end) applyGlobeEndpoints();
+  updateMissionSetupUi();
+}
+
 function updateMissionSetupUi() {
   if (!setupStepBanner || !btnLaunch3d || !btnLaunch2d) return;
   const hasStart = Boolean(minimapEndpoints.start);
@@ -269,7 +346,13 @@ function updateMissionSetupUi() {
   const plannerUnavailable = !routeWorkerReady && pendingInitId === null;
   const canLaunch = hasStart && hasEnd && !isComputing && (hasRouteOk || plannerUnavailable || !layers.dtm.available);
 
-  if (!hasStart) {
+  if (missionSetupStage === 'globe') {
+    setupStepBanner.textContent = globeEndpoints.start && globeEndpoints.end
+      ? 'A ve B kürede seçildi. Rota yalnız doğrulanmış yerel arazi kapsamında hesaplanabilir.'
+      : globeEndpoints.start
+        ? '2. Adım: Mars küresinde B / bitiş noktasını seçin.'
+        : '1. Adım: Mars küresinde A / başlangıç noktasını seçin; küreyi sürükleyerek döndürebilirsiniz.';
+  } else if (!hasStart) {
     setupStepBanner.textContent = '1. Adım: Harita üzerinde yürüyüşe başlayacağınız Başlangıç (A) noktasını tıklayın veya alttan örnek bir rota seçin.';
   } else if (!hasEnd) {
     setupStepBanner.textContent = '2. Adım: Harita üzerinde Hedef / Bitiş (B) noktasını tıklayın — ardından koridor ve A* rotası otomatik hesaplanacaktır.';
@@ -373,6 +456,9 @@ function applyCorridorHalfWidth(val) {
   }
   syncMinimapCorridor();
   updateHud();
+  if (globeRegionActive && minimapEndpoints.start && minimapEndpoints.end) {
+    pendingAutoPlan = initializeRouteWorker({ start: minimapEndpoints.start, end: minimapEndpoints.end });
+  }
   return next;
 }
 
@@ -413,14 +499,19 @@ function openMissionSetup({ resetSelection = false } = {}) {
   if (setupCorridorInput) setupCorridorInput.value = String(sim.corridorHalfWidthM);
   missionSetupOpen = true;
   missionSetupOverlay.hidden = false;
+  showMissionSetupStage('globe');
   updateViewControls();
   if (resetSelection) {
+    globeEndpoints = { start: null, end: null };
+    globeController?.setEndpoints(globeEndpoints);
+    setGlobeSelectionMode('start');
+    if (setupGlobeSelection) setupGlobeSelection.textContent = 'Küreyi döndürün, A noktasını seçmek için yüzeye tıklayın. Viking MDIM 2.1 yalnız renk bağlamıdır.';
     clearMissionEndpoints('Haritada Başlangıç (A) noktasını seçin.');
   }
   if (!minimapEndpoints.start) setMinimapPickMode('start');
   else if (!minimapEndpoints.end) setMinimapPickMode('end');
   updateMissionSetupUi();
-  requestAnimationFrame(() => minimapController.fit());
+  requestAnimationFrame(() => minimapController.draw());
 }
 
 function closeMissionSetup() {
@@ -458,7 +549,9 @@ async function startDemoTour() {
   });
   showSelectedPoint('start', startPt, false, { autoPlan: false, applyRoute: false });
   showSelectedPoint('end', endPt, false, { autoPlan: false, applyRoute: false });
-  if (routeWorkerReady && pendingInitId === null) {
+  if (globeRegionActive) {
+    pendingDemoTour = initializeRouteWorker({ start: startPt, end: endPt });
+  } else if (routeWorkerReady && pendingInitId === null) {
     planMinimapRoute();
   } else {
     pendingDemoTour = true;
@@ -529,6 +622,18 @@ function showSelectedPoint(kind, point, byDrag = false, { autoPlan = true, custo
     syncMinimapCorridor();
   }
   updateMissionSetupUi();
+}
+
+function handleLocalPointSelected(kind, point, byDrag) {
+  if (!globeRegionActive) {
+    showSelectedPoint(kind, point, byDrag);
+    return;
+  }
+  showSelectedPoint(kind, point, byDrag, { autoPlan: false });
+  if (minimapEndpoints.start && minimapEndpoints.end &&
+      initializeRouteWorker({ start: minimapEndpoints.start, end: minimapEndpoints.end })) {
+    pendingAutoPlan = true;
+  }
 }
 
 minimapGlobalButton?.addEventListener('click', () => minimapController.fitGlobal());
@@ -737,7 +842,9 @@ function handleRouteWorkerMessage({ data }) {
     }
     if (data.type !== 'window-ready') return;
     routeWorkerReady = true;
-    routeHeatmap = updateHeatmap(data.heatmap);
+    const workerHeatmap = updateHeatmap(data.heatmap);
+    if (!globeRegionActive) fullRouteHeatmap = workerHeatmap;
+    routeHeatmap = globeRegionActive && fullRouteHeatmap ? fullRouteHeatmap : workerHeatmap;
     const readyPlanning = {
       heatmap: routeHeatmap,
       heatmapVisible: minimapHeatmapToggle.checked,
@@ -756,6 +863,7 @@ function handleRouteWorkerMessage({ data }) {
     }
     updateRouteButton();
     updateMissionSetupUi();
+    if (missionSetupOpen && missionSetupStage === 'globe' && globeEndpoints.start && globeEndpoints.end) applyGlobeEndpoints();
     return;
   }
   if (pending.kind === 'plan') {
@@ -851,8 +959,8 @@ function resolveRouteGrid(dtm) {
 }
 
 // Yerli (USGS/native) yol: layers.dtm değerleri olduğu gibi kopyalanır; davranış K3-10 öncesiyle aynıdır.
-function nativePlannerWindow() {
-  const values = new Float32Array(layers.dtm.values);
+function nativePlannerWindow(copy = true) {
+  const values = copy ? new Float32Array(layers.dtm.values) : layers.dtm.values;
   const dataView = new DataView(new ArrayBuffer(4));
   dataView.setUint32(0, layers.dtm.noDataBits, true);
   return {
@@ -877,10 +985,34 @@ function routeGridDiagnostics() {
   };
 }
 
-function initializeRouteWorker() {
-  if (!layers.dtm.available || !terrain) return;
+function initializeRouteWorker(regionEndpoints = null) {
+  if (!layers.dtm.available || !terrain) return false;
   const worker = ensureRouteWorker();
-  const planner = routeGrid.grid ? buildPlannerWindowInput(routeGrid.grid) : nativePlannerWindow();
+  let planner;
+  if (regionEndpoints) {
+    const source = routeGrid.grid
+      ? {
+          elevation: routeGrid.grid.elevation,
+          rows: routeGrid.grid.rows, cols: routeGrid.grid.cols,
+          cellSizeM: routeGrid.grid.cellSizeM, nwXM: routeGrid.grid.nwXM, nwYM: routeGrid.grid.nwYM,
+          noDataValue: routeGrid.grid.noDataValue,
+          validMin: routeGrid.grid.validMin, validMax: routeGrid.grid.validMax,
+        }
+      : nativePlannerWindow(false);
+    const cropped = cropDemWindowForEndpoints(source, regionEndpoints.start, regionEndpoints.end, {
+      marginM: Math.max(50, sim.corridorHalfWidthM + 10),
+      maxCells: 2_000_000,
+    });
+    if (cropped.status !== 'ready') {
+      setupGlobeSelection.textContent = `Seçilen aralık işlenemiyor: ${cropped.reason}`;
+      return false;
+    }
+    planner = cropped.window;
+    globeRegionActive = true;
+  } else {
+    planner = routeGrid.grid ? buildPlannerWindowInput(routeGrid.grid) : nativePlannerWindow();
+    globeRegionActive = false;
+  }
   const request = { type: 'init-window', id: ++routeWorkerId, window: planner };
   pendingInitId = request.id;
   routeWorkerRequests.set(request.id, { kind: 'init' });
@@ -888,6 +1020,7 @@ function initializeRouteWorker() {
   minimapStatus.textContent = 'Planlama alanı Worker içinde hazırlanıyor…';
   updateMissionSetupUi();
   worker.postMessage(request, [planner.elevation.buffer]);
+  return true;
 }
 
 function renderCellExplanation(result) {
@@ -1857,6 +1990,12 @@ btnDemoRestart?.addEventListener('click', () => {
 btnOpenRouteSetup?.addEventListener('click', () => openMissionSetup());
 hudMinimapOpenSetupBtn?.addEventListener('click', () => openMissionSetup());
 btnCloseSetup?.addEventListener('click', () => closeMissionSetup());
+setupGlobeFocusBtn?.addEventListener('click', () => showMissionSetupStage('local'));
+setupGlobePickStartBtn?.addEventListener('click', () => setGlobeSelectionMode('start'));
+setupGlobePickEndBtn?.addEventListener('click', () => setGlobeSelectionMode('end'));
+setupGlobeZoomOutBtn?.addEventListener('click', () => globeController?.zoomOut());
+setupGlobeZoomInBtn?.addEventListener('click', () => globeController?.zoomIn());
+setupBackToGlobeBtn?.addEventListener('click', () => showMissionSetupStage('globe'));
 hudMinimapFollowBtn?.addEventListener('click', () => {
   hudMinimapFollow = !hudMinimapFollow;
   hudMinimapFollowBtn.setAttribute('aria-pressed', String(hudMinimapFollow));
@@ -1882,6 +2021,7 @@ if (setupCorridorInput) {
 }
 for (const presetBtn of btnPresetRoutes) {
   presetBtn.addEventListener('click', () => {
+    showMissionSetupStage('local');
     const preset = PRESET_MISSION_ROUTES[presetBtn.dataset.preset];
     if (!preset) return;
     for (const btn of btnPresetRoutes) btn.classList.toggle('is-active', btn === presetBtn);
@@ -1895,7 +2035,9 @@ for (const presetBtn of btnPresetRoutes) {
     });
     showSelectedPoint('start', preset.start, false, { autoPlan: false, applyRoute: false });
     showSelectedPoint('end', preset.end, false, { autoPlan: false, applyRoute: false });
-    if (routeWorkerReady && pendingInitId === null) {
+    if (globeRegionActive) {
+      pendingAutoPlan = initializeRouteWorker({ start: preset.start, end: preset.end });
+    } else if (routeWorkerReady && pendingInitId === null) {
       planMinimapRoute();
     } else {
       pendingAutoPlan = true;
@@ -1952,6 +2094,20 @@ document.addEventListener('click', (event) => {
     }
   }
 });
+
+if (setupGlobeCanvas) {
+  try {
+    globeController = createMarsGlobe({
+      canvas: setupGlobeCanvas,
+      marker: { lonDeg: WAYPOINTS[0].lonDeg, latDeg: WAYPOINTS[0].latDeg, label: 'Jezero' },
+      statusElement: setupGlobeStatus,
+      onSelect: handleGlobeSelect,
+    });
+    setGlobeSelectionMode('start');
+  } catch (error) {
+    if (setupGlobeStatus) setupGlobeStatus.textContent = `Mars küresi açılamadı: ${error.message}. Jezero'ya yaklaş düğmesiyle yerel haritayı açabilirsiniz.`;
+  }
+}
 
 updateViewControls();
 

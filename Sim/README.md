@@ -57,6 +57,7 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 4. **Rota tercihleri:** Dengeli, en kısa, en düz (`gentle` / `flattest`). Ağırlıklar `route/route-compare.js` içinde senaryo parametresidir. Eski `main.js` tablosu kaldırıldı.
 5. **Minimap ve sürükle-bırak uçları:** Başlangıç/bitiş seçimi, tercih değişince bayat plan gösterilmez (`route/plan-response-state.js`). No-data ve kenar (EDGE_UNKNOWN) hücreleri seçilemez (kod ve birim testi; tarayıcı kanıtı için `stage-final-acceptance.md`).
 6. **Viking MDIM 2.1 global bağlam:** 232 m/piksel renkli küresel mozaik, z0–z3 karo piramidi; "Mars globali göster" ile küresel görünüm. Viking verisi renk bağlamıdır; kot veya ortogörüntü değildir.
+   Normal açılıştaki görev kurulumunda döndürülebilir Mars küresi üzerinde A/B aday noktaları seçilebilir. İki nokta geçerli Jezero DTM ve planlama hücrelerine denk gelirse worker yalnız seçilen aralığı ve senaryo koridorunu kapsayan sınırlı DEM penceresiyle yeniden hazırlanır. Diğer Mars bölgelerindeki seçimler kürede kalır; doğrulanmış yerel DTM bulunmadan EVA rotası veya yüzey simülasyonu başlatılmaz. Viking görüntüsü küresel yükseklik kaynağı değildir. Metre ölçekli kesin seçim için Jezero ayrıntılı haritası kullanılır.
 7. **Bölgesel MOLA ufku:** `data/regional-dem/` (~463 m/piksel, 384×384). Datum `needs_review`; yürünebilirlik puanı üretmez, yerel DTM ile birleştirilmez. `?horizon=off` ile kapatılır.
 8. **1× gerçek dikey ölçek:** Varsayılan; 2× ve 3× görsel abartı seçenekleri ayrı rozetle gösterilir.
 9. **Güneş, gökyüzü ve gölge (görsel):** Mars gökyüzü kubbesi, doğrusal ışık ve ACES ton eşleme, güneş gölge haritası. Sunum parametresidir; ölçülmüş değildir.
@@ -80,6 +81,8 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 | `public/js/view/render.js` | 2D Canvas çizimi (yalnız snapshot ve hazır varlıklar alır) |
 | `public/js/view/3d/` | WebGL2: `renderer.js` (render pass'leri), `camera.js`, `camera-motion.js`, `terrain-mesh.js`, `astronaut-rig.js`, `marker-mesh.js`, `footprint-trail.js`, `route-ribbon.js`, `horizon-mesh.js`, `shadow-map.js`, `sky-model.js`, `terrain-shading.js` |
 | `public/js/view/minimap/minimap.js` | Minimap: Viking global, HiRISE yerel katman, rota planlama |
+| `public/js/view/globe/mars-globe.js` | Viking dokulu Mars küresi, A/B küresel seçim arayüzü |
+| `public/js/route/region-window.js` | Seçilen yerel A/B çevresindeki DEM penceresini hücre bütçesiyle sınırlar |
 | `public/js/view/hud.js` | Snapshot okuyan HUD ve uyarı şeritleri |
 | `public/js/input/input.js` | Klavye, fare tekerleği ve buton bağlamaları (simülasyon kuralı içermez) |
 | `scripts/` | `extract-dtm.mjs`, `preflight.mjs`, `smoke-e2e.mjs`, `relief-report.mjs`, `ingest-viking-mosaic.mjs`, `fetch-regional-dem.mjs`, `validate-ortho-registration.mjs`, `build-sources-list.mjs` |

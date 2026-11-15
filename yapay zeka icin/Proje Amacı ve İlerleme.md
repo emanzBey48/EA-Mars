@@ -1,18 +1,48 @@
 ﻿# Marswalk — Proje Amacı ve İlerleme
 
-**Son güncelleme:** 12 Kasım 2026  
+**Son güncelleme:** 14 Kasım 2026
 **Proje:** NASA Space Apps 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Hedef uygulama:** `C:\Users\Erdem\OneDrive\Desktop\nasa space apps\Sim`
+
+## En son bağımsız doğrulama — 14 Kasım 2026
+
+Efe'nin Stage 13 rig kinematiği bu dalda zaten mevcuttu; yeni uygulama kodu gerekmedi. Stage 13'e özel rig testleri 7/7, tam `npm test` 241/241 geçti. Güncel tam test, legacy HiRISE DTM LFS nesnesi indirildikten sonra çalıştırıldı. `Sim/data/legacy-hirise/dtm_subset.f32` checkout öncesinde 132 baytlık LFS pointer'ıydı; `git lfs pull --include="Sim/data/legacy-hirise/dtm_subset.f32"` sonrası beklenen 7.537.204 bayt oldu ve `git lfs fsck --objects --dry-run` başarılı. Bu yalnız yerel LFS çalışma kopyasını tamamladı; pointer içeriği değişmedi.
+
+`npm run smoke`, sandbox'ta yerel Edge DevTools bağlantısı `EACCES` ile engellendiğinden önce sayfa hedefi bulamayıp betik hatası verdi. Yerel loopback erişimi olan çalıştırmada ve LFS verisi geldikten sonra uygulama testleri çalıştı: 32 kontrolden 26'sı geçti. Kalanlar: ilk 2D→3D açılışında mesh 10 saniyelik bekleme penceresinde hazır olmadı (sonraki 2D→3D dönüşü 3D'ye geçti); bu nedenle 6b/6i/6l rig/mesh tanıları da boş kaldı; 6h kamera yönünde hareket kontrolü geçerli örneğe rağmen `grounded=false` ve yaklaşık -4,45 m ilerleme gösterdi; 5b smoke metin kontrolü, arşiv izi uyarısındaki “güvenli rota bilgisi içermez” ibaresini ayrıca hesaba katmıyor. Bunlar Alparslan'ın 3D entegrasyon/smoke kabulinde takip edilecek ayrı konulardır; Efe'nin saf rig Stage 13 testleri geçmiştir.
+
+Smoke'un ürettiği ekran görüntüleri HEAD'deki sürümlerine geri alındı. Bu doğrulamada uygulama kodu ve test dosyaları değiştirilmedi. Sonuç Stage 15–17 birleşik görsel kabulinin yerine geçmez.
+
+## Güncel birleştirme durumu — 14 Kasım 2026
+
+`origin/codex/alparslan-integration-followups` dalı `c2f3008`, `origin/codex/camera-eye-alignment` dalı `c10e885` merge commit'leriyle bu çalışma dalına alındı. 19B jeoloji snapshot/HUD/kontak, 20B arşiv sürüş izi, 22B rover fotoğraf galerisi/tahmini kamera yönü ve first-person kamera yüksekliğinin kask merkezine 1,48 m hizalanması kaynakta mevcut. 21B ortomozaik bindirmesi yapılmadı; DTM ile hizalama kanıtı olmadan açılmamalı. Bu dallar yeni ham `Sim/data/` dosyası getirmedi; Mars Trek, SIM 3464 ve Perseverance paketleri önceki `805f739` veri commit'inde zaten depodaydı. Bu turda kaynak kodu ve Git geçmişi statik incelendi; test, smoke veya tarayıcı çalıştırılmadı. Stage 15–18 görsel kabul ve 19–22 ürün/runtime kabulü açık.
+
+## USGS DTM durum kaydı — 14 Kasım 2026
+
+`7df26df` ve `1bc85f6`, `codex/usgs-dtm-fail-closed` dalına push edildi; önceki kod engelleri için bağımsız statik tekrar incelemesi PASS olarak kaydedildi. USGS adayı ürün-özel düşey datum doğrulanmadığı için `needs_review`; HiRISE fallback etkin. Test, `prepare-data` veya runtime çalıştırılmadı; Stage 6 terrain kabulü açık. JP2 decoder mevcut değil.
+
+**Tarihsel ilk inceleme: FAIL / kabul edilmedi (`eb385ea`).** Sonraki kod düzeltmeleri bu tarihsel sonucu değiştirmiştir: kod engelleri statik tekrar incelemede kapalı bulundu; ürün-özel datum kanıtı ve runtime kabulü hâlâ gereklidir. Kodun mevcut olması verinin provenance/koordinat/datum/lisans kabulünü tamamlamaz. Stage 8–12 için önceki test kayıtları bu migration'ın kabul sonucu değildir.
+
+**Tarihsel ilk review engelleri (`eb385ea` dönemi):** sonraki fail-closed düzeltmelerden önce kaydedilen maddelerdir. `7df26df`/`1bc85f6` sonrası bağımsız statik tekrar incelemesi eski kod engelleri için PASS bildirdi; aşağıdaki ürün verisi/datum ve runtime kabul gereksinimleri hâlâ açık:
+
+1. `extract-dtm.mjs`, eksik TIFF tag’leri varken ürün kimliği, boyut, tiepoint/yarıçap, no-data, geçerli aralık, datum ve lisansı varsayıyor/sabitliyor; TIFF strip yerleşimi ve compression doğrulanmıyor.
+2. İlk sürümde manifest bayrakları ve `frameMatchesConfig` destek durumunu bağımsız transform doğrulaması olmadan verebiliyordu. Raster örnek kontrolü yalnız sonlu değeri kontrol ediyordu.
+3. Ürün etiketi/SIS, provenance, datum ve lisans/kullanım koşulu için QC kapısı hâlâ açık. USGS release sayfasındaki hak ifadesi **“This work is marked with CC0 1.0 Universal”** şeklindedir ([USGS data release](https://www.usgs.gov/data/mars-2020-terrain-relative-navigation-hirise-dtm-mosaic)); bu ifade kaynak olarak ilişkilendirilmeli, ama tek başına yerel TIFF’in ürün kimliğini veya metadata eşleşmesini kanıtlamaz.
+
+**Açık iş:** Alparslan ürün-özel düşey datum kanıtını edinip Stage 6 runtime kabulünü ayrıca tamamlar. Stage 13 ve 19–22 kod teslimleri kaynakta mevcuttur; bu merge için yeni test veya görsel kabul yapılmadı. Eski IMG/JP2 dosyaları kullanıcı tarafından geçersiz bildirildi; migration geçmişi onları yeniden geçerli veri yapmaz.
+
+İnceleme anındaki working tree’de legacy raster silmeleri, camera/renderer/test/screenshot değişiklikleri ve TIFF/`.crdownload` dosyaları not değişikliklerinden ayrı unstaged/untracked durumdaydı; bu notlar bunları sahiplenmez.
 
 Bu belge, projeyi devralan kişi veya başka bir yapay zekâ için adım adım devir notudur. Güncel kod ve birincil kaynaklar, eski notlardan daha güncel olabilir; çelişkide güncel kaynaklara bakıp bu notu düzelt.
 
 ## 1. Ürün vaadi ve sınırlar
 
-Marswalk, kullanıcının Jezero haritasında astronotu klavyeyle yönettiği kısa, oynanabilir bir Mars yürüyüş deneyimidir. Kullanıcı rota çizgisi ve koridorla ilişkisini görür; konumundaki arşiv DTM kotu ve DTM’den hesaplanan eğim, kaynak/birim/yöntem bilgileriyle gösterilir. Challenge adı *Interplanetary Survival Guide: Martian Map*.
+Marswalk’ın nihai amacı, kullanıcının astronotu Mars yüzeyinde **birinci şahıs bakışla keşif için** yönettiği ayrıntılı bir 3D simülasyon oluşturmaktır. Kullanıcının “FPS” ifadesi first-person keşif/kamera anlamındadır; silah/çatışma oyunu değildir. Jezero 2D Canvas uygulaması oynanabilir ara MVP’dir. WebGL2 terrain viewer’a first-person kamera/yönlü hareket/yüzey teması ve sunum amaçlı astronot rig’i eklendi (`fbc623f`); bu dikey dilim gösterilebilir bir aşamadır, nihai FPS ürünü veya doğrulanmış fizik motoru değildir. MVP rota ve koridor ilişkisini, arşiv DTM kotunu ve DTM’den türetilen eğimi kaynak/birim/yöntem bilgileriyle gösterir. Challenge adı *Interplanetary Survival Guide: Martian Map*.
 
-Ürün genel Mars fizik motoru, canlı NASA telemetrisi, gerçek rover kontrolü veya güvenlik/karar destek sistemi değildir. Rota sapması sadece seçilmiş senaryo çizgisine uzaklığı gösterir. 10 m/yan koridor uygulama varsayımıdır; güvenlik sınırı değildir. Bilimsel ölçüm, veri setinden hesaplanan sonuç, senaryo varsayımı ve UI değeri ayrı etiketlenmelidir.
+Ürün doğrulanmış genel Mars fizik motoru, canlı NASA telemetrisi, gerçek rover kontrolü veya güvenlik/karar destek sistemi değildir. Yeni first-person hareket Mars yerçekimi ve atmosferini kaynaklı, kapsamı açık parametrelerle dikkate almalıdır. NASA Planet Compare yüzey yerçekimini 3.71 m/s², NSSDC Mars Fact Sheet yaklaşık 3.73 m/s² olarak verir; kaynak/yuvarlama farkı belirtilmelidir. NSSDC ortalama basıncı 6.36 mbar (mevsimsel 4.0–8.7 mbar), yoğunluğu yaklaşık 0.016 ± 0.006 kg/m³ olarak verir. Bunlar Jezero’da belirli tarih/sol için ölçüm değildir. Suit/insan kütlesi, aerodinamik kesit/drag katsayısı ve yerel koşullar kaynaksızsa atmosferin karakter hareketine etkisini fiziksel gerçek gibi uydurma. Rota sapması sadece seçilmiş senaryo çizgisine uzaklığı gösterir. 10 m/yan koridor uygulama varsayımıdır; güvenlik sınırı değildir. Bilimsel ölçüm, veri setinden hesaplanan sonuç, senaryo varsayımı ve UI değeri ayrı etiketlenmelidir.
 
-**Kullanıcı etkileşimi:** WASD/oklarla astronot hareketi; P/Space duraklat/devam; R yeniden başlat; yakınlaştırma yalnız görünüm. Beklenen demo akışı 60–90 saniyedir.
+**Kullanıcı etkileşimi:** Stage 10 first-person diliminde göz hizası kamera, kamera yönlü WASD/ok hareketi, DTM temas örneği ve kaynaklı Mars yüzey yerçekimi referanslı oyun sıçraması vardır. Hareket modeli basitleştirilmiş senaryo davranışıdır; suit biyomekaniği veya tam Mars fizik modeli değildir. Bilinmeyen temas `grounded` durumundan ayrıdır; temas kaybı tek başına düşüş başlatmaz. P/Space duraklat/devam ve R yeniden başlat korunur. Sıradaki planlama işi Stage 8 demo kapsamı ve 60–90 saniyelik gösterim akışını kararlaştırmaktır.
+
+**[KULLANICI BİLDİRDİ — 13 Kasım 2026, Stage 10 öncesi]** Simülasyon açılıyor; arayüzde “Ortogörüntü kullanılamıyor (JPEG 2000 çözülemiyor)” uyarısı görülüyor ve o tarihteki 3D görünüm istenen FPS deneyimine yakın değil. Bu, o anki kullanıcı gözlemidir; bağımsız runtime kabul raporu değildir. Stage 10 first-person dilimi sonradan eklendi ve ayrı doğrulandı; bu JP2 sınırlamasını çözmez. JPEG 2000 çözücü bulunmadığı için zemin DTM’den türetilmiş hillshade’dir, ortogörüntü değildir. JP2 decoder ve half-pixel kayıt/alignment doğrulaması ayrı ve first-person hareketten bağımsız iştir.
 
 ## 2. Çalışmanın kronolojisi ve her aşamanın amacı
 
@@ -45,13 +75,13 @@ PDS Search API metadata’sı PLACES release 16.0 içindeki `best_interp.csv` ü
 
 Bunlar **basitleştirilmiş waypoint çizgisi boyunca arşiv DTM’den örneklenmiş/türetilmiş** değerlerdir; gerçek rover izi, saha ölçümü, geçilebilirlik veya güvenlik puanı değildir. 10 m/yan koridor senaryo varsayımıdır. Yerel equirectangular projeksiyon ~18.4° enlemde doğu-batı mesafesini yaklaşık %1.8 fazla gösterebilir.
 
-### E. Kapsamı küçültme ve 2D oynanabilir MVP
+### E. 3D ürün vizyonuna giden 2D oynanabilir MVP
 
-Proje kapsamı kullanıcı kontrollü tek bir kısa harita deneyimi olarak sabitlendi. Node.js ≥20, bağımlılıksız vanilla JavaScript ES modules ve Canvas 2D ile `Sim` içinde uygulandı. Kullanıcı hareketi/saat/rota sapmasıyla DTM kot/eğim değerleri ve metadata paneli birleştirildi. DTM yoksa oyun açılabilir; katman unavailable olarak işaretlenir. Orto çözücü olmadığı için DTM’den türetilmiş hillshade kullanılır ve ortogörüntü diye adlandırılmaz.
+Etkinlik öncesi oynanabilir kapsam kullanıcı kontrollü tek bir kısa 2D harita deneyimine indirildi; bu, nihai 3D ürün hedefinden vazgeçildiği anlamına gelmez. Node.js ≥20, bağımlılıksız vanilla JavaScript ES modules ve Canvas 2D ile `Sim` içinde uygulandı. Kullanıcı hareketi/saat/rota sapmasıyla DTM kot/eğim değerleri ve metadata paneli birleştirildi. DTM yoksa oyun açılabilir; katman unavailable olarak işaretlenir. Orto çözücü olmadığı için DTM’den türetilmiş hillshade kullanılır ve ortogörüntü diye adlandırılmaz.
 
 ### F. Hesaplama, veri ve render ayrımı
 
-Saf jeo-uzamsal hesaplar `public/js/geo.js` içinde; veri katmanı/sample durumları `layers.js` içinde; kullanıcı simülasyonu `sim.js` içinde; Canvas görünümü `render.js` içinde. `createWorldSnapshot()` surface provider’dan kot/eğim alır; `zM` Mars 2000 yüzey yüksekliğidir (astronot beden yüksekliği değil), no-data/unavailable durumunda `null` kalır. Snapshot kopyalanıp derin dondurulur. `hud.js` ve `render()` aynı snapshot’ı tüketir; renderer canlı `sim`/`layer`/`adapter` almaz. Debug handle yalnız `?debug=1` ile açılır.
+Saf jeo-uzamsal hesaplar `public/js/geo/geo.js` içinde; veri katmanı/sample durumları `public/js/surface/layers.js` içinde; kullanıcı simülasyonu `public/js/simulation/sim.js` içinde; Canvas görünümü `public/js/view/render.js` içindedir. `createWorldSnapshot()` surface provider’dan kot/eğim alır; `zM` Mars 2000 yüzey yüksekliğidir (astronot beden yüksekliği değil), no-data/unavailable durumunda `null` kalır. Snapshot kopyalanıp derin dondurulur. `public/js/view/hud.js` ve `render()` aynı snapshot’ı tüketir; renderer canlı `sim`/`layer`/`adapter` almaz. Debug handle yalnız `?debug=1` ile açılır.
 
 ### G. Regresyon kontrolü ve kullanıcı bildirimi
 
@@ -59,20 +89,20 @@ Saf jeo-uzamsal hesaplar `public/js/geo.js` içinde; veri katmanı/sample duruml
 
 ### H. Manifest ve provider registry — kısmen tamamlandı
 
-Güncel kodda `public/js/registry.js` manifest alan doğrulayıcısı (`supported`, `needs_review`, `unavailable`, `invalid`), `SurfaceProviderRegistry`, fallback ve yerel HiRISE provider kaydı var. `main.js` registry’den varsayılan HiRISE’yi seçer; HUD validation/seçim raporunu gösterebilir. `test/core.test.mjs` synthetic manifest, belirsiz kayıt/ölçek, reddedilen candidate, fallback ve snapshot devamlılığı için test örnekleri içeriyor.
+Güncel kodda `public/js/surface/registry.js` manifest alan doğrulayıcısı (`supported`, `needs_review`, `unavailable`, `invalid`), `SurfaceProviderRegistry`, fallback ve yerel HiRISE provider kaydı var. `main.js` registry’den varsayılan HiRISE’yi seçer; HUD validation/seçim raporunu gösterebilir. `test/core.test.mjs` synthetic manifest, belirsiz kayıt/ölçek, reddedilen candidate, fallback ve snapshot devamlılığı için test örnekleri içeriyor.
 
 **Stage 6 tamam değil.** `Sim/data` içinde gerçek organizer verisi yok; desteklenen format şimdilik hazırlanmış `PDS3_PC_REAL_F32_WINDOW`. Registry gerçek yeni format parser’ı değildir; yeni candidate’ın loader’ı/CRS dönüşümü ayrıca yazılmalı. Kodun güncel statik incelemesinde dört fail-closed boşluğu göründü:
 
-1. `license`/usage koşulu manifestte zorunlu ve validate edilmiyor; yalnız source/attribution aranıyor.
+1. Manifestte `license`/usage alanı yok ve doğrulanmıyor; yalnız source/attribution aranıyor.
 2. Mekânsal kapsam sadece `coverage.description` metniyle kontrol ediliyor; sayısal footprint ve rota/dünya çerçevesiyle kesişim doğrulanmıyor.
 3. `verticalDatumVerified === false` `needs_review` yapıyor; bayrak yokken datum metni tek başına yeterli görülüp supported olabiliyor. Güvenli doğrulama için `true` açıkça aranmalı.
-4. `expectedFrame` argümanı verilmezse CRS/grid karşılaştırması atlanabiliyor. Her doğrulama çağrısında kanonik çerçeve zorunlu olmalı.
+4. `validateLayerManifest(manifest, expectedFrame)` fonksiyonunda `expectedFrame` opsiyonel; verilmezse CRS/grid karşılaştırması atlanabiliyor. Her doğrulama çağrısında kanonik çerçeve zorunlu olmalı.
 
 Ek olarak `transformVerified` boolean’ı insan/loader iddiasıdır; yeni CRS dönüşümünü matematiksel olarak kendiliğinden doğrulamaz. Dönüşüm parametreleri ve footprint kanıtı doğrulanmalı. Bu boşluklar kapatılana ve gerçek kaynak incelenene kadar bilinmeyen candidate örneklenmemeli.
 
-### I. Git ile ortak çalışma — yerel depo kuruldu; LFS push bekliyor
+### I. Git ile ortak çalışma — güncel dal bilgisi
 
-Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında kuruldu; `origin` ayarlı ve AI başlangıç commit’i `54747f7` yerelde. Kimlik doğrulama tamamlandı fakat push sırasında Git LFS’in `github-cloud.s3.amazonaws.com` TLS sertifikası doğrulanamadı; remote’daki branch doğrulanmadı. Büyük IMG/JP2 ve `.f32` LFS’te, proje kodu ve AI yönergeleri aynı depoda. Workspace OneDrive altında olduğundan `.git` eşitleme çatışması riski vardır.
+En son belge ve paralel iş bölümü güncellemesi `d6a1189 docs: align 3D roadmap for parallel work` commit’iyle `origin/docs/parallel-roadmap`’a push edildi. Önceki `aae4830` modül düzenlemesi `origin/docs/shared-code-boundaries` dalındadır. IMG/JP2/F32 Git LFS’te izlenir; workspace OneDrive altında olduğundan `.git` eşitleme çatışması riski vardır.
 
 **AI commit kuralı:** Her önemli ve gözden geçirilebilir görev aşamasında yalnız ilgili dosyaları commit et; büyük işi tek commit’te biriktirme. Commit’ten önce staged diff’i gözden geçir. Görev branch’ini remote’a push et ki ekip arkadaşı değişiklikleri görebilsin. Push engellenirse commit hash’ini ve nedeni bildir, remote’a ulaştı iddiasında bulunma. AI kendi kimliğiyle commit etmeli; insanı taklit etmemeli.
 
@@ -81,12 +111,12 @@ Workspace kökünde `emanzBey48/EA-Mars` için yerel Git deposu `main` dalında 
 | Konum | Sorumluluk |
 |---|---|
 | `public/js/config.js` | Senaryo, waypoint, MAP_FRAME, rota caveat ve kaynaklar |
-| `public/js/geo.js` | Equirectangular/PDS grid/local metre transformu, segment uzaklığı, saf Horn gradyanı |
-| `public/js/layers.js` | `GridElevationLayer`, `UnavailableLayer`, `sampleSurface`, metadata ve no-data durumu |
-| `public/js/registry.js` | Manifest validator, SurfaceProvider registration/factory/fallback; şu an HiRISE default |
-| `public/js/sim.js` | Hareket, saat, rota metrikleri, immutable `WorldSnapshot` |
-| `public/js/input.js` / `hud.js` | Girişler ve DOM HUD; HUD snapshot tüketir |
-| `public/js/render.js` | 2D Canvas kamera, görsel terrain asset’i ve snapshot çizimi |
+| `public/js/geo/geo.js` | Equirectangular/PDS grid/local metre transformu, segment uzaklığı, saf Horn gradyanı |
+| `public/js/surface/layers.js` | `GridElevationLayer`, `UnavailableLayer`, `sampleSurface`, metadata ve no-data durumu |
+| `public/js/surface/registry.js` | Manifest validator, SurfaceProvider registration/factory/fallback; şu an HiRISE default |
+| `public/js/simulation/sim.js` | Hareket, saat, rota metrikleri, derin dondurulmuş `WorldSnapshot` |
+| `public/js/input/input.js` / `public/js/view/hud.js` | Girişler ve DOM HUD; HUD snapshot tüketir |
+| `public/js/view/render.js` | 2D Canvas kamera, görsel terrain asset’i ve snapshot çizimi; `buildTerrainImage(layer)` asset’i önceden katmandan hazırlar |
 | `scripts/extract-dtm.mjs` | Kaynak DTM’den altküme/metadata çıkarımı ve JP2 başlık incelemesi |
 | `test/core.test.mjs` | Saf hesaplar, no-data, sim, snapshot ve registry birim kontrolleri |
 | `scripts/smoke-e2e.mjs` | Başsız tarayıcı etkileşim/kabul kontrolü ve `test-output/` screenshot’ları |
@@ -100,13 +130,17 @@ npm start
 
 Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulumuna gerek yok. Gerekirse kaynak DTM’den altküme üretmek için `npm run prepare-data` (kaynak IMG/JP2 Sim’in bir üst klasöründe aranır). Birim testleri `npm test`; README smoke testi için Node.js ≥22 ve Edge/Chrome gerektiğini belirtir: `npm run smoke`. **Ajan, kullanıcı söylemedikçe çalıştırdığını iddia etmemeli.** Kullanıcı manuel regresyonun geçtiğini söyledi; bu bilgi “kullanıcı bildirimi” olarak kalmalı.
 
-## 4. Kalan işler ve öncelik
+## 4. Tamamlanan Aşamalar ve Kalan İşler
 
-1. **Stage 6 doğrulamasını kapat:** Lisans/usage alanı, sayısal spatial bounds/intersection ve zorunlu doğrulanmış düşey datum alanlarını validator’a ekle; transform/frame kontrolünü açık kanıtla fail-closed yap; synthetic valid/invalid testleri güncelle. İlk bounded kodlama promptu hazırlanmıştı; registry’nin son hali ise promptun bazı kısımlarını içeriyor, tüm boşlukları değil. Bir sonraki AI kodlama adımında güncel kaynak incelensin.
-2. **Gerçek organizer dataset’i gelirse:** Önce dosya/label/SIS/provenance, format, CRS, birim/datum, zaman/kapsam, no-data, scaling/offset, lisans ve footprint doğrula. Uygun loader yoksa `UnavailableLayer`/HiRISE fallback kullan. Bilinmeyen CRS’i tahmin etme.
-3. **PLACES raw CSV’yi engelsiz ağdan al:** PDS Search API ile doğrulanmış aynı release/product’ı indir; coordinate frame ve label/SIS ile Sol 120–164 gerçek polyline’ı çıkar, DTM footprint/no-data’yı kontrol et. Erişim yine bloklanırsa mevcut simplified line ve görünür caveat kalır.
-4. **Demo freeze:** Etkinlik tarihleri 14–15 Kasım 2026 olduğu kullanıcı tarafından bildirildi; 12 Kasım itibarıyla yaklaşık iki gün var. İlk demo için özellik eklemeyi erken dondur, kullanıcı akışını ve attribution/fallback’i göster; son 4 saatte yalnız kritik hata düzelt.
-5. **3D:** Etkinlik sonrasına ertelendi. Önce mevcut `WorldSnapshot` ve surface adapter korunarak renderer spike yap; Mars 2000 `zM` ile display vertical offset’i ayır. Yeni motor/ekonomi ancak açık kapsam ve zaman varsa.
+1. **Stage 9 — 3D viewer runtime kabulü:** İlk tur `d471d6a` üzerinde `npm test` 13/13 ve `npm run smoke` 26/26 geçti. Ardından mesh optimizasyonunu içeren `fbc623f` kod HEAD’i Stage 10 entegrasyonuyla birlikte bağımsız doğrulandı: `npm test` 18/18 ve `npm run smoke` 32/32.
+2. **Stage 10 — first-person keşif ve rig entegrasyonu:** `fbc623f` ile tamamlandı. Alparslan movement/camera/surface-contact ve renderer entegrasyonunun; Efe `view/3d/astronaut-rig.js` renderer-bağımsız rig/poz modülünün sahibiydi. Snapshot hareket sözleşmesi `timeS`, yatay/düşey hız, `grounded`, açık `airborne`, `phase` ve `groundContactStatus` taşır.
+3. **Stage 11 — 3D waypoint beacon ve rota kılavuz geometrisi:** `8054b1a` ile tamamlandı. Efe `marker-mesh.js` modülünü yazdı, Alparslan renderer'a entegre etti. Sol 120 / WB1 ve Sol 164 / Roubion 3D fenerleri, rota şeridi ve koridor sınırları eklendi.
+4. **Stage 8 — first-person demo akışı ve HUD entegrasyonu:** `f5259d2` ve `9819da2` ile tamamlandı. Doğrudan 3D URL açılışı (`?view=3d`), Sol 164 hedef kilidi, nişangah (`#fp-reticle`), kontrol kılavuz kapsülü (`#fp-hud-hint`) ve Roubion varış rozeti eklendi.
+5. **Stage 12 — Mars düşük yerçekimi zıplama balistiği ve kamera dinamikleri:** `58660f0` ile Alparslan tarafından tamamlandı. Mars $3.71\text{ m/s}^2$ yerçekimi altında $v_0 = 2.4\text{ m/s}$ dikey zıplama dürtüsüyle $\sim 1.3\text{ s}$ hava süresi ve $\sim 0.78\text{ m}$ apeks doğrulandı. Havada yatay momentum korunumu (balistik transit), iniş darbe sönümleme süresi (`landingRecovery` $\sim 0.25\text{ s}$) ve birinci şahıs adım kafa salınımı (head-bobbing) ile iniş kamera esnemesi (landing dip) eklendi. Bağımsız `npm test` 29/29 ve `npm run smoke` 32/32 geçti (59.3 FPS).
+6. **Stage 13 — Düşük Yerçekimi EVA Loping ve Sıçrama/İniş Poz Kinematiği:** `653bf73` ve sonraki rig iyileştirmeleriyle kod/test teslimi mevcut; bu incelemede Stage 13 testleri 7/7, tam birim paketi 241/241 geçti. Sunum kinematiği biyomekanik iddiası taşımaz. Birleşik renderer/kamera görsel kabulini Alparslan ayrıca yürütür; bu smoke turundaki 3D başlangıç/diagnostic başarısızlıkları üstte kayıtlıdır.
+7. **Atmosfer/kuvvet modeli:** NASA ortalama/seasonal değerlerini referans ve senaryo girdisi olarak açıkça etiketle. Belirli Jezero hava koşulu veya gerçek uzay giysisi modeli olduğunu ileri sürme; gerekli kütle/drag/wind parametreleri kaynaklandırılmadan karakter hareketine atmosfer kuvveti uydurma.
+8. **Ortogörüntü ayrı işi:** JP2 çözme kütüphanesi/lisansı ve `PixelIsArea` ile PDS pixel-center yarım piksel farkı araştırılsın; hizalama doğrulanmadan görsel bindirme iddiası kurma. Stage 12/13 önkoşulu değildir.
+9. **Yarışma verisi/PLACES:** Gerçek veri gelince Stage 6 intake’i kanıtla aç; gerçek PLACES traverse ise erişilebilir aynı birincil PDS ürünüyle ayrı doğrulansın. HiRISE fallback’i ve rota caveat’ı korunur.
 
 ## 5. Kaynaklar ve atıf
 
@@ -115,5 +149,7 @@ Tarayıcı `http://127.0.0.1:8080/`. Node.js ≥20; paket/bağımlılık kurulum
 - [Mars 2020 PDS Initial Reports](https://pds-geosciences.wustl.edu/missions/mars2020/Mars%202020%20Initial%20Reports%201-4%20April%202022.pdf)
 - [PDS PLACES](https://pds-geosciences.wustl.edu/missions/mars2020/places.htm)
 - [NASA PDS Search API kılavuzu](https://nasa-pds.github.io/pds-api/guides/search/endpoints.html)
+- [NASA Solar System Exploration — Mars yerçekimi](https://solarsystem.nasa.gov/planet-compare/?intent=121)
+- [NASA NSSDC Mars Fact Sheet — yerçekimi ve atmosfer ortalamaları/aralıkları](https://nssdc.gsfc.nasa.gov/planetary/factsheet/marsfact.html)
 
 Kaynak rasterın ölçüm/ürün değeri, bu uygulamanın türettiği profil/eğim, senaryo koridoru ve görsel sunum ayrı tutulmalı. Ürün atfını göster; lisans/usage koşulu bulunmadan şart uydurma.

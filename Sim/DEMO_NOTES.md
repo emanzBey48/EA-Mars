@@ -43,7 +43,7 @@ DTM etiketleri: **[AKTİF]** = ekranda gösterilen arazi (legacy PDS3 DTEEC yede
 
 1. `npm start` → `http://127.0.0.1:8080/?demo=1` — sunum modu açılır.
 2. "Örnek Görevi Başlat (Sol 120 → Sol 164)" — A* rotası hesaplanır. Hesaplama süresi ölçülmedi.
-3. 3D birinci şahıs: **W/A/S/D** yürür, turkuaz şerit rotayı gösterir, **Space** küçük bir senaryo sıçraması yapar, **P** duraklatır, **Esc** fare kilidini bırakır. Ufuk, gölge ve ortomozaik kaplama aynı sahnededir.
+3. 3D birinci şahıs simülasyon modu: **W/A/S/D** yürür, sol üst holografik 2D harita oyuncu ve rotayı gösterir, turkuaz şerit rota kılavuzudur, **Space** küçük bir senaryo sıçraması yapar. **P** veya “Durdur · Ayarlara dön” simülasyonu dondurup ayrıntılı ayar panelini açar; “Simülasyonu Başlat” kaldığı yerden devam eder. **Esc** fare kilidini bırakır. Ufuk, gölge ve ortomozaik kaplama aynı sahnededir.
 4. Sağ panel (sunum modu kapalıyken): rota tercihi (dengeli / en kısa / en düz) değişince özet yeniden hesaplanır; minimap "Mars globali göster" ile Viking bağlamına, "Kapsama sığdır" ile Jezero'ya döner.
 5. Sol 164'e varılınca varış rozeti belirir (README tarifi; bu belgenin kabulünde gözlenmedi). Doğrudan çizgi ~687 m (USGS adayı ölçümü), A* rotası ~730 m (UI özeti, aktif legacy DTM); yürüme süresi (1,2 m/s × 8 ≈ 9,6 m/s duvar saati) yaklaşık 60–90 sn'dir (HESAP). Arayüzdeki "Tahmini yürüme süresi" simülasyon saatidir (730 m ≈ 10 dk 8 sn); duvar saati satırı ayrıca ≈ 1 dk 16 sn gösterir.
 6. Gösterilemiyorsa: `?view=3d` yerine varsayılan 2D görünüm açık kalır; WebGL2 yoksa 2D Canvas kesintisiz çalışır.

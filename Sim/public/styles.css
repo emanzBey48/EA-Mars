@@ -591,6 +591,76 @@ body.view-3d #hud-minimap-widget .hud-minimap-footer {
   background: rgba(7, 27, 35, 0.92);
   border-top-color: rgba(103, 232, 249, 0.22);
 }
+.hud-map-projection { position: relative; overflow: hidden; }
+.hud-map-scanlines {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(110, 244, 255, 0.065) 0 1px, transparent 1px 5px);
+  mix-blend-mode: screen;
+}
+body.simulation-mode.view-3d #hud-minimap-widget {
+  width: 248px;
+  background: rgba(3, 18, 28, 0.56);
+  border-color: rgba(103, 245, 255, 0.92);
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.38), 0 0 3px rgba(165, 243, 252, 0.9), inset 0 0 20px rgba(34, 211, 238, 0.14);
+}
+body.simulation-mode.view-3d #hud-minimap-widget .hud-minimap-header {
+  background: linear-gradient(90deg, rgba(4, 38, 51, 0.98), rgba(6, 24, 38, 0.92));
+}
+body.simulation-mode.view-3d #hud-minimap-widget .hud-minimap-title {
+  color: #cffafe;
+  text-shadow: 0 0 5px #22d3ee, 0 0 13px rgba(34, 211, 238, 0.9);
+}
+body.simulation-mode.view-3d .hud-map-scanlines { display: block; }
+body.simulation-mode.view-3d #hud-minimap-canvas { height: 204px; }
+body.simulation-mode .hud-minimap-actions,
+body.simulation-mode .hud-minimap-footer { display: none; }
+
+.btn-simulation-start {
+  background: linear-gradient(135deg, #07586a 0%, #123849 100%);
+  border-color: rgba(103, 245, 255, 0.75);
+  color: #d9fcff;
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.24);
+}
+.simulation-stop {
+  display: none;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 16;
+  padding: 7px 12px;
+  border: 1px solid rgba(103, 245, 255, 0.72);
+  border-radius: 8px;
+  background: rgba(4, 25, 34, 0.86);
+  color: #d9fcff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.22);
+  cursor: pointer;
+}
+body.simulation-mode .simulation-stop { display: block; }
+body.simulation-mode header {
+  min-height: 34px;
+  padding: 3px 12px;
+  background: rgba(9, 13, 19, 0.84);
+  box-shadow: none;
+}
+body.simulation-mode h1 { font-size: 13px; }
+body.simulation-mode .sub { display: none; }
+body.simulation-mode #panel,
+body.simulation-mode .view-toolbar,
+body.simulation-mode #view-note,
+body.simulation-mode #fp-hud-hint,
+body.simulation-mode #presentation-hud,
+body.simulation-mode #start-hint,
+body.simulation-mode #legend { display: none !important; }
+body:not(.simulation-mode) .quick-sim-bar #btn-pause { display: none; }
+
 .hud-minimap-header {
   display: flex;
   padding: 4px 8px;
@@ -975,10 +1045,12 @@ body.presentation-mode .hud-minimap-widget {
     left: 8px;
     width: 170px;
   }
+  body.simulation-mode.view-3d #hud-minimap-widget { width: 170px; }
   #hud-minimap-canvas {
     height: 136px;
   }
   body.view-3d #hud-minimap-canvas { height: 126px; }
+  body.simulation-mode.view-3d #hud-minimap-canvas { height: 126px; }
   .mission-setup-overlay {
     padding: 8px;
   }

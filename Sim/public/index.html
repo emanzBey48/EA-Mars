@@ -71,7 +71,7 @@
           <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Yürü</span>
           <span>🎯 Tıkla: Fare Bakışı</span>
           <span><kbd>Space</kbd> Mars Sıçraması</span>
-          <span><kbd>P</kbd> Duraklat</span>
+          <span><kbd>P</kbd> Durdur · ayarlara dön</span>
           <span><kbd>Esc</kbd> Çıkış</span>
         </div>
       </div>
@@ -83,10 +83,11 @@
         <span class="fp-hint-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Yürü</span>
         <span class="fp-hint-item">🎯 Tıkla: Fare Bakışı</span>
         <span class="fp-hint-item"><kbd>Space</kbd> Sıçra</span>
-        <span class="fp-hint-item"><kbd>P</kbd> Duraklat</span>
+        <span class="fp-hint-item"><kbd>P</kbd> Durdur · ayarlara dön</span>
         <span class="fp-hint-item"><kbd>Esc</kbd> Fareyi Bırak</span>
       </div>
       <div class="view-toolbar" role="group" aria-label="Harita görünümü">
+        <button id="btn-simulation-start" class="btn-simulation-start" type="button" hidden>🚀 3D Simülasyonunu Başlat</button>
         <button id="btn-demo-mode" class="btn-demo-mode" type="button" aria-pressed="false" title="Sunum ve Jüri Demo Modunu Aç/Kapat">🎬 Sunum Modu</button>
         <button id="btn-open-route-setup" type="button" title="Başlangıç/Bitiş ve Rota Kurulumunu Aç">🎯 Rota Kurulumu</button>
         <button id="btn-view-2d" type="button" aria-pressed="true">2D</button>
@@ -109,7 +110,8 @@
           </div>
         </details>
       </div>
-      <div id="view-note" class="view-note visually-compact-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. <span id="scale-indicator-text">Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).</span></div>
+      <button id="btn-simulation-stop" class="simulation-stop" type="button" hidden title="Simülasyonu durdur ve ayrıntılı ayarlara dön">⏸ Durdur · Ayarlara dön</button>
+      <div id="view-note" class="view-note visually-compact-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile durdurup ayarlara dön. Esc fare kilidini bırakır. <span id="scale-indicator-text">Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).</span></div>
       <div id="view-status" class="banner info" hidden role="status" aria-live="polite"></div>
       <div id="deviation-banner" class="banner warn" hidden role="alert"></div>
       <div id="arrived-banner" class="banner ok arrived-badge" hidden role="alert" aria-live="polite">
@@ -128,7 +130,10 @@
             <button id="hud-minimap-open-setup" type="button" class="hud-mm-btn hud-mm-route-btn" title="Yeni Başlangıç ve Bitiş Seç">Rota</button>
           </div>
         </div>
-        <canvas id="hud-minimap-canvas" class="hud-minimap-canvas" aria-label="3D oyun içi minimap"></canvas>
+        <div class="hud-map-projection">
+          <canvas id="hud-minimap-canvas" class="hud-minimap-canvas" aria-label="3D oyun içi minimap"></canvas>
+          <div class="hud-map-scanlines" aria-hidden="true"></div>
+        </div>
         <div class="hud-minimap-footer">
           <button id="hud-toggle-geology" type="button" class="hud-layer-pill" aria-pressed="false" title="Jeoloji sınırlarını göster/gizle (Sarı çizgiler)">🟡 Jeoloji</button>
           <button id="hud-toggle-archive" type="button" class="hud-layer-pill" aria-pressed="false" title="Arşiv Perseverance sürüş izini göster/gizle (Mor çizgi)">🟣 Arşiv İzi</button>
@@ -198,8 +203,8 @@
         <summary><h2>Kontroller ve simülasyon</h2></summary>
         <ul class="keys">
           <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> hareket</li>
-          <li><kbd>P</kbd> duraklat · devam</li>
-          <li><kbd>Space</kbd> 2D’de duraklat · 3D’de küçük simülasyon sıçraması</li>
+          <li><kbd>P</kbd> simülasyonu durdur · ayarlara dön</li>
+          <li><kbd>Space</kbd> simülasyon modunda 3D’de sıçra · 2D’de durdurup ayarlara dön</li>
           <li>3D sahneye tıkla: fare bakışı · <kbd>Esc</kbd> fare kilidini bırakır</li>
           <li><kbd>R</kbd> yeniden başlat</li>
           <li><kbd>+</kbd> / <kbd>−</kbd> / fare tekerleği yakınlaştırma (yalnız görünüm)</li>
@@ -289,7 +294,7 @@
             <h2 id="setup-modal-title">🧭 Marswalk — Başlangıç ve Bitiş Noktası Seçimi</h2>
             <p class="setup-modal-sub">Simülasyona girmeden önce harita üzerinden başlangıç ve hedef noktalarınızı belirleyin. Koridor ve A* yürüyüş rotası önceden hesaplanır.</p>
           </div>
-          <button id="btn-close-setup" type="button" class="btn-setup-close" hidden title="Mevcut Rotayla Devam Et">✕ Kapat</button>
+          <button id="btn-close-setup" type="button" class="btn-setup-close" title="Detaylı ayar paneline geç">⚙ Ayarları İncele</button>
         </div>
         <div id="setup-step-banner" class="setup-step-banner">1. Adım: Harita üzerinde <b>Başlangıç</b> noktasını tıklayın veya alttaki örnek rotalardan birini seçin.</div>
         <div class="setup-modal-body">
@@ -302,7 +307,7 @@
             </div>
             <div class="setup-launch-actions">
               <button id="btn-launch-3d" type="button" class="btn-launch-primary" disabled>Önce Başlangıç ve Bitiş Seçin</button>
-              <button id="btn-launch-2d" type="button" class="btn-launch-secondary" disabled>2D Haritada Başlat</button>
+              <button id="btn-launch-2d" type="button" class="btn-launch-secondary" disabled>2D Simülasyonunu Başlat</button>
             </div>
           </div>
         </div>

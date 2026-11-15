@@ -38,15 +38,16 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 
 ## Kontroller (`public/js/input/input.js` ile doğrulandı)
 
-- **2D:** WASD veya ok tuşları hareket eder; `P` veya `Space` duraklatır/devam ettirir.
-- **3D:** WASD veya ok tuşları kamera yönüne göre hareket eder; `Space` küçük bir simülasyon sıçraması yapar; `P` duraklatır/devam ettirir. Sahneye tıklamak fare bakışını açar; `Esc` fare kilidini bırakır (tarayıcı davranışı).
-- **Her iki görünümde:** `R` yeniden başlatır; `+` / `-` ve fare tekerleği görünümü yakınlaştırır.
+- **Simülasyon öncesi:** Başlangıç/hedef ve rota ayarlarını görev ekranında yapın. “Ayarları İncele” sağ paneldeki görünüm ve katman ayarlarını açar. “Simülasyonu Başlat” seçilen ayarlarla 3D’yi (WebGL2/DTM yoksa 2D’yi) başlatır.
+- **Simülasyon sırasında:** 3D birinci şahısta WASD/ok tuşları kamera yönüne göre yürür; `Space` küçük bir senaryo sıçraması yapar. Sol üstteki “HOLO MAP” oyuncuyu ve rotayı gösteren 2D HUD haritasıdır. “Durdur · Ayarlara dön” veya `P`, simülasyonu dondurur ve ayrıntılı ayar panelini geri getirir; “Simülasyonu Başlat” kaldığınız yerden devam eder.
+- **2D fallback:** WASD/oklar hareket eder; `P` veya `Space` simülasyonu durdurup ayarlara döndürür.
+- **Her iki görünümde:** `R` yeniden başlatır; `+` / `-` ve fare tekerleği görünümü yakınlaştırır. 3D sahneye tıklamak fare bakışını açar; `Esc` fare kilidini bırakır (tarayıcı davranışı).
 
 ## Jüri / demo akışı (60–90 sn)
 
-1. `npm start` ardından `http://127.0.0.1:8080/?demo=1` açın. Sunum modu açılır ve Sol 120 → Sol 164 rotası hesaplanır.
-2. "Örnek Görevi Başlat" ile 3D birinci şahıs görünüm ve turkuaz rota şeridi başlar. WASD ile yürüyün, `Space` ile sıçrayın.
-3. Sunum modundan çıkmak için "Kapat" düğmesini kullanın veya fare kilidi yokken `Esc`'e basın (`main.js:1461`); sağ panelde rota tercihini (dengeli / en kısa / en düz) değiştirip minimap'te "Mars globali göster" ve "Kapsama sığdır" düğmelerini deneyin.
+1. `npm start` ardından `http://127.0.0.1:8080/?demo=1` açın. Sol 120 → Sol 164 rotası hesaplanır ve sade 3D simülasyon HUD’ı açılır.
+2. WASD ile yürüyün; soldaki holografik 2D harita oyuncuyu ve rotayı izler. `Space` ile sıçrayın.
+3. “Durdur · Ayarlara dön” veya `P` ile simülasyonu dondurup ayrıntılı paneli açın. Ayarları değiştirip “3D Simülasyonunu Başlat” ile kaldığınız yerden devam edin.
 4. Ayrıntılı sınır ve sayı notları için `DEMO_NOTES.md`.
 
 ## Özellikler

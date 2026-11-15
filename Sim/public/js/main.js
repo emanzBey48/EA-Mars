@@ -186,6 +186,8 @@ const minimapRouteSummary = $('minimap-route-summary');
 const minimapCellExplanation = $('minimap-cell-explanation');
 const orthoStatus = $('ortho-status');
 const btnDemoMode = $('btn-demo-mode');
+const btnSimulationStart = $('btn-simulation-start');
+const btnSimulationStop = $('btn-simulation-stop');
 const btnHeaderDemo = $('btn-header-demo');
 const btnOpenRouteSetup = $('btn-open-route-setup');
 const presentationHud = $('presentation-hud');
@@ -212,6 +214,7 @@ const panelPlannerHome = $('panel-planner-home');
 const btnPresetRoutes = Array.from(document.querySelectorAll('.btn-preset-route'));
 
 let presentationModeActive = false;
+let simulationModeActive = false;
 let pendingDemoTour = false;
 let missionSetupOpen = false;
 let pendingAutoPlan = false;
@@ -250,6 +253,53 @@ function setPresentationMode(active) {
   if (activeView === '3d' && renderer3d) {
     renderer3d.resize(w, h, dpr);
   }
+}
+
+function updateSimulationModeUi() {
+  const canUse3d = Boolean(renderer3d && layers.dtm.available && !terrainMeshError);
+  if (btnSimulationStart) {
+    btnSimulationStart.hidden = simulationModeActive || missionSetupOpen;
+    btnSimulationStart.textContent = canUse3d ? '🚀 3D Simülasyonunu Başlat' : '🚀 2D Simülasyonunu Başlat';
+  }
+  if (btnSimulationStop) btnSimulationStop.hidden = !simulationModeActive;
+}
+
+function setSimulationMode(active) {
+  const next = Boolean(active);
+  if (next === simulationModeActive) return;
+
+  if (next) {
+    if (presentationModeActive) setPresentationMode(false);
+    if (sim.phase === 'paused') sim.togglePause();
+  } else {
+    if (sim.phase === 'running') sim.togglePause();
+    if (document.pointerLockElement === canvas3d) document.exitPointerLock();
+    document.body.classList.remove('panel-collapsed');
+    $('btn-toggle-panel')?.setAttribute('aria-pressed', 'true');
+    if (presentationModeActive) setPresentationMode(false);
+  }
+
+  simulationModeActive = next;
+  document.body.classList.toggle('simulation-mode', simulationModeActive);
+  updateViewControls();
+  updateHud();
+}
+
+async function startSimulationMode(view = '3d') {
+  if (missionSetupOpen) closeMissionSetup();
+  if (presentationModeActive) setPresentationMode(false);
+
+  const targetView = view === '3d' && renderer3d && layers.dtm.available && !terrainMeshError ? '3d' : '2d';
+  if (activeView !== targetView) await selectView(targetView);
+  if (targetView === '3d' && activeView !== '3d') return false;
+
+  setSimulationMode(true);
+  return true;
+}
+
+function stopSimulationMode() {
+  if (!simulationModeActive) return;
+  setSimulationMode(false);
 }
 
 function syncMinimapCorridor() {
@@ -471,13 +521,14 @@ async function startDemoTour() {
   } else {
     await selectView('2d');
   }
+  setSimulationMode(true);
 }
 
 function getFirstPersonNote(scale = currentVerticalScale) {
   const scaleText = scale === 1
     ? 'Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).'
     : `Dikey ölçek: ${scale}× görsel sunum abartısıdır.`;
-  return `Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. ${scaleText} Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.`;
+  return `Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile simülasyonu durdurup ayarlara dön. Esc fare kilidini bırakır. ${scaleText} Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.`;
 }
 
 function showSelectedPoint(kind, point, byDrag = false, { autoPlan = true, custom = true, applyRoute = true } = {}) {
@@ -1053,6 +1104,7 @@ function updateViewControls() {
   if (hudMinimapWidget) {
     hudMinimapWidget.hidden = !is3d || missionSetupOpen;
   }
+  updateSimulationModeUi();
 }
 
 function updateScaleUi() {
@@ -1797,7 +1849,9 @@ const { keys } = bindControls({
   corridorMin: SCENARIO.corridorHalfWidthMinM,
   corridorMax: SCENARIO.corridorHalfWidthMaxM,
   initialCorridor: sim.corridorHalfWidthM,
-  onTogglePause: () => { sim.togglePause(); updateHud(); },
+  onTogglePause: () => {
+    if (simulationModeActive) stopSimulationMode();
+  },
   onRestart: () => {
     sim.restart();
     resetFootprints();
@@ -1843,6 +1897,11 @@ if (selectVerticalScale) {
 
 btnDemoMode?.addEventListener('click', () => setPresentationMode(!presentationModeActive));
 btnHeaderDemo?.addEventListener('click', () => setPresentationMode(!presentationModeActive));
+btnSimulationStart?.addEventListener('click', () => {
+  const preferredView = renderer3d && layers.dtm.available && !terrainMeshError ? '3d' : '2d';
+  void startSimulationMode(preferredView);
+});
+btnSimulationStop?.addEventListener('click', stopSimulationMode);
 btnClosePresentation?.addEventListener('click', () => setPresentationMode(false));
 btnDemoTour?.addEventListener('click', () => void startDemoTour());
 btnDemoToggleView?.addEventListener('click', () => void selectView(activeView === '3d' ? '2d' : '3d'));
@@ -1903,14 +1962,8 @@ for (const presetBtn of btnPresetRoutes) {
     updateMissionSetupUi();
   });
 }
-btnLaunch3d?.addEventListener('click', async () => {
-  closeMissionSetup();
-  await selectView('3d');
-});
-btnLaunch2d?.addEventListener('click', async () => {
-  closeMissionSetup();
-  await selectView('2d');
-});
+btnLaunch3d?.addEventListener('click', () => { void startSimulationMode('3d'); });
+btnLaunch2d?.addEventListener('click', () => { void startSimulationMode('2d'); });
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !document.pointerLockElement) {
@@ -2024,7 +2077,7 @@ function frame(now) {
     paused: sim.phase === 'paused',
   });
   if (activeView === '3d') renderer3d?.setQualityLevel(qualityStep.level);
-  if (!missionSetupOpen) {
+  if (!missionSetupOpen && simulationModeActive) {
     if (activeView === '3d') {
       const move = cameraRelativeMovement(camera3d.yawRad, keys);
       sim.stepFirstPerson(dt, { ...move, jump: keys.jumpPressed, headingRad: camera3d.yawRad }, {

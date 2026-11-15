@@ -62,6 +62,25 @@ export const TERRAIN_SHADING_PARAMS = Object.freeze({
   pebbleHeightPerRadius: 0.9,
   pebbleSlopeMax: 0.6,
   pebbleOrthoToneReduction: 0.85,
+
+  // Rocks and scattered boulders (gorsel detay, veri degildir):
+  // Medium stones and boulders with angular, faceted profiles, sun-facing highlights and contact shadows.
+  rocks: Object.freeze([
+    Object.freeze({ cellM: 1.8, radiusM: 0.38, density: 0.32, toneAmp: 0.18, fadeStartM: 18, fadeEndM: 55 }),
+    Object.freeze({ cellM: 4.8, radiusM: 1.02, density: 0.22, toneAmp: 0.22, fadeStartM: 30, fadeEndM: 95 }),
+  ]),
+  rockHeightPerRadius: 0.85,
+  rockSlopeMax: 0.65,
+  rockOrthoToneReduction: 0.80,
+
+  // Impact pits and small craters (gorsel detay, veri degildir):
+  // Deterministic world-fixed bowl depressions with inward sloping walls, shaded interiors, and raised rims.
+  craters: Object.freeze([
+    Object.freeze({ cellM: 3.8, radiusM: 0.78, density: 0.28, depthAmp: 0.50, toneAmp: 0.20, fadeStartM: 15, fadeEndM: 65 }),
+    Object.freeze({ cellM: 9.6, radiusM: 1.95, density: 0.20, depthAmp: 0.60, toneAmp: 0.25, fadeStartM: 30, fadeEndM: 120 }),
+  ]),
+  craterSlopeMax: 0.55,
+  craterOrthoToneReduction: 0.75,
   // Hard cap on the total micro slope perturbation (|dh/dx,dh/dy| vector length).
   microSlopeMax: 0.45,
   // Ortho coverage tone detail already resolves ~0.32 m texels: micro tone is reduced by this fraction there.
@@ -206,6 +225,95 @@ export function pebbleDetail(xM, yM, distM) {
   if (len > P.pebbleSlopeMax) { sx *= P.pebbleSlopeMax / len; sy *= P.pebbleSlopeMax / len; }
   return { slopeX: sx, slopeY: sy, tone };
 }
+
+/** Salted per-cell random for rocks in [0, 1) (mirrors terrainRockRand in GLSL). */
+export const rockRand = (ix, iy, k) => hashUnit(ix + 13001 * k, iy + 27011 * k);
+
+/**
+ * Rock and boulder scatter at local world position (xM, yM) seen from `distM` (JS mirror of terrainRocks).
+ * Angular faceted rocks with directional illumination and contact shadow.
+ * Visual detail only: carries no terrain data and never feeds routes or slope analysis.
+ */
+export function rockDetail(xM, yM, distM) {
+  let sx = 0, sy = 0, tone = 0;
+  for (const L of P.rocks) {
+    const fade = 1 - smoothstep(L.fadeStartM, L.fadeEndM, Math.max(distM, 0));
+    if (fade <= 0) continue;
+    const px = xM / L.cellM, py = yM / L.cellM;
+    const ix = Math.floor(px), iy = Math.floor(py);
+    const fx = px - ix, fy = py - iy;
+    const cx = 0.32 + 0.36 * rockRand(ix, iy, 1);
+    const cy = 0.32 + 0.36 * rockRand(ix, iy, 2);
+    const rw = (0.55 + 0.45 * rockRand(ix, iy, 3)) * L.radiusM;
+    if (rockRand(ix, iy, 4) >= L.density) continue;
+    const dxw = (fx - cx) * L.cellM, dyw = (fy - cy) * L.cellM;
+    const ang = Math.atan2(dyw, dxw);
+    const angularity = 1.0 + 0.18 * Math.sin(ang * 3.0 + rockRand(ix, iy, 6) * 6.2831853)
+                           + 0.10 * Math.cos(ang * 5.0 + rockRand(ix, iy, 7) * 6.2831853);
+    const effR = rw * angularity;
+    const d = Math.hypot(dxw, dyw) / effR;
+    const shade = (rockRand(ix, iy, 5) - 0.5) * 2;
+    if (d < 1) {
+      const h = Math.max(Math.sqrt(1 - d * d), 0.25);
+      const k = -P.rockHeightPerRadius / h * fade;
+      sx += k * dxw / effR;
+      sy += k * dyw / effR;
+      tone += L.toneAmp * (0.35 + 0.65 * shade) * fade;
+    } else if (d < 1.35) {
+      tone -= 0.12 * (1 - smoothstep(1, 1.35, d)) * fade;
+    }
+  }
+  const len = Math.hypot(sx, sy);
+  if (len > P.rockSlopeMax) { sx *= P.rockSlopeMax / len; sy *= P.rockSlopeMax / len; }
+  return { slopeX: sx, slopeY: sy, tone };
+}
+
+/** Salted per-cell random for craters in [0, 1) (mirrors terrainCraterRand in GLSL). */
+export const craterRand = (ix, iy, k) => hashUnit(ix + 3571 * k, iy + 49009 * k);
+
+/**
+ * Small impact craters and pit depressions at local world position (xM, yM) seen from `distM` (JS mirror of terrainCraters).
+ * Inward-sloping bowl depression, shaded floor, and slightly raised/illuminated rim.
+ * Visual detail only: carries no terrain data and never feeds routes or slope analysis.
+ */
+export function craterDetail(xM, yM, distM) {
+  let sx = 0, sy = 0, tone = 0;
+  for (const L of P.craters) {
+    const fade = 1 - smoothstep(L.fadeStartM, L.fadeEndM, Math.max(distM, 0));
+    if (fade <= 0) continue;
+    const px = xM / L.cellM, py = yM / L.cellM;
+    const ix = Math.floor(px), iy = Math.floor(py);
+    const fx = px - ix, fy = py - iy;
+    const cx = 0.32 + 0.36 * craterRand(ix, iy, 1);
+    const cy = 0.32 + 0.36 * craterRand(ix, iy, 2);
+    const rw = (0.60 + 0.40 * craterRand(ix, iy, 3)) * L.radiusM;
+    if (craterRand(ix, iy, 4) >= L.density) continue;
+    const dxw = (fx - cx) * L.cellM, dyw = (fy - cy) * L.cellM;
+    const lenDw = Math.hypot(dxw, dyw);
+    const d = lenDw / rw;
+    if (d < 1.35 && lenDw > 0.001) {
+      const dirX = dxw / lenDw, dirY = dyw / lenDw;
+      if (d < 0.85) {
+        const bowlSlope = Math.sin(d * (Math.PI / 0.85)) * L.depthAmp;
+        sx += dirX * bowlSlope * fade;
+        sy += dirY * bowlSlope * fade;
+        const bowlFloor = 1 - smoothstep(0, 0.85, d);
+        tone -= L.toneAmp * (0.4 + 0.6 * bowlFloor) * fade;
+      } else if (d < 1.15) {
+        const rimT = (d - 0.85) / 0.30;
+        const rimSlope = -Math.sin(rimT * Math.PI) * (L.depthAmp * 0.42);
+        sx += dirX * rimSlope * fade;
+        sy += dirY * rimSlope * fade;
+        const rimHighlight = Math.sin(rimT * Math.PI);
+        tone += L.toneAmp * (0.35 * rimHighlight) * fade;
+      }
+    }
+  }
+  const len = Math.hypot(sx, sy);
+  if (len > P.craterSlopeMax) { sx *= P.craterSlopeMax / len; sy *= P.craterSlopeMax / len; }
+  return { slopeX: sx, slopeY: sy, tone };
+}
+
 /** Applies the micro slope to a unit normal (local X east, Y north, Z up) and renormalises. */
 export function perturbNormal(normal, slopeX, slopeY) {
   const x = normal[0] - slopeX * normal[2];
@@ -303,6 +411,66 @@ const pebbleGlsl = P.pebbles.map((L) => `
       }
     }
   }`).join('');
+
+const rockGlsl = P.rocks.map((L) => `
+  {
+    float fade = 1.0 - smoothstep(${f(L.fadeStartM)}, ${f(L.fadeEndM)}, dist);
+    if (fade > 0.0) {
+      vec2 p = xy / ${f(L.cellM)};
+      ivec2 ic = ivec2(floor(p));
+      vec2 fr = p - vec2(ic);
+      vec2 c = vec2(0.32 + 0.36 * terrainRockRand(ic, 1), 0.32 + 0.36 * terrainRockRand(ic, 2));
+      float rw = (0.55 + 0.45 * terrainRockRand(ic, 3)) * ${f(L.radiusM)};
+      if (terrainRockRand(ic, 4) < ${f(L.density)}) {
+        vec2 dw = (fr - c) * ${f(L.cellM)};
+        float ang = atan(dw.y, dw.x);
+        float angularity = 1.0 + 0.18 * sin(ang * 3.0 + terrainRockRand(ic, 6) * 6.2831853)
+                               + 0.10 * cos(ang * 5.0 + terrainRockRand(ic, 7) * 6.2831853);
+        float effR = rw * angularity;
+        float d = length(dw) / effR;
+        float shade = (terrainRockRand(ic, 5) - 0.5) * 2.0;
+        if (d < 1.0) {
+          float h = max(sqrt(1.0 - d * d), 0.25);
+          slope += -${f(P.rockHeightPerRadius)} / h * fade * dw / effR;
+          tone += ${f(L.toneAmp)} * (0.35 + 0.65 * shade) * fade;
+        } else if (d < 1.35) {
+          tone -= 0.12 * (1.0 - smoothstep(1.0, 1.35, d)) * fade;
+        }
+      }
+    }
+  }`).join('');
+
+const craterGlsl = P.craters.map((L) => `
+  {
+    float fade = 1.0 - smoothstep(${f(L.fadeStartM)}, ${f(L.fadeEndM)}, dist);
+    if (fade > 0.0) {
+      vec2 p = xy / ${f(L.cellM)};
+      ivec2 ic = ivec2(floor(p));
+      vec2 fr = p - vec2(ic);
+      vec2 c = vec2(0.32 + 0.36 * terrainCraterRand(ic, 1), 0.32 + 0.36 * terrainCraterRand(ic, 2));
+      float rw = (0.60 + 0.40 * terrainCraterRand(ic, 3)) * ${f(L.radiusM)};
+      if (terrainCraterRand(ic, 4) < ${f(L.density)}) {
+        vec2 dw = (fr - c) * ${f(L.cellM)};
+        float lenDw = length(dw);
+        float d = lenDw / rw;
+        if (d < 1.35 && lenDw > 0.001) {
+          vec2 dir = dw / lenDw;
+          if (d < 0.85) {
+            float bowlSlope = sin(d * (3.14159265 / 0.85)) * ${f(L.depthAmp)};
+            slope += dir * bowlSlope * fade;
+            float bowlFloor = 1.0 - smoothstep(0.0, 0.85, d);
+            tone -= ${f(L.toneAmp)} * (0.4 + 0.6 * bowlFloor) * fade;
+          } else if (d < 1.15) {
+            float rimT = (d - 0.85) / 0.30;
+            float rimSlope = -sin(rimT * 3.14159265) * (${f(L.depthAmp)} * 0.42);
+            slope += dir * rimSlope * fade;
+            float rimHighlight = sin(rimT * 3.14159265);
+            tone += ${f(L.toneAmp)} * (0.35 * rimHighlight) * fade;
+          }
+        }
+      }
+    }
+  }`).join('');
 export const TERRAIN_SHADING_GLSL = `
 const vec3 TERRAIN_BASIN = ${v3(PALETTE_LINEAR.basin)};
 const vec3 TERRAIN_DELTA = ${v3(PALETTE_LINEAR.delta)};
@@ -348,6 +516,22 @@ void terrainPebbles(vec2 xy, float dist, out vec2 slope, out float tone) {
   tone = 0.0;${pebbleGlsl}
   float len = length(slope);
   if (len > ${f(P.pebbleSlopeMax)}) slope *= ${f(P.pebbleSlopeMax)} / len;
+}
+float terrainRockRand(ivec2 cell, int k) { return terrainHashUnit(cell + ivec2(13001 * k, 27011 * k)); }
+// Rock and boulder scatter (görsel detay, veri değildir): world-fixed, deterministic, distance-faded. Mirrors rockDetail().
+void terrainRocks(vec2 xy, float dist, out vec2 slope, out float tone) {
+  slope = vec2(0.0);
+  tone = 0.0;${rockGlsl}
+  float len = length(slope);
+  if (len > ${f(P.rockSlopeMax)}) slope *= ${f(P.rockSlopeMax)} / len;
+}
+float terrainCraterRand(ivec2 cell, int k) { return terrainHashUnit(cell + ivec2(3571 * k, 49009 * k)); }
+// Impact pits and small craters (görsel detay, veri değildir): world-fixed, deterministic, distance-faded. Mirrors craterDetail().
+void terrainCraters(vec2 xy, float dist, out vec2 slope, out float tone) {
+  slope = vec2(0.0);
+  tone = 0.0;${craterGlsl}
+  float len = length(slope);
+  if (len > ${f(P.craterSlopeMax)}) slope *= ${f(P.craterSlopeMax)} / len;
 }
 vec3 terrainPerturbNormal(vec3 n, vec2 slope) {
   return normalize(vec3(n.xy - slope * n.z, n.z));

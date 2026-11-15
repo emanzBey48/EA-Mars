@@ -12,7 +12,7 @@ import {
   MICRO_DERIVATIVE_BOUND, ORTHO_MID_LUMA, PALETTE_LINEAR, TERRAIN_SHADING_GLSL, TERRAIN_SHADING_PARAMS,
   combineAlbedo, hash2, hashUnit, meshEdgeFade, microDetail, octaveFade, orthoCoverage, orthoGain,
   paletteAlbedo, perturbNormal, slopeAlbedoFactor, slopeRoughness, tanSlopeFromNormalZ, terrainSlopeWeight,
-  valueNoiseD, pebbleDetail,
+  valueNoiseD, pebbleDetail, rockDetail, craterDetail,
 } from '../public/js/view/3d/terrain-shading.js';
 
 const P = TERRAIN_SHADING_PARAMS;
@@ -237,4 +237,52 @@ test('pebble scatter: GLSL block mirrors the JS constants and the renderer wires
   assert.match(TERRAIN_SHADING_GLSL, /7919 \* k/);
   const renderer = fs.readFileSync(new URL('../public/js/view/3d/renderer.js', import.meta.url), 'utf8');
   assert.match(renderer, /terrainPebbles\(vWorldPos\.xy/);
+});
+
+test('rock scatter: deterministic, world-fixed, bounded, fades to zero with distance, sparse', () => {
+  const far = P.rocks[1].fadeEndM + 1;
+  let nonZero = 0, total = 0, maxTone = 0, maxSlope = 0;
+  for (const [x, y] of samples(2000)) {
+    const a = rockDetail(x, y, 5), b = rockDetail(x, y, 5);
+    assert.deepEqual(a, b, 'deterministic');
+    assert.ok(finite([a.slopeX, a.slopeY, a.tone]));
+    assert.ok(Math.hypot(a.slopeX, a.slopeY) <= P.rockSlopeMax + 1e-9, 'slope capped');
+    maxSlope = Math.max(maxSlope, Math.hypot(a.slopeX, a.slopeY));
+    maxTone = Math.max(maxTone, Math.abs(a.tone));
+    total++; if (a.tone !== 0 || a.slopeX !== 0) nonZero++;
+    const f = rockDetail(x, y, far);
+    assert.ok(f.tone === 0 && f.slopeX === 0 && f.slopeY === 0, 'no rocks beyond fade range');
+  }
+  assert.ok(maxTone <= 0.6, `tone amplitude stays modest (${maxTone})`);
+  assert.ok(nonZero / total > 0.02 && nonZero / total < 0.6, `rocks are present (${nonZero / total})`);
+});
+
+test('crater scatter: deterministic, world-fixed, bounded, fades to zero with distance, bowl depression', () => {
+  const far = P.craters[1].fadeEndM + 1;
+  let nonZero = 0, total = 0, maxTone = 0, maxSlope = 0;
+  for (const [x, y] of samples(2000)) {
+    const a = craterDetail(x, y, 5), b = craterDetail(x, y, 5);
+    assert.deepEqual(a, b, 'deterministic');
+    assert.ok(finite([a.slopeX, a.slopeY, a.tone]));
+    assert.ok(Math.hypot(a.slopeX, a.slopeY) <= P.craterSlopeMax + 1e-9, 'slope capped');
+    maxSlope = Math.max(maxSlope, Math.hypot(a.slopeX, a.slopeY));
+    maxTone = Math.max(maxTone, Math.abs(a.tone));
+    total++; if (a.tone !== 0 || a.slopeX !== 0) nonZero++;
+    const f = craterDetail(x, y, far);
+    assert.ok(f.tone === 0 && f.slopeX === 0 && f.slopeY === 0, 'no craters beyond fade range');
+  }
+  assert.ok(maxTone <= 0.6, `tone amplitude stays modest (${maxTone})`);
+  assert.ok(nonZero / total > 0.01 && nonZero / total < 0.5, `craters are present (${nonZero / total})`);
+});
+
+test('rock and crater scatter: cells preserve containment and GLSL block mirrors JS functions', () => {
+  for (const L of P.rocks) assert.ok(L.radiusM <= 0.22 * L.cellM + 1e-12, 'rock radius <= 0.22 cell');
+  for (const L of P.craters) assert.ok(L.radiusM <= 0.22 * L.cellM + 1e-12, 'crater radius <= 0.22 cell');
+  assert.match(TERRAIN_SHADING_GLSL, /void terrainRocks\(/);
+  assert.match(TERRAIN_SHADING_GLSL, /void terrainCraters\(/);
+  assert.match(TERRAIN_SHADING_GLSL, /13001 \* k/);
+  assert.match(TERRAIN_SHADING_GLSL, /3571 \* k/);
+  const renderer = fs.readFileSync(new URL('../public/js/view/3d/renderer.js', import.meta.url), 'utf8');
+  assert.match(renderer, /terrainRocks\(vWorldPos\.xy/);
+  assert.match(renderer, /terrainCraters\(vWorldPos\.xy/);
 });

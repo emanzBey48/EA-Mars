@@ -34,6 +34,7 @@ import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3
 import { createMinimap } from './view/minimap/minimap.js';
 import { classifyPlanResponse } from './route/plan-response-state.js';
 import { createGlobeScreen } from './view/globe/index.js';
+import { createShowreel, buildDefaultShowreelSteps } from './app/showreel.js';
 import { typeLabel as regionTypeLabel } from './view/globe/regions.js';
 import { createHelmetOverlay } from './view/helmet.js';
 import { createAutoDriveControls } from './view/auto-drive-controls.js';
@@ -1895,6 +1896,12 @@ btnLaunch2d?.addEventListener('click', async () => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey && showreel &&
+      !/INPUT|TEXTAREA|SELECT/.test(e.target?.tagName ?? '')) {
+    // R oyun içinde "yeniden başlat"; gösteri yalnız küre ekranında başlar, çalışırken her yerde durdurulur.
+    if (showreel.isRunning()) { showreel.stop(); return; }
+    if (document.querySelector('.mw-globe-screen:not(.mw-globe-screen--hidden)')) { showreel.start(); return; }
+  }
   if (e.key === 'Escape' && !document.pointerLockElement) {
     if (missionSetupOpen) closeMissionSetup();
     else if (presentationModeActive) setPresentationMode(false);
@@ -1945,6 +1952,7 @@ let resolveDataReady = () => {};
 const dataReady = new Promise((resolve) => { resolveDataReady = resolve; });
 let globeScreen = null;
 let introSimulate = null;
+let showreel = null;
 let modeState = { mode: 'normal', field: null, overlay: null, acc: 0 };
 if (introEnabled) {
   const autoDrive = createAutoDrive({});
@@ -1985,14 +1993,15 @@ if (introEnabled) {
   modeState.overlay = overlay;
   const modeBar = createViewModeBar({
     root: barRoot,
-    onChange: (mode) => {
-      modeState.mode = mode;
-      let field = null;
-      try { field = computeModeField(mode, { grid: routeGrid.grid }); } catch { field = null; }
-      modeState.field = field;
-      modeBar.setField(field);
-    },
+    onChange: (mode) => applyMode(mode),
   });
+  function applyMode(mode) {
+    modeState.mode = mode;
+    let field = null;
+    try { field = computeModeField(mode, { grid: routeGrid.grid }); } catch { field = null; }
+    modeState.field = field;
+    modeBar.setField(field);
+  }
   globeScreen = createGlobeScreen({
     root: document.body,
     getEtaMinutes: () => (Number.isFinite(activeRoute?.stats?.estimatedDurationS) ? activeRoute.stats.estimatedDurationS / 60 : null),
@@ -2003,6 +2012,16 @@ if (introEnabled) {
       setPresentationMode(false);
       demoFlow.enter3d(selection);
     },
+  });
+  // Tanıtım gösterisi (yalnız sunum): ?showreel=1 veya R tuşu.
+  showreel = createShowreel({
+    steps: buildDefaultShowreelSteps({
+      globe: globeScreen,
+      setViewMode: (id) => { modeBar.setMode(id); applyMode(id); },
+      setAutoDrive: (on) => demoFlow.toggleAuto(on),
+      setAutoSpeed: (n) => demoFlow.setSpeed(n),
+    }),
+    onStep: (e) => console.info('[showreel]', e.status, e.id),
   });
 }
 
@@ -2073,6 +2092,7 @@ function drawMinimapModeOverlay() {
   } else if (introEnabled) {
     // Küre ekranı üstte; 3B/HUD arkada hazır. Rota planı Jezero varsayılanıyla SİMÜLE ET'te başlar.
     globeScreen?.show();
+    if (urlParams.get('showreel') === '1') showreel?.start();
   } else if (!debugEnabled) {
     openMissionSetup({ resetSelection: true });
   }

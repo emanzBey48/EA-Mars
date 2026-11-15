@@ -81,6 +81,16 @@ export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null
   }
 
   return {
+    pickRegion(id, which) {
+      if (state.busy) return;
+      const r = regions.find((x) => x.id === id);
+      if (!r) return;
+      if (which === 'start') { state.start = r; panel.setStart(r); }
+      else if (which === 'end') { state.end = r; panel.setEnd(r); }
+      else return;
+      syncMarkers();
+    },
+    simulate() { return simulate({ start: state.start, end: state.end }); },
     show() { screen.classList.remove('mw-globe-screen--hidden'); globe?.resetView(); globe?.setActive(true); requestAnimationFrame(() => panel.show()); },
     hide() { screen.classList.add('mw-globe-screen--hidden'); panel.hide(); globe?.setActive(false); tip.hidden = true; },
     dispose() { state.disposed = true; globe?.dispose(); panel.dispose(); screen.remove(); },

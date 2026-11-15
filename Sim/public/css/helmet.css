@@ -20,6 +20,14 @@
   background:
     radial-gradient(ellipse 60% 55% at 50% 50%, transparent 62%, rgba(210, 225, 235, 0.10) 88%, rgba(210, 225, 235, 0.18) 100%);
 }
+/* Nefes buğusu: iç camın alt/kenar bölgesinde çok hafif, ~4 sn periyot; merkez görüş açık kalır. */
+.mw-helmet-fog::after {
+  content: ""; position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(ellipse 55% 45% at 50% 100%, rgba(225, 238, 245, 0.10) 0%, rgba(225, 238, 245, 0.05) 45%, transparent 75%);
+  animation: mw-helmet-breath 4s ease-in-out infinite;
+}
+@keyframes mw-helmet-breath { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mw-helmet-fog::after { animation: none; display: none; } }
 .mw-helmet-glare {
   position: absolute; inset: 0;
   background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.045) 44%, rgba(255, 255, 255, 0.02) 50%, transparent 56%);

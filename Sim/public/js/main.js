@@ -43,7 +43,31 @@ const urlScaleParam = Number(urlParams.get('scale'));
 let currentVerticalScale = [1, 2, 3].includes(urlScaleParam) ? urlScaleParam : 1;
 const adapter = adapterFromLabel(MAP_FRAME, WAYPOINTS[0]);
 const waypoints = WAYPOINTS.map((w) => ({ ...w, local: adapter.latLonToLocal(w.latDeg, w.lonDeg) }));
-const targetYawRad = Math.atan2(waypoints[1].local.y - waypoints[0].local.y, waypoints[1].local.x - waypoints[0].local.x);
+const DEFAULT_WAYPOINT_POINTS = waypoints.map((w) => ({ xM: w.local.x, yM: w.local.y }));
+const PRESET_MISSION_ROUTES = {
+  'sol120-sol164': {
+    start: DEFAULT_WAYPOINT_POINTS[0],
+    end: DEFAULT_WAYPOINT_POINTS[1],
+    startLabel: WAYPOINTS[0].label,
+    endLabel: WAYPOINTS[1].label,
+    custom: false,
+  },
+  'crater-flat': {
+    start: { xM: 40, yM: -180 },
+    end: { xM: 260, yM: -420 },
+    startLabel: 'Krater Tabanı A',
+    endLabel: 'Krater Tabanı B',
+    custom: true,
+  },
+  'nw-ridge': {
+    start: { xM: -260, yM: 220 },
+    end: { xM: 180, yM: -40 },
+    startLabel: 'Kuzeybatı Sırtı A',
+    endLabel: 'Delta Eşiği B',
+    custom: true,
+  },
+};
+let targetYawRad = Math.atan2(waypoints[1].local.y - waypoints[0].local.y, waypoints[1].local.x - waypoints[0].local.x);
 const sim = new MarswalkSim({ a: waypoints[0].local, b: waypoints[1].local }, SCENARIO);
 const camera = new Camera();
 const camera3d = createFirstPersonCamera({ xM: waypoints[0].local.x, yM: waypoints[0].local.y, yawRad: targetYawRad });
@@ -132,15 +156,56 @@ const minimapCellExplanation = $('minimap-cell-explanation');
 const orthoStatus = $('ortho-status');
 const btnDemoMode = $('btn-demo-mode');
 const btnHeaderDemo = $('btn-header-demo');
+const btnOpenRouteSetup = $('btn-open-route-setup');
 const presentationHud = $('presentation-hud');
 const btnClosePresentation = $('btn-close-presentation');
 const btnDemoTour = $('btn-demo-tour');
 const btnDemoToggleView = $('btn-demo-toggle-view');
 const btnDemoRestart = $('btn-demo-restart');
 const presGuideBanner = $('pres-guide-banner');
+const hudMinimapWidget = $('hud-minimap-widget');
+const hudMinimapDist = $('hud-minimap-dist');
+const hudMinimapFollowBtn = $('hud-minimap-follow');
+const hudMinimapOpenSetupBtn = $('hud-minimap-open-setup');
+const hudMinimapCanvas = $('hud-minimap-canvas');
+const missionSetupOverlay = $('mission-setup-overlay');
+const btnCloseSetup = $('btn-close-setup');
+const setupStepBanner = $('setup-step-banner');
+const setupMapSlot = $('setup-map-slot');
+const setupPlannerSlot = $('setup-planner-slot');
+const setupCorridorInput = $('setup-corridor-input');
+const btnLaunch3d = $('btn-launch-3d');
+const btnLaunch2d = $('btn-launch-2d');
+const panelMapHome = $('panel-map-home');
+const panelPlannerHome = $('panel-planner-home');
+const btnPresetRoutes = Array.from(document.querySelectorAll('.btn-preset-route'));
 
 let presentationModeActive = false;
 let pendingDemoTour = false;
+let missionSetupOpen = false;
+let pendingAutoPlan = false;
+let hudMinimapFollow = true;
+let hudMinimapAcc = 0;
+let lastHudMinimapX = NaN;
+let lastHudMinimapY = NaN;
+let lastHudMinimapYaw = NaN;
+
+const minimapController = createMinimap({
+  canvas: minimapCanvas,
+  terrain,
+  descriptor: MAP_FRAME,
+  onPointSelected: ({ kind, xM, yM, byDrag }) => showSelectedPoint(kind, { xM, yM }, Boolean(byDrag)),
+  onCellClick: (point) => explainMinimapCell(point),
+});
+
+const hudMinimapController = hudMinimapCanvas
+  ? createMinimap({
+    canvas: hudMinimapCanvas,
+    terrain,
+    descriptor: MAP_FRAME,
+    compactHud: true,
+  })
+  : null;
 
 function setPresentationMode(active) {
   presentationModeActive = Boolean(active);
@@ -156,16 +221,215 @@ function setPresentationMode(active) {
   }
 }
 
+function syncMinimapCorridor() {
+  const corridor = (minimapEndpoints.start && minimapEndpoints.end) || debugEnabled
+    ? { a: waypoints[0].local, b: waypoints[1].local, halfWidthM: sim.corridorHalfWidthM }
+    : null;
+  minimapController.setCorridor(corridor);
+  hudMinimapController?.setCorridor(corridor);
+}
+
+function updateMissionSetupUi() {
+  if (!setupStepBanner || !btnLaunch3d || !btnLaunch2d) return;
+  const hasStart = Boolean(minimapEndpoints.start);
+  const hasEnd = Boolean(minimapEndpoints.end);
+  const isComputing = pendingInitId !== null || pendingPlanId !== null;
+  const hasRouteOk = activeRoute?.status === 'ok';
+  const plannerUnavailable = !routeWorkerReady && pendingInitId === null;
+  const canLaunch = hasStart && hasEnd && !isComputing && (hasRouteOk || plannerUnavailable || !layers.dtm.available);
+
+  if (!hasStart) {
+    setupStepBanner.textContent = '1. Adım: Harita üzerinde yürüyüşe başlayacağınız Başlangıç (A) noktasını tıklayın veya alttan örnek bir rota seçin.';
+  } else if (!hasEnd) {
+    setupStepBanner.textContent = '2. Adım: Harita üzerinde Hedef / Bitiş (B) noktasını tıklayın — ardından koridor ve A* rotası otomatik hesaplanacaktır.';
+  } else if (pendingInitId !== null) {
+    setupStepBanner.textContent = 'HiRISE DTM yürüyüş alanı Worker içinde hazırlanıyor… Koridor ve rota otomatik hesaplanacak.';
+  } else if (pendingPlanId !== null) {
+    setupStepBanner.textContent = 'Seçtiğiniz başlangıç, hedef ve koridor için A* yürünebilirlik rotası hesaplanıyor…';
+  } else if (hasRouteOk) {
+    const lengthStr = Number.isFinite(activeRoute?.stats?.lengthM) ? `${activeRoute.stats.lengthM.toFixed(0)} m` : '';
+    const durS = activeRoute?.stats?.estimatedDurationS;
+    const durStr = Number.isFinite(durS)
+      ? (Math.floor(durS / 60) > 0 ? `${Math.floor(durS / 60)} dk ${Math.round(durS % 60)} sn` : `${Math.round(durS)} sn`)
+      : '';
+    const detail = [lengthStr, durStr].filter(Boolean).join(' · ');
+    setupStepBanner.textContent = `Koridor ve A* rotası hazır${detail ? ` (${detail})` : ''}. Artık simülasyona girebilirsiniz.`;
+  } else if (plannerUnavailable || !layers.dtm.available) {
+    setupStepBanner.textContent = 'Rota planlayıcı veya DTM kullanılamıyor; seçilen noktalarla devam edebilirsiniz.';
+  } else {
+    setupStepBanner.textContent = `Rota hesaplanamadı (${activeRoute?.reason || activeRoute?.status || 'erişilemeyen nokta'}). Haritada başka noktalar veya alttan örnek rota seçin.`;
+  }
+
+  btnLaunch3d.disabled = !canLaunch || !renderer3d || !layers.dtm.available || Boolean(terrainMeshError);
+  btnLaunch2d.disabled = !canLaunch;
+  btnLaunch3d.textContent = isComputing ? '⏳ Rota Hesaplanıyor…' : '🚀 3D Simülasyona Başla';
+}
+
+function applyCustomMissionRoute(startPt, endPt, { startLabel = 'Kullanıcı Başlangıcı', endLabel = 'Kullanıcı Hedefi', custom = true } = {}) {
+  if (!startPt || !endPt) return;
+  const startGeo = adapter.localToLatLon(startPt.xM, startPt.yM);
+  const endGeo = adapter.localToLatLon(endPt.xM, endPt.yM);
+  waypoints[0] = {
+    ...waypoints[0],
+    id: 'sol120-wb1',
+    label: startLabel,
+    sol: custom ? null : WAYPOINTS[0].sol,
+    latDeg: startGeo.latDeg,
+    lonDeg: startGeo.lonDeg,
+    local: { x: startPt.xM, y: startPt.yM },
+    custom: Boolean(custom),
+  };
+  waypoints[1] = {
+    ...waypoints[1],
+    id: 'sol164-roubion',
+    label: endLabel,
+    sol: custom ? null : WAYPOINTS[1].sol,
+    latDeg: endGeo.latDeg,
+    lonDeg: endGeo.lonDeg,
+    local: { x: endPt.xM, y: endPt.yM },
+    custom: Boolean(custom),
+  };
+  targetYawRad = Math.atan2(waypoints[1].local.y - waypoints[0].local.y, waypoints[1].local.x - waypoints[0].local.x);
+  sim.setRoute({ a: { x: startPt.xM, y: startPt.yM }, b: { x: endPt.xM, y: endPt.yM } });
+  if (layers.dtm.available) {
+    const startElev = layers.dtm.sampleElevation(waypoints[0].local.x, waypoints[0].local.y);
+    if (startElev?.status === 'ok' && Number.isFinite(startElev.value)) {
+      sim.resolveSurfaceContact(startElev);
+    }
+  }
+  camera3d.xM = waypoints[0].local.x;
+  camera3d.yM = waypoints[0].local.y;
+  camera3d.yawRad = targetYawRad;
+  camera3d.dynamicPitchOffsetRad = 0;
+  camera3d.dynamicRollOffsetRad = 0;
+  camera3d.dynamicEyeOffsetM = 0;
+  cameraMotion.reset();
+  lastCameraMotion = null;
+  sim.headingRad = targetYawRad;
+  hasEntered3dOnce = false;
+
+  markerMesh = null;
+  combinedArchiveMarkers = null;
+  archiveMarkerBase = null;
+  if (terrainMesh && layers.dtm.available) {
+    build3dMarkersOnce();
+  }
+
+  const archiveMainToggle = $('toggle-archive-traverse');
+  if (custom) {
+    if (archiveMainToggle) archiveMainToggle.checked = false;
+    if (minimapArchiveToggle) minimapArchiveToggle.checked = false;
+  }
+
+  resetFootprints();
+  lastHudMinimapX = NaN;
+  lastHudMinimapY = NaN;
+  lastHudMinimapYaw = NaN;
+  syncMinimapCorridor();
+  refreshMinimapOverlays();
+  updateHud();
+}
+
+function applyCorridorHalfWidth(val) {
+  const next = sim.setCorridorHalfWidth(val);
+  const sidebarCorridor = $('in-corridor');
+  if (sidebarCorridor) sidebarCorridor.value = String(next);
+  if (setupCorridorInput) setupCorridorInput.value = String(next);
+  hud.renderLayerPanel(layers, terrain, next, currentVerticalScale);
+  if (terrainMesh && layers.dtm.available) {
+    markerMesh = null;
+    combinedArchiveMarkers = null;
+    archiveMarkerBase = null;
+    build3dMarkersOnce();
+  }
+  syncMinimapCorridor();
+  updateHud();
+  return next;
+}
+
+function clearMissionEndpoints(statusMessage = 'Noktalar temizlendi. Yeni başlangıç ve bitiş seçerek yeniden planlayın.') {
+  minimapEndpoints = { start: null, end: null };
+  pendingAutoPlan = false;
+  endpointRevision++;
+  minimapStartLabel.textContent = 'Seçilmedi';
+  minimapEndLabel.textContent = 'Seçilmedi';
+  minimapController.setEndpoints(minimapEndpoints);
+  hudMinimapController?.setEndpoints(minimapEndpoints);
+  minimapController.setSelectionMode(null);
+  $('minimap-pick-start').setAttribute('aria-pressed', 'false');
+  $('minimap-pick-end').setAttribute('aria-pressed', 'false');
+  if (pendingPlanId !== null) routeWorkerRequests.delete(pendingPlanId);
+  pendingPlanId = null;
+  minimapStatus.textContent = statusMessage;
+  activeRoute = null;
+  preparePlannedRouteGuide();
+  const clearPlanning = { heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null };
+  minimapController.setPlanning(clearPlanning);
+  hudMinimapController?.setPlanning(clearPlanning);
+  syncMinimapCorridor();
+  renderRouteSummary({ status: 'idle', reason: 'Noktalar temizlendi' });
+  updateRouteButton();
+  updateMissionSetupUi();
+}
+
+function openMissionSetup({ resetSelection = false } = {}) {
+  if (!missionSetupOverlay) return;
+  if (document.pointerLockElement === canvas3d) document.exitPointerLock();
+  if (panelMapHome && setupMapSlot) {
+    while (panelMapHome.firstChild) setupMapSlot.appendChild(panelMapHome.firstChild);
+  }
+  if (panelPlannerHome && setupPlannerSlot) {
+    while (panelPlannerHome.firstChild) setupPlannerSlot.appendChild(panelPlannerHome.firstChild);
+  }
+  if (setupCorridorInput) setupCorridorInput.value = String(sim.corridorHalfWidthM);
+  missionSetupOpen = true;
+  missionSetupOverlay.hidden = false;
+  updateViewControls();
+  if (resetSelection) {
+    clearMissionEndpoints('Haritada Başlangıç (A) noktasını seçin.');
+  }
+  if (!minimapEndpoints.start) setMinimapPickMode('start');
+  else if (!minimapEndpoints.end) setMinimapPickMode('end');
+  updateMissionSetupUi();
+  requestAnimationFrame(() => minimapController.fit());
+}
+
+function closeMissionSetup() {
+  if (!missionSetupOverlay) return;
+  if (setupMapSlot && panelMapHome) {
+    while (setupMapSlot.firstChild) panelMapHome.appendChild(setupMapSlot.firstChild);
+  }
+  if (setupPlannerSlot && panelPlannerHome) {
+    while (setupPlannerSlot.firstChild) panelPlannerHome.appendChild(setupPlannerSlot.firstChild);
+  }
+  missionSetupOpen = false;
+  missionSetupOverlay.hidden = true;
+  minimapController.setSelectionMode(null);
+  $('minimap-pick-start').setAttribute('aria-pressed', 'false');
+  $('minimap-pick-end').setAttribute('aria-pressed', 'false');
+  updateViewControls();
+  requestAnimationFrame(() => minimapController.draw());
+}
+
 async function startDemoTour() {
+  if (missionSetupOpen) closeMissionSetup();
   setPresentationMode(true);
   if (currentVerticalScale !== 1) {
     rebuildTerrainMeshForScale(1);
   }
-  const startPt = { xM: waypoints[0].local.x, yM: waypoints[0].local.y };
-  const endPt = { xM: waypoints[1].local.x, yM: waypoints[1].local.y };
-  showSelectedPoint('start', startPt);
-  showSelectedPoint('end', endPt);
-  if (routeWorkerReady) {
+  const startPt = DEFAULT_WAYPOINT_POINTS[0];
+  const endPt = DEFAULT_WAYPOINT_POINTS[1];
+  const archiveMainToggle = $('toggle-archive-traverse');
+  if (archiveMainToggle) archiveMainToggle.checked = true;
+  if (minimapArchiveToggle) minimapArchiveToggle.checked = true;
+  applyCustomMissionRoute(startPt, endPt, {
+    startLabel: WAYPOINTS[0].label,
+    endLabel: WAYPOINTS[1].label,
+    custom: false,
+  });
+  showSelectedPoint('start', startPt, false, { autoPlan: false, applyRoute: false });
+  showSelectedPoint('end', endPt, false, { autoPlan: false, applyRoute: false });
+  if (routeWorkerReady && pendingInitId === null) {
     planMinimapRoute();
   } else {
     pendingDemoTour = true;
@@ -187,7 +451,7 @@ function getFirstPersonNote(scale = currentVerticalScale) {
   return `Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile sıçra, P ile duraklat. Esc fare kilidini bırakır. ${scaleText} Güneş senaryosu: yerel gerçek güneş saati 15.00, Lₛ 0°.`;
 }
 
-function showSelectedPoint(kind, point, byDrag = false) {
+function showSelectedPoint(kind, point, byDrag = false, { autoPlan = true, custom = true, applyRoute = true } = {}) {
   const label = `${point.xM.toFixed(1)} m doğu, ${point.yM.toFixed(1)} m kuzey (WB1 orijini)`;
   if (kind === 'start') minimapStartLabel.textContent = label;
   else minimapEndLabel.textContent = label;
@@ -195,29 +459,48 @@ function showSelectedPoint(kind, point, byDrag = false) {
   endpointRevision++;
   if (pendingPlanId !== null) routeWorkerRequests.delete(pendingPlanId);
   pendingPlanId = null;
+  pendingAutoPlan = false;
   minimapController.setEndpoints(minimapEndpoints);
+  hudMinimapController?.setEndpoints(minimapEndpoints);
   activeRoute = null;
   preparePlannedRouteGuide();
-  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
+  const clearPlanning = { heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null };
+  minimapController.setPlanning(clearPlanning);
+  hudMinimapController?.setPlanning(clearPlanning);
   renderRouteSummary({ status: 'idle', reason: 'Yeni nokta seçildi' });
   minimapStatus.textContent = 'Nokta kaydedildi. Planlama göstergesi — güvenli rota sertifikası değildir.';
   updateRouteButton();
-  minimapController.setSelectionMode(null);
-  $('minimap-pick-start').setAttribute('aria-pressed', 'false');
-  $('minimap-pick-end').setAttribute('aria-pressed', 'false');
 
-  if (byDrag && minimapEndpoints.start && minimapEndpoints.end && routeWorkerReady) {
-    planMinimapRoute();
+  if (!byDrag && kind === 'start' && !minimapEndpoints.end) {
+    setMinimapPickMode('end');
+  } else {
+    minimapController.setSelectionMode(null);
+    $('minimap-pick-start').setAttribute('aria-pressed', 'false');
+    $('minimap-pick-end').setAttribute('aria-pressed', 'false');
   }
-}
 
-const minimapController = createMinimap({
-  canvas: minimapCanvas,
-  terrain,
-  descriptor: MAP_FRAME,
-  onPointSelected: ({ kind, xM, yM, byDrag }) => showSelectedPoint(kind, { xM, yM }, Boolean(byDrag)),
-  onCellClick: (point) => explainMinimapCell(point),
-});
+  if (minimapEndpoints.start && minimapEndpoints.end) {
+    if (applyRoute) {
+      applyCustomMissionRoute(minimapEndpoints.start, minimapEndpoints.end, {
+        startLabel: custom ? 'Kullanıcı Başlangıcı' : WAYPOINTS[0].label,
+        endLabel: custom ? 'Kullanıcı Hedefi' : WAYPOINTS[1].label,
+        custom,
+      });
+    } else {
+      syncMinimapCorridor();
+    }
+    if (autoPlan) {
+      if (routeWorkerReady && pendingInitId === null) {
+        planMinimapRoute();
+      } else {
+        pendingAutoPlan = true;
+      }
+    }
+  } else {
+    syncMinimapCorridor();
+  }
+  updateMissionSetupUi();
+}
 
 minimapGlobalButton?.addEventListener('click', () => minimapController.fitGlobal());
 if (minimapGlobalButton) minimapGlobalButton.disabled = true;
@@ -227,6 +510,7 @@ loadVikingMinimapBase().then((base) => {
   vikingBaseLicense = base.license;
   vikingBaseNativeMPerPx = base.nativeMPerPx;
   minimapController.setGlobalBase(base);
+  hudMinimapController?.setGlobalBase(base);
   if (minimapGlobalButton) minimapGlobalButton.disabled = false;
   refreshMinimapOverlays();
 }).catch((error) => {
@@ -235,6 +519,7 @@ loadVikingMinimapBase().then((base) => {
   vikingBaseLicense = null;
   vikingBaseNativeMPerPx = null;
   minimapController.setGlobalBase(null);
+  hudMinimapController?.setGlobalBase(null);
   if (minimapGlobalButton) minimapGlobalButton.disabled = true;
   refreshMinimapOverlays();
   console.warn(`Viking global minimap katmanı kullanılamıyor: ${error.message}`);
@@ -418,15 +703,24 @@ function handleRouteWorkerMessage({ data }) {
     if (data.type !== 'window-ready') return;
     routeWorkerReady = true;
     routeHeatmap = updateHeatmap(data.heatmap);
-    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null, segments: activeRoute?.status === 'ok' ? activeRoute.segments : null });
+    const readyPlanning = {
+      heatmap: routeHeatmap,
+      heatmapVisible: minimapHeatmapToggle.checked,
+      route: activeRoute?.status === 'ok' ? activeRoute.path : null,
+      segments: activeRoute?.status === 'ok' ? activeRoute.segments : null,
+    };
+    minimapController.setPlanning(readyPlanning);
+    hudMinimapController?.setPlanning(readyPlanning);
     minimapStatus.textContent = routeHeatmap
       ? 'Dengeli EVA yürünebilirlik alanı hazır. Planlama göstergesi — güvenli rota sertifikası değildir.'
       : 'Rota planlama alanı hazır; ısı haritası verisi Worker yanıtında bulunamadı.';
-    if (pendingDemoTour && minimapEndpoints.start && minimapEndpoints.end) {
+    if ((pendingDemoTour || pendingAutoPlan) && minimapEndpoints.start && minimapEndpoints.end) {
       pendingDemoTour = false;
+      pendingAutoPlan = false;
       planMinimapRoute();
     }
     updateRouteButton();
+    updateMissionSetupUi();
     return;
   }
   if (pending.kind === 'plan') {
@@ -443,6 +737,7 @@ function handleRouteWorkerMessage({ data }) {
     pendingPlanId = null;
     if (responseState === 'superseded') {
       updateRouteButton();
+      updateMissionSetupUi();
       planMinimapRoute();
       return;
     }
@@ -454,18 +749,28 @@ function handleRouteWorkerMessage({ data }) {
     if (pending.kind === 'plan') {
       activeRoute = null;
       preparePlannedRouteGuide();
-      minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
+      const errPlanning = { heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null };
+      minimapController.setPlanning(errPlanning);
+      hudMinimapController?.setPlanning(errPlanning);
       renderRouteSummary({ status: 'error', reason });
       minimapStatus.textContent = `Rota planlayıcı: ${reason}`;
     }
     if (pending.kind === 'explain') minimapCellExplanation.textContent = `Hücre açıklaması alınamadı: ${reason}`;
     updateRouteButton();
+    updateMissionSetupUi();
     return;
   }
   if (data.type === 'result' && pending.kind === 'plan') {
     activeRoute = data.result;
     preparePlannedRouteGuide();
-    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null, segments: activeRoute?.status === 'ok' ? activeRoute.segments : null });
+    const resultPlanning = {
+      heatmap: routeHeatmap,
+      heatmapVisible: minimapHeatmapToggle.checked,
+      route: activeRoute?.status === 'ok' ? activeRoute.path : null,
+      segments: activeRoute?.status === 'ok' ? activeRoute.segments : null,
+    };
+    minimapController.setPlanning(resultPlanning);
+    hudMinimapController?.setPlanning(resultPlanning);
     renderRouteSummary(activeRoute);
     minimapStatus.textContent = activeRoute?.status === 'ok'
       ? `Rota planlandı. ${activeRoute.mode === 'eva_walkability' ? 'EVA yürünebilirlik' : 'Bölgesel ön planlama'}. Planlama göstergesi — güvenli rota sertifikası değildir.`
@@ -477,6 +782,7 @@ function handleRouteWorkerMessage({ data }) {
     renderCellExplanation(data.result);
   }
   updateRouteButton();
+  updateMissionSetupUi();
 }
 
 function ensureRouteWorker() {
@@ -487,10 +793,12 @@ function ensureRouteWorker() {
     routeWorkerReady = false;
     pendingInitId = null;
     pendingPlanId = null;
+    pendingAutoPlan = false;
     latestExplainId = null;
     routeWorkerRequests.clear();
     minimapStatus.textContent = `Rota Worker kullanılamıyor: ${event.message || 'çalışma hatası'}.`;
     updateRouteButton();
+    updateMissionSetupUi();
   });
   return routeWorker;
 }
@@ -511,6 +819,7 @@ function initializeRouteWorker() {
   routeWorkerRequests.set(request.id, { kind: 'init' });
   routeWorkerReady = false;
   minimapStatus.textContent = 'Planlama alanı Worker içinde hazırlanıyor…';
+  updateMissionSetupUi();
   worker.postMessage(request, [values.buffer]);
 }
 
@@ -546,13 +855,16 @@ function planMinimapRoute() {
   const id = ++routeWorkerId;
   activeRoute = null;
   preparePlannedRouteGuide();
-  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
+  const pendingPlanning = { heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null };
+  minimapController.setPlanning(pendingPlanning);
+  hudMinimapController?.setPlanning(pendingPlanning);
   renderRouteSummary({ status: 'pending', reason: 'Rota hesaplanıyor' });
   pendingPlanId = id;
   const prefKey = minimapRoutePreference?.value ?? 'balanced';
   routeWorkerRequests.set(id, { kind: 'plan', endpointRevision, preference: prefKey });
   minimapStatus.textContent = 'Rota hesaplanıyor… Planlama göstergesi — güvenli rota sertifikası değildir.';
   updateRouteButton();
+  updateMissionSetupUi();
   ensureRouteWorker().postMessage({
     type: 'plan-walking-route',
     id,
@@ -563,14 +875,16 @@ function planMinimapRoute() {
 }
 
 function refreshMinimapOverlays() {
-  minimapController.setOverlays({
+  const overlayState = {
     geologySegments: geologySegmentsLocal,
     archiveTraverse,
     geologyVisible: minimapGeologyToggle.checked && geologyLayerVisible,
     archiveVisible: minimapArchiveToggle.checked && $('toggle-archive-traverse').checked,
     orthoOverlay,
     orthoVisible: minimapOrthoToggle ? minimapOrthoToggle.checked : true,
-  });
+  };
+  minimapController.setOverlays(overlayState);
+  hudMinimapController?.setOverlays(overlayState);
   const geologyText = geologyStatus === 'ready' ? 'hazır' : geologyStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
   const archiveText = archiveTraverseStatus === 'ready' ? 'hazır' : archiveTraverseStatus === 'loading' ? 'yükleniyor' : 'kullanılamıyor';
   const vikingText = vikingBaseStatus === 'ready'
@@ -583,7 +897,9 @@ function setMinimapPickMode(kind) {
   minimapController.setSelectionMode(kind);
   $('minimap-pick-start').setAttribute('aria-pressed', String(kind === 'start'));
   $('minimap-pick-end').setAttribute('aria-pressed', String(kind === 'end'));
-  minimapStatus.textContent = `${kind === 'start' ? 'Başlangıç' : 'Bitiş'} koordinatını seçin. Seçim geçilebilirlik veya rota üretmez.`;
+  if (kind) {
+    minimapStatus.textContent = `${kind === 'start' ? 'Başlangıç' : 'Bitiş'} koordinatını seçin. Seçim geçilebilirlik veya rota üretmez.`;
+  }
 }
 
 $('minimap-pick-start').addEventListener('click', () => setMinimapPickMode('start'));
@@ -595,27 +911,17 @@ minimapRoutePreference?.addEventListener('change', () => {
   }
 });
 minimapHeatmapToggle.addEventListener('change', () => {
-  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute?.status === 'ok' ? activeRoute.path : null, segments: activeRoute?.status === 'ok' ? activeRoute.segments : null });
+  const planningState = {
+    heatmap: routeHeatmap,
+    heatmapVisible: minimapHeatmapToggle.checked,
+    route: activeRoute?.status === 'ok' ? activeRoute.path : null,
+    segments: activeRoute?.status === 'ok' ? activeRoute.segments : null,
+  };
+  minimapController.setPlanning(planningState);
+  hudMinimapController?.setPlanning(planningState);
 });
 $('minimap-fit').addEventListener('click', () => minimapController.fit());
-$('minimap-clear-points').addEventListener('click', () => {
-  minimapEndpoints = { start: null, end: null };
-  endpointRevision++;
-  minimapStartLabel.textContent = 'Seçilmedi';
-  minimapEndLabel.textContent = 'Seçilmedi';
-  minimapController.setEndpoints(minimapEndpoints);
-  minimapController.setSelectionMode(null);
-  $('minimap-pick-start').setAttribute('aria-pressed', 'false');
-  $('minimap-pick-end').setAttribute('aria-pressed', 'false');
-  if (pendingPlanId !== null) routeWorkerRequests.delete(pendingPlanId);
-  pendingPlanId = null;
-  minimapStatus.textContent = 'Noktalar temizlendi. Yeni başlangıç ve bitiş seçerek yeniden planlayın.';
-  activeRoute = null;
-  preparePlannedRouteGuide();
-  minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: null });
-  renderRouteSummary({ status: 'idle', reason: 'Noktalar temizlendi' });
-  updateRouteButton();
-});
+$('minimap-clear-points').addEventListener('click', () => clearMissionEndpoints());
 minimapGeologyToggle.addEventListener('change', () => {
   geologyLayerVisible = minimapGeologyToggle.checked;
   geologyToggle.checked = geologyLayerVisible;
@@ -670,6 +976,9 @@ function updateViewControls() {
   }
   if (fpHudHint) {
     fpHudHint.hidden = !is3d;
+  }
+  if (hudMinimapWidget) {
+    hudMinimapWidget.hidden = !is3d || missionSetupOpen;
   }
 }
 
@@ -1048,6 +1357,23 @@ async function selectView(view) {
     camera3d.yawRad = sim.headingRad;
   }
   setActiveView('3d');
+  if (!debugEnabled && !document.body.classList.contains('panel-collapsed')) {
+    document.body.classList.add('panel-collapsed');
+    btnTogglePanel?.setAttribute('aria-pressed', 'false');
+    requestAnimationFrame(() => {
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(1, mapWrap.clientWidth), h = Math.max(1, mapWrap.clientHeight);
+      if (activeView === '3d' && renderer3d) renderer3d.resize(w, h, dpr);
+    });
+  }
+  if (hudMinimapController) {
+    lastHudMinimapX = NaN;
+    lastHudMinimapY = NaN;
+    lastHudMinimapYaw = NaN;
+    hudMinimapController.setPlayer({ xM: sim.pos.x, yM: sim.pos.y, headingRad: sim.headingRad });
+    if (hudMinimapFollow) hudMinimapController.centerOn(sim.pos.x, sim.pos.y, 1.35);
+    else hudMinimapController.fit();
+  }
   viewNote.textContent = getFirstPersonNote();
   viewStatus.hidden = true;
 }
@@ -1103,6 +1429,7 @@ function resetFootprints() {
   footprintTrailSnapshot = footprintTrail.getSnapshot();
   lastMinimapFootprintRefreshS = -Infinity;
   minimapController.setOverlays({ footprintTrail: footprintTrailSnapshot });
+  hudMinimapController?.setOverlays({ footprintTrail: footprintTrailSnapshot });
 }
 
 function updateFootprints(snapshot) {
@@ -1124,6 +1451,10 @@ function updateFootprints(snapshot) {
   // The minimap is a low-rate overview; avoid redrawing it at display refresh rate.
   if (countChanged || snapshot.simTimeS - lastMinimapFootprintRefreshS >= 1) {
     minimapController.setOverlays({ footprintTrail: footprintTrailSnapshot });
+    hudMinimapController?.setOverlays({ footprintTrail: footprintTrailSnapshot });
+    if (missionSetupOpen || !document.body.classList.contains('panel-collapsed')) {
+      minimapController.setPlayer({ xM: astronaut.xM, yM: astronaut.yM, headingRad: astronaut.headingRad });
+    }
     lastMinimapFootprintRefreshS = snapshot.simTimeS;
   }
   updateFootprints.lastCount = footprintTrailSnapshot.count;
@@ -1428,16 +1759,7 @@ const { keys } = bindControls({
       viewNote.textContent = getFirstPersonNote();
     }
   },
-  onCorridorChange: (val) => {
-    const next = sim.setCorridorHalfWidth(val);
-    hud.renderLayerPanel(layers, terrain, next, currentVerticalScale);
-    if (terrainMesh && layers.dtm.available) {
-      markerMesh = null;
-      build3dMarkersOnce();
-    }
-    updateHud();
-    return next;
-  },
+  onCorridorChange: (val) => applyCorridorHalfWidth(val),
 });
 
 if (selectVerticalScale) {
@@ -1460,9 +1782,68 @@ btnDemoRestart?.addEventListener('click', () => {
   updateHud();
 });
 
+btnOpenRouteSetup?.addEventListener('click', () => openMissionSetup());
+hudMinimapOpenSetupBtn?.addEventListener('click', () => openMissionSetup());
+btnCloseSetup?.addEventListener('click', () => closeMissionSetup());
+hudMinimapFollowBtn?.addEventListener('click', () => {
+  hudMinimapFollow = !hudMinimapFollow;
+  hudMinimapFollowBtn.setAttribute('aria-pressed', String(hudMinimapFollow));
+  hudMinimapFollowBtn.textContent = hudMinimapFollow ? '🎯 Takip: Açık' : '🗺️ Tümü';
+  if (!hudMinimapFollow) {
+    hudMinimapController?.fit();
+  } else if (hudMinimapController) {
+    lastHudMinimapX = NaN;
+    hudMinimapController.setPlayer({ xM: sim.pos.x, yM: sim.pos.y, headingRad: sim.headingRad });
+    hudMinimapController.centerOn(sim.pos.x, sim.pos.y, 1.35);
+  }
+});
+if (setupCorridorInput) {
+  setupCorridorInput.min = String(SCENARIO.corridorHalfWidthMinM);
+  setupCorridorInput.max = String(SCENARIO.corridorHalfWidthMaxM);
+  setupCorridorInput.value = String(sim.corridorHalfWidthM);
+  const onSetupCorridorInput = () => {
+    const val = Number(setupCorridorInput.value);
+    if (Number.isFinite(val)) applyCorridorHalfWidth(val);
+  };
+  setupCorridorInput.addEventListener('input', onSetupCorridorInput);
+  setupCorridorInput.addEventListener('change', onSetupCorridorInput);
+}
+for (const presetBtn of btnPresetRoutes) {
+  presetBtn.addEventListener('click', () => {
+    const preset = PRESET_MISSION_ROUTES[presetBtn.dataset.preset];
+    if (!preset) return;
+    for (const btn of btnPresetRoutes) btn.classList.toggle('is-active', btn === presetBtn);
+    const archiveMainToggle = $('toggle-archive-traverse');
+    if (archiveMainToggle) archiveMainToggle.checked = !preset.custom;
+    if (minimapArchiveToggle) minimapArchiveToggle.checked = !preset.custom;
+    applyCustomMissionRoute(preset.start, preset.end, {
+      startLabel: preset.startLabel,
+      endLabel: preset.endLabel,
+      custom: preset.custom,
+    });
+    showSelectedPoint('start', preset.start, false, { autoPlan: false, applyRoute: false });
+    showSelectedPoint('end', preset.end, false, { autoPlan: false, applyRoute: false });
+    if (routeWorkerReady && pendingInitId === null) {
+      planMinimapRoute();
+    } else {
+      pendingAutoPlan = true;
+    }
+    updateMissionSetupUi();
+  });
+}
+btnLaunch3d?.addEventListener('click', async () => {
+  closeMissionSetup();
+  await selectView('3d');
+});
+btnLaunch2d?.addEventListener('click', async () => {
+  closeMissionSetup();
+  await selectView('2d');
+});
+
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !document.pointerLockElement && presentationModeActive) {
-    setPresentationMode(false);
+  if (e.key === 'Escape' && !document.pointerLockElement) {
+    if (missionSetupOpen) closeMissionSetup();
+    else if (presentationModeActive) setPresentationMode(false);
   }
 });
 
@@ -1517,17 +1898,23 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalSca
     try {
       terrain = buildTerrainImage(layers.dtm);
       minimapController.setTerrain(terrain);
+      hudMinimapController?.setTerrain(terrain);
     } catch (error) {
       minimapController.setTerrain(null);
+      hudMinimapController?.setTerrain(null);
       viewStatus.textContent = `2D DTM görseli hazırlanamadı; metre ızgarası kullanılacak. ${error.message}`;
       viewStatus.hidden = false;
     }
   } else {
     minimapController.setTerrain(null);
+    hudMinimapController?.setTerrain(null);
   }
   minimapController.setDescriptor(layers.dtm.descriptor);
+  hudMinimapController?.setDescriptor(layers.dtm.descriptor);
+  syncMinimapCorridor();
   initializeRouteWorker();
   updateRouteButton();
+  updateMissionSetupUi();
   updateViewControls();
   hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalScale);
   updateScaleUi();
@@ -1537,6 +1924,8 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalSca
     await startDemoTour();
   } else if (startIn3dRequested && layers.dtm.available && renderer3d && !forceWebgl2Failure) {
     await selectView('3d');
+  } else if (!debugEnabled) {
+    openMissionSetup({ resetSelection: true });
   }
 })();
 
@@ -1544,22 +1933,45 @@ hud.renderLayerPanel(layers, terrain, sim.corridorHalfWidthM, currentVerticalSca
 let last = performance.now(), hudAcc = 0;
 function frame(now) {
   const dt = (now - last) / 1000; last = now;
-  if (activeView === '3d') {
-    const move = cameraRelativeMovement(camera3d.yawRad, keys);
-    sim.stepFirstPerson(dt, { ...move, jump: keys.jumpPressed, headingRad: camera3d.yawRad }, {
-      status: lastSnapshot?.surface?.elevation?.status,
-      value: lastSnapshot?.surface?.elevation?.value,
-    });
-    keys.jumpPressed = false;
-  } else {
-    sim.step(dt, keys);
-  }
-  if (activeView === '3d') {
-    // Composition root samples current ground after movement; simulation rules only receive the sample.
-    sim.resolveSurfaceContact(layers.dtm.sampleElevation(sim.pos.x, sim.pos.y));
+  if (!missionSetupOpen) {
+    if (activeView === '3d') {
+      const move = cameraRelativeMovement(camera3d.yawRad, keys);
+      sim.stepFirstPerson(dt, { ...move, jump: keys.jumpPressed, headingRad: camera3d.yawRad }, {
+        status: lastSnapshot?.surface?.elevation?.status,
+        value: lastSnapshot?.surface?.elevation?.value,
+      });
+      keys.jumpPressed = false;
+    } else {
+      sim.step(dt, keys);
+    }
+    if (activeView === '3d') {
+      // Composition root samples current ground after movement; simulation rules only receive the sample.
+      sim.resolveSurfaceContact(layers.dtm.sampleElevation(sim.pos.x, sim.pos.y));
+    }
   }
   const snapshot = buildSnapshot();
   updateFootprints(snapshot);
+  hudMinimapAcc += dt;
+  if (activeView === '3d' && hudMinimapController && !missionSetupOpen && hudMinimapAcc >= 0.06) {
+    hudMinimapAcc = 0;
+    const p = snapshot.astronaut;
+    const movedOrTurned = !Number.isFinite(lastHudMinimapX)
+      || Math.hypot(p.xM - lastHudMinimapX, p.yM - lastHudMinimapY) >= 0.05
+      || Math.abs(p.headingRad - lastHudMinimapYaw) >= 0.015;
+    if (movedOrTurned) {
+      lastHudMinimapX = p.xM;
+      lastHudMinimapY = p.yM;
+      lastHudMinimapYaw = p.headingRad;
+      hudMinimapController.setPlayer({ xM: p.xM, yM: p.yM, headingRad: p.headingRad });
+      if (hudMinimapFollow) {
+        hudMinimapController.centerOn(p.xM, p.yM, 1.35);
+      }
+      if (hudMinimapDist) {
+        const distM = Math.hypot(waypoints[1].local.x - p.xM, waypoints[1].local.y - p.yM);
+        hudMinimapDist.textContent = distM <= SCENARIO.goalRadiusM ? 'Hedef ✓' : `Hedef: ${distM.toFixed(0)} m`;
+      }
+    }
+  }
   camera.cx = snapshot.astronaut.xM; camera.cy = snapshot.astronaut.yM;
   const dpr = window.devicePixelRatio || 1;
   const w = Math.max(1, mapWrap.clientWidth), h = Math.max(1, mapWrap.clientHeight);

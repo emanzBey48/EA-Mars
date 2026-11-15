@@ -196,9 +196,9 @@ test('minimap renders ground-sampled footprint quads and clears them with an emp
       instances: new Float32Array([0, 0, -1, 0, 1, 0.8, 1, 0, 0, 1]),
     };
     mini.setOverlays({ footprintTrail: trail });
-    assert.ok(ctx.fillStyles.slice(before).includes('#34251e'), 'footprint uses the trail fill color');
+    assert.ok(ctx.fillStyles.slice(before).includes('#24130e'), 'footprint uses the trail fill color');
     const afterDraw = ctx.fillStyles.length;
     mini.setOverlays({ footprintTrail: { count: 0, quads: new Float32Array(), instances: new Float32Array() } });
-    assert.ok(!ctx.fillStyles.slice(afterDraw).includes('#34251e'), 'empty reset trail draws no footprint');
+    assert.ok(!ctx.fillStyles.slice(afterDraw).includes('#24130e'), 'empty reset trail draws no footprint');
   } finally { restore(); }
 });

@@ -1,0 +1,40 @@
+name: Deploy Marswalk to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - codex/terrain-route-preferences
+    paths:
+      - 'Sim/**'
+      - '.github/workflows/deploy-marswalk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marswalk-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: ${{ vars.CLOUDFLARE_PAGES_PROJECT != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Package static site
+        run: npm run build:pages
+        working-directory: Sim
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy Sim/dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }} --branch=codex/terrain-route-preferences

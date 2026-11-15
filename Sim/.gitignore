@@ -12,6 +12,7 @@ data-external/
 !data/viking-mdim/**
 .e2e-profile/
 node_modules/
+dist/
 !data/regional-dem/
 !data/regional-dem/**
 !data/nodata-fixture/

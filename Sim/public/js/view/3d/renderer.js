@@ -215,6 +215,20 @@ void main() {
       microSlope += pebSlope;
       albedo *= 1.0 + pebTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.pebbleOrthoToneReduction.toFixed(4)});
     }
+    // Rock and boulder scatter (görsel detay, veri değildir)
+    if (dist < ${TERRAIN_SHADING_PARAMS.rocks[1].fadeEndM.toFixed(1)}) {
+      vec2 rkSlope; float rkTone;
+      terrainRocks(vWorldPos.xy, dist, rkSlope, rkTone);
+      microSlope += rkSlope;
+      albedo *= 1.0 + rkTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.rockOrthoToneReduction.toFixed(4)});
+    }
+    // Small impact craters & pit hollows (görsel detay, veri değildir)
+    if (dist < ${TERRAIN_SHADING_PARAMS.craters[1].fadeEndM.toFixed(1)}) {
+      vec2 cratSlope; float cratTone;
+      terrainCraters(vWorldPos.xy, dist, cratSlope, cratTone);
+      microSlope += cratSlope;
+      albedo *= 1.0 + cratTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.craterOrthoToneReduction.toFixed(4)});
+    }
     albedo *= (1.0 + microTone * (1.0 - coverage * ${TERRAIN_SHADING_PARAMS.microToneOrthoReduction.toFixed(4)}));
     albedo *= 1.0 - ${TERRAIN_SHADING_PARAMS.slopeDarkening.toFixed(4)} * slopeW;
 

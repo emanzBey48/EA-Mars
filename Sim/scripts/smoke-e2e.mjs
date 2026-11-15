@@ -323,6 +323,8 @@ try {
     'Kot ve eğim yalnız arşiv DTM’sinden türetilmiş değerlerdir; güvenli/güvensiz yorumu, tehlike skoru veya rover karar desteği değildir.',
     'Sürüş izi canlı telemetri veya güvenli rota bilgisi içermez.',
     'Planlama göstergesi — güvenli rota sertifikası değildir.',
+    // Stage 31B kaynaklar/sınırlar paneli: olumsuzlanmış (feragat) cümle; "güvenli rota"yı iddia etmez, reddeder.
+    'EVA yürünebilirlik puanı ve kılavuz çizgi planlama göstergesidir; güvenli rota sertifikası değildir.',
   ];
   const missingDisclaimers = disclaimers.filter((disclaimer) => !text.includes(disclaimer));
   const rest = disclaimers.reduce((remaining, disclaimer) => remaining.replaceAll(disclaimer, ''), text);

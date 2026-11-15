@@ -546,6 +546,8 @@ test('(i) minimap: no-data hücreye tıklama reddedilir (metin çizilir), geçer
   const { canvas, texts, arcs } = recordingCanvas();
   const picks = [];
   const mini = createMinimap({ canvas, terrain: fixtureTerrainCanvas(), selectionMode: 'start', onPointSelected: (p) => picks.push(p) });
+  // K3-2: minimap selection is fail-closed until it knows the planner's per-cell status (no heatmap -> every click is rejected).
+  mini.setPlanning({ heatmap: { status: fieldDefault.status, rows: ROWS, cols: COLS, nwXM: FIXTURE_NW_X_M, nwYM: FIXTURE_NW_Y_M, cellSizeM: 1 } });
   const screen = (xM, yM) => {
     const v = mini.getView();
     return { clientX: CANVAS_PX / 2 + (xM - v.centerXM) * v.pxPerM, clientY: CANVAS_PX / 2 - (yM - v.centerYM) * v.pxPerM };
@@ -562,6 +564,14 @@ test('(i) minimap: no-data hücreye tıklama reddedilir (metin çizilir), geçer
     assert.ok(texts.includes(REJECT_NODATA), 'no-data reddi ekranda metin olarak çizilir');
     click(-59.5, 39.5);
     assert.deepEqual(picks, [], 'koyu eflatun (tek hücre delik) de reddedilir');
+
+    // K3-2: adanın kuzey komşu halkası (satır 89, sütun 120) görsel olarak geçerli boyanır ama planlayıcıda EDGE_UNKNOWN'dur;
+    // minimap bunu artık planlayıcıya göndermeden reddeder.
+    const edgeCell = { xM: FIXTURE_NW_X_M + 120 + 0.5, yM: FIXTURE_NW_Y_M - 89 - 0.5 };
+    assert.equal(fieldDefault.status[89 * COLS + 120], STATUS.EDGE_UNKNOWN, 'varsayım: bu hücre EDGE_UNKNOWN');
+    click(edgeCell.xM, edgeCell.yM);
+    assert.deepEqual(picks, [], 'EDGE_UNKNOWN hücre minimap seçiminde reddedilir');
+    assert.ok(texts.some((t) => String(t).includes('komşu yüzey durumu bilinmiyor')), 'EDGE_UNKNOWN reddi ekranda metin olarak çizilir');
 
     // Geçerli hücre (satır 20, sütun 20) kabul edilir.
     const valid = { xM: -100, yM: 80 };
@@ -585,9 +595,9 @@ test('(i) minimap: no-data hücreye tıklama reddedilir (metin çizilir), geçer
   }
 });
 
-// FINDING (orkestra şefine): minimap, EDGE_UNKNOWN (no-data'ya komşu) hücrelerini kabul eder; çünkü view/render.js yalnız
-// layer durumu OK olmayan hücreleri boyar. Zincir yine de kapalıdır: planner bu hücreyi start_blocked/EDGE_UNKNOWN ile reddeder
-// (test b2). Kullanıcıya minimap'te anlık red gösterilmez.
+// ÇÖZÜLDÜ (K3-2, Alparslan): eskiden minimap EDGE_UNKNOWN hücrelerini kabul ediyordu (yalnız planner start_blocked ile
+// reddediyordu). Artık planlama ısı haritası verilmeden hiçbir nokta kabul edilmez ve EDGE_UNKNOWN/TOO_STEEP/NO_DATA hücreleri
+// seçim anında reddedilir; test (i) bunu kilitler.
 
 // ------------------------------------------------------------------------------------------------ (j) rölyef metrikleri
 

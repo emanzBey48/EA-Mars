@@ -8,7 +8,7 @@ Proje kökü: `C:\Users\efese\Desktop\Nasaspaceapps\Sim`
 
 - Node.js ≥ 20 (`npm test` için). `npm run smoke` ve tarayıcı betiği için Node ≥ 22 (genel `WebSocket`) ve yerel Edge veya Chrome gerekir.
 - npm paketi kurulmaz; bağımlılık yoktur.
-- Veri: ekranda gösterilen (aktif) arazi `Sim/data/legacy-hirise/dtm_subset.f32` (~7,5 MB, legacy PDS3 yedek); analiz adayı `Sim/data/dtm_subset.f32` (~7,6 MB, USGS 1 m). İkisi de Git LFS ile izlenir. Dosya 132 baytlık bir işaretçi ise `git lfs pull` çalıştırın.
+- Veri: ekranda gösterilen aktif arazi `Sim/data/dtm_subset.f32` (~7,6 MB, USGS Mars 2020 TRN 1 m DTM); çevrimdışı yedek `Sim/data/legacy-hirise/dtm_subset.f32` (~7,5 MB, PDS3 DTEEC). İkisi de Git LFS ile izlenir. Dosya 132 baytlık bir işaretçi ise `git lfs pull` çalıştırın.
 
 ## Çalıştırma
 
@@ -51,8 +51,8 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 
 ## Özellikler
 
-1. **HiRISE DTM arazi tabanı (aktif: legacy yedek):** Gösterilen arazi PDS3 DTEEC DTM penceresidir (1669×1129, ~1,01 m/px). USGS Mars 2020 TRN 1 m penceresi (1676×1135) düşey datum kanıtı olmadığı için `needs_review` kalır, UI'de kullanılmaz ve analiz belgelerinde ölçülmüştür. 3×3 Horn gradyanı ile anlık eğim.
-2. **HiRISE 25 cm WMTS ortomozaik kaplaması:** z17 (0,318 m/px) ve z14 (2,544 m/px) karoları; Hibrit / Ortomozaik / Hillshade modları. Hizalama ±1,5 m belirsizlikle gösterilir; yarım piksel hizası kanıtlanmadı. Hizası USGS adayı penceresinde ölçüldü; aktif legacy DTM ile hizası ölçülmedi (K3-8).
+1. **HiRISE DTM arazi tabanı (aktif: USGS Mars 2020 TRN):** Gösterilen arazi USGS 1 m DTM penceresidir (1676×1135). PDS3 LBL, Mars equipotential surface (MOLA areoid / DeltaGeoid) datumunu destekler; `config.js` ve DTM metadata'sında kaynak kanıtı vardır. 3×3 Horn gradyanı ile anlık eğim. Legacy PDS3 DTEEC (1669×1129, ~1,01 m/px) çevrimdışı fallback olarak tutulur.
+2. **HiRISE WMTS ortomozaik kaplaması:** z17 (0,318 m/px) ve z14 (2,544 m/px) karoları; Hibrit / Ortomozaik / Hillshade modları. WMTS örnekleme çözünürlüğü yerel DTM'den daha incedir. DTM ile görsel kayıt için ±1,5 m bulgusu vardır, ancak yarım piksel hizası ve kayaç düzeyinde hizalama kanıtlanmadı (K3-8); overlay'i doğrulanmış hassas hizalama diye sunmayın.
 3. **A* EVA yürünebilirlik planlayıcısı:** Eğim, pürüzlülük ve veri geçerliliğine dayalı maliyet; minimap'te ısı haritası. Planlama göstergesi; güvenli rota sertifikası değildir.
 4. **Rota tercihleri:** Dengeli, en kısa, en düz (`gentle` / `flattest`), yüksek kabartma ve çukur/krater benzeri keşif. Son iki seçenek `route/terrain-preference.js` içinde yerel DTM kotunun çevre ortalamasından farkını senaryo ağırlığı olarak kullanır; gerçek dağ veya çarpma krateri tespiti değildir. Geçersiz/no-data, sert eğim ve ızgara kenarı hücreleri açılmaz. Küreden seçilen A/B için tematik arama penceresi iki noktanın çevresinde 250 m marjla sınırlıdır. Hedef örüntüye ulaşan rota bulunamazsa açıkça kullanılamaz durumu gösterilir; farklı tercih aynı güzergâhı da üretebilir.
    Rota paneli tahmini varışı yol uzunluğu / 1,2 m/s senaryo hızıyla hesaplar; veri dayanağı, DTM çözünürlüğü, datum, planlı yol kapsamı ve model sınırlarını ayrıca gösterir. Güvenlik olasılığı veya güvenli rota sertifikası üretilmez.
@@ -63,7 +63,7 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 8. **1× gerçek dikey ölçek:** Varsayılan; 2× ve 3× görsel abartı seçenekleri ayrı rozetle gösterilir.
 9. **Güneş, gökyüzü ve gölge (görsel):** Mars gökyüzü kubbesi, doğrusal ışık ve ACES ton eşleme, güneş gölge haritası. Sunum parametresidir; ölçülmüş değildir.
 10. **Ayak izleri ve parlak rota şeridi (görsel):** Yürüyüşte DTM'den örneklenen ayak izleri; emissive rota şeridi. İzler regolit mekaniği iddiası taşımaz.
-11. **Birinci şahıs astronot:** Göz hizasında eldiven ve ön kollar; aşağı bakışta gövde kademeli görünür. Yürüme salınımı, nefes ve yumuşak iniş kamera hareketi (`view/3d/camera-motion.js`).
+11. **Birinci şahıs astronot:** EVA referanslarından esinlenen sunum modeli; Mars için uçuşa hazır gerçek bir suit veya doğrulanmış insan biyomekaniği değildir. Göz hizasında eldiven ve ön kollar; aşağı bakışta gövde kademeli görünür. Yürüme salınımı, nefes ve yumuşak iniş kamera hareketi sunum modelidir (`view/3d/camera-motion.js`, `astronaut-rig.js`).
 12. **Mars yerçekimi zıplaması:** 3,71 m/s² (NASA küresel referansı), v0 = 2,4 m/s oyun girdisi; ~1,3 s havada, ~0,78 m tepe; inişte 0,25 s darbe sönümü. Atmosfer sürüklemesi yoktur.
 13. **USGS SIM 3464 jeoloji haritası:** 1:75.000 formasyon sınırları ve kontağa anlık mesafe; belirsizlik bildirimli.
 14. **Perseverance arşiv fotoğrafları ve sürüş izi:** Sol 120 ve Sol 164 durakları için ham JPEG önizlemeleri; arşiv izi rover izidir, insan rotası değildir.
@@ -102,7 +102,7 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 - **Aktif DTM (K3-7 / K5-7 kararı):** Ekranda USGS Mars 2020 TRN HiRISE DTM mozaiği 1 m penceresi (`data/dtm_subset.json`) gösterilir. Çerçeve: EQUIRECTANGULAR, PLANETOCENTRIC, EAST, rotasyon 0; küre yarıçapı 3396,190 km; merkez meridyen 0°, standart enlem 0° (`MAP_FRAME`); map scale 1,0 m/px; 21488×21400 kaynak mozaik, 1676×1135 yüklenen pencere. Etiket datumu: Mars equipotential surface (MOLA areoid / DeltaGeoid, Fergason vd. 2020, PDS3 LBL kanıtı). Legacy PDS3 DTEEC DTM (`data/legacy-hirise/`) ise çevrimdışı fallback yedeği olarak tutulur.
 - **Düşey datum:** Mars eşpotansiyel yüzeyi (MOLA areoid / DeltaGeoid). `data/dtm_subset.json` ve `config.js` içinde `verticalDatumVerified: true` ve kanıt URL'siyle eşitlenmiştir (K3-7 / K5-7). Mutlak kot iddiası yapılmaz; eğim ve göreli kabartma doğrudan bu veriden türetilir.
 - **No-data:** `0xFF7FFFFB` tam bit deseni `no_data`; geçerli aralık dışı `invalid`. Asla 0 ile değiştirilmez. Eğim, 3×3 pencerede bir hücre bile geçersizse üretilmez.
-- **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere yüklenir; dışı `out_of_bounds` olarak raporlanır. Aktif legacy penceresi 1 884 301 geçerli hücre, 0 no-data; USGS adayı penceresi 1 902 260 geçerli hücre, 0 no-data.
+- **Kapsam:** Tarayıcıya yalnız rota çevresindeki pencere yüklenir; dışı `out_of_bounds` olarak raporlanır. Aktif USGS penceresi 1 902 260 geçerli hücre, 0 no-data; legacy fallback penceresi 1 884 301 geçerli hücre, 0 no-data.
 - **Rota kökeni:** İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değildir. PLACES kullanılmadı.
 
 ## Değer etiketleri
@@ -119,12 +119,12 @@ Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/bu
 
 - **Yürünebilirlik:** Planlama göstergesidir. Güvenli rota sertifikası değildir. Eşikler senaryo parametresidir.
 - **Rota süresi:** Tek kaynak olarak simülasyon yürüyüş hızına (1,2 m/s, `SCENARIO.walkSpeedMps`) eşitlenmiştir (K5-11 / `stage-route-eta-note.md`). Simülasyon saati ve duvar saati ayrı etiketlerle sunulur; eski 0,8 m/s sabit değeri kaldırılmıştır.
-- **"En düz" tercihi:** Maksimum eğimi dengeli tercihten düşürmeyebilir (aktif legacy UI özetinde 10,1° ve 9,8°; USGS adayında 9,27° ve 9,81°). Tercih adı ne ölçtüğünü tam açıklamaz.
-- **Aktif DTM ↔ analiz DTM'i:** UI aktif legacy DTM ile çalışır; rota ve eğim analizlerinin çoğu USGS adayı penceresinde yapıldı. Aynı uç noktalarda en kısa rota maks. eğimi UI'de 14,1°, USGS adayında 10,64°. Analizlerin legacy üzerinde yeniden koşulması K3-9'dadır.
-- **Ortomozaik hizası:** ±1,5 m belirsizlik (USGS adayı penceresinde ölçüldü); aktif legacy DTM ile hizası **ölçülmedi**; yarım piksel hizası kanıtlanmadı. `hud.js:104` uyarısı WMTS katmanıyla çelişkili görünebilir.
+- **"En düz" tercihi:** Maksimum eğimi dengeli tercihten düşürmesi garanti değildir; tercih toplam maliyete göre yol seçer, en yüksek tek hücre eğimine göre değil. Güncel USGS worker ölçümleri ve yöntem açıklaması için `stage-perf-and-preference-review.md` kullan.
+- **Aktif DTM ↔ analiz DTM'i:** `c6ab77d` sonrası arazi, eğim örneklemesi ve rota planlaması aynı USGS 1 m grid'i kullanır. Legacy DTM yalnız fallback'tir. Eski stage kabul raporlarındaki `[AKTİF legacy]` değerleri o tarihteki ölçümleri anlatır, güncel UI'yı değil.
+- **Ortomozaik hizası:** ±1,5 m bulgusu etkin USGS penceresinde ölçülmüştür; bu, yarım piksel kaydını veya kayaç ayrıntısında hizayı doğrulamaz. HUD, yerel JP2 çözülmediğini belirtir; ayrı Mars Trek WMTS katmanı kullanılabilir.
 - **Viking:** Renk bağlamıdır (232 m/px); USGS Astropedia ürün metadata'sı erişimi "Public domain", kullanım kısıtını "None" olarak verir. Kaynak atfı ve kanıt `SOURCES.md` #9'da.
 - **MOLA ufku:** Datum doğrulanmadı (`needs_review`); uzak silüet alçak ve bulanık, bölgesel bağlam olarak sunulur.
-- **Datum bayrağı:** `config.js` içinde `verticalDatumVerified: false` yapılarak `data/dtm_subset.json` ile eşitlendi (Stage 38B / K5-6). Kanıt eklenene kadar mutlak kot iddiası yapılmaz.
+- **Datum:** Aktif DTM'nin PDS3 LBL'si Mars equipotential surface (MOLA areoid / DeltaGeoid) referansını verir; `config.js` ve DTM metadata'sı aynı `verticalDatumVerified: true` kanıtını taşır. Yerel yükseklik, arşiv DTM değeri olarak etiketlenir.
 - **Görsel kalite:** Gölge yumuşak; eller kalın; uzak ufuk silüeti alçaktır. Bunlar sunum tercihleridir, ölçülmüş değildir.
 - **Göz yüksekliği:** Kod 1,48 m; bir commit mesajı 1,75 m diyor. Suit ölçümü yoktur.
 - **Atmosfer:** Mars basıncı ve yoğunluğu (NSSDC ortalama/mevsimsel) gösterilir; hareket fiziğine sürükleme eklenmemiştir.

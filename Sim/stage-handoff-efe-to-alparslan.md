@@ -1,7 +1,7 @@
 # Efe → Alparslan devir notu (güncel, 15 Kasım 2026)
 
-**Dal:** `codex/efe-visual-realism` @ `53068e6` (bu oturumda çalışılan worktree: `C:\Users\efese\Desktop\Nasaspaceapps-efe`). Önceki sürüm (`190e133` ve `codex/efe-stage13-eva-kinematics` dalı) bu notta yerini bu sürüme bırakmıştır.
-**Test durumu (bu oturum):** `cd Sim; node --test test/` → **612/612, çıkış kodu 0** (mevcut çalışma ağacı). `node scripts/preflight.mjs` → **HAZIR**. Tarayıcı kabulü: `Sim/stage-final-acceptance.md` (PASS/FAIL/NOT-TESTED). `npm run smoke` bu oturumda çalıştırılmadı.
+**Dal:** `codex/efe-realism` (Alparslan'ın `c6ab77d` aktif DTM güncellemesi üzerine; `codex/efe-visual-realism` geçmiş iş dalıdır).
+**Bu görsel turunun doğrulaması:** Yerel Edge/WebGL2 görüntü kontrolü yapıldı; otomatik test, preflight ve smoke bu turda çalıştırılmadı. Önceki 612/612 birim testi ve preflight kaydı tarihsel doğrulamadır; bu değişiklik için kabul sayılmaz.
 
 ## 1. Ortak çalışma klasörü uyarısı
 
@@ -48,6 +48,8 @@ Yeni pass gerekirse 8 ve sonrası kullanılır. Pass 4 erken döner; pass 7'nin 
 
 ## 5. Ölçümler ve doğrulama (bu oturum)
 
+Bu tablo, USGS DTM etkinleştirme commit'i `c6ab77d` öncesindeki legacy-aktif çalışma ağacına ait tarihsel kabul ölçümlerini içerir. `c6ab77d` sonrasında güncel aktif yüzey değişti; bu tablo yeni sürüm için tarayıcı kabulü veya tekrar test sonucu değildir.
+
 | Konu | Değer | Kaynak |
 |---|---|---|
 | Birim testleri | 612/612 | `node --test test/` (çıkış kodu 0) |
@@ -66,18 +68,23 @@ Yeni pass gerekirse 8 ve sonrası kullanılır. Pass 4 erken döner; pass 7'nin 
 - Rota süresi tutarsızlığı: `route-service.js:301` (0,8 m/s) ile `config.js:5` (1,2 m/s). `main.js:348` sabit metni de bunu yazıyor.
 
 **Efe:**
-- K2-5 son gerçekçilik turu (önce/sonra ekran görüntüleri).
+**Efe:**
+- K2-5 yüzey sunum ayarı kısmen işlendi: sentetik pebble/rock/crater yoğunluğu azaltıldı; yerel Edge/WebGL2'de panorama ve aşağı bakış kontrol edildi (`stage-visual-a-scene-audit.md`). Görsel mikrodetay veri değildir. Astronotun birinci şahıs kadrajı ve tarayıcı kabulü hâlâ açık.
 
 **Efe tamamladı:**
-- K1-4 Viking MDIM 2.1 lisans/atıf teyidi: USGS Astropedia ürün metadata'sı erişimi "Public domain", kullanım kısıtını "None" olarak bildiriyor; kaynak URL'si ve alan kanıtı, manifest ve `SOURCES.md` içine işlendi. USGS ürün sayfasının bu ortamda doğrudan açılması 403 döndürdü; arama sonucu resmi ürün metadata alanlarını gösterdi.
+- K1-4 Viking MDIM 2.1 lisans/atıf teyidi: USGS Astropedia ürün metadata'sı erişimi "Public domain", kullanım kısıtını "None" olarak bildiriyor; kaynak URL'si ve alan kanıtı, manifest ve `SOURCES.md` içine işlendi (`codex/efe-k1-4`, `740e316`).
 - K3-4 rig taraf denetimi: `renderer.js` parça kimliklerini geometri/poz eşlemesi için kullanıyor; `main.js` ve renderer içinde `side` üzerinden kullanıcıya taraf etiketi üretilmiyor. `astronaut-rig.js` yorumu, `+X = fiziksel sol` ve geriye uyumlu `left*` adlarının fiziksel sağda olduğunu açıklıyor; `part()` taraf metadatasını koordinattan çıkarıyor. Bu nedenle mevcut arayüzde ters taraf etiketi hatası gözlenmedi; `left*` kimlikleri uyumluluk için korunmalı.
-- K3-6 rapor düzeltmesi Alparslan'ın `9e13043` commit'inde tamamlandı: `stage39-ortho-diagnosis.md` yazarı düzeltildi ve 0,0 m değeri aritmetik katalog/grid tutarlılığı olarak etiketlendi. `stage34b` costParams notu da düzeltilmiş.
+
+**Alparslan tamamladı:**
+- K3-6 rapor düzeltmesi `9e13043` commit'inde tamamlandı: `stage39-ortho-diagnosis.md` yazarı düzeltildi ve 0,0 m değeri aritmetik katalog/grid tutarlılığı olarak etiketlendi. `stage34b` costParams notu da düzeltildi.
+- K3-7/K5-7: `c6ab77d` USGS Mars 2020 TRN HiRISE 1 m DTM'yi etkin yüzey yaptı. `config.js` ve DTM metadata'sı Mars equipotential surface (MOLA areoid / DeltaGeoid) datumunu resmi PDS3 label URL'siyle eşliyor; legacy HiRISE DTM fallback olarak korunuyor.
+- K3-9: `c6ab77d` planner, terrain ve raporları etkin grid'e birleştirdi. Ortomozaik ile etkin DTM hizası yine doğrulanmış sayılmaz (K3-8).
 
 **Açık veri/karar:**
-- **Aktif arazi = legacy fallback; karar bekleyen konu (K3-7):** Ekranda gösterilen arazi legacy PDS3 DTEEC yedek DTM'dir (`data/legacy-hirise/`, 1669×1129, ~1,0097 m/px). USGS 1 m adayı (`data/dtm_subset.json`, 1676×1135) `needs_review_verticalReference` nedeniyle fail-closed reddedilip legacy'ye düşülüyor (`surface/registry.js` `resolveActiveProvider`). Karar: legacy kalsın mı, yoksa USGS 1 m 'datum doğrulanmadı' etiketiyle (`needs_review`) mi etkinleştirilsin? 38B ile bağlantılı; ürün kararı kullanıcıdadır.
+- **Aktif arazi (K3-7):** `c6ab77d` sonrası etkin provider USGS Mars 2020 TRN HiRISE 1 m DTM'dir; legacy DTM yedektir. Güncel UI/README/source bu davranış için esas alınmalı.
 - **Ortomozaik ↔ aktif DTM hizası ölçülmedi (K3-8):** 21B/39A ölçümleri USGS adayı penceresinde yapıldı. Legacy DTEEC farklı çerçeve (yarıçap 3394,84 km, merkez 77,44°E, standart enlem 15°; USGS: 3396,19 km, 0°E, 0°). Köprü ve ölçüm yapılana kadar hizalı denmez.
-- **Analizlerin aktif DTM'de yeniden koşulması (K3-9):** kabartma (35A), rota doğrulama (23C), tercih tablosu, `relief-report` ve ufuk dikiş ölçümü (37A) USGS adayında yapıldı.
-- Datum: `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` `false`. Kanıt yoksa `false` olmalı (K3-5).
+- **Analizlerin etkin DTM'de yeniden koşulması (K3-9):** `c6ab77d` planner, terrain ve raporları etkin grid'e birleştirdi; sayısal sonuçlar için güncel README ve analiz raporlarını kullan.
+- **Düşey datum (K3-5):** Eski uyuşmazlık notu `c6ab77d` ile güncellendi. Güncel config ve DTM metadata'sını birlikte kontrol et; kod PDS3 label URL'siyle Mars equipotential surface / MOLA areoid-DeltaGeoid ifadesini belgeliyor.
 - Göz yüksekliği: kod 1,48 m (`camera.js:9`); `e9a0a78` mesajı 1,75 m. Kod esas alındı.
 - Ortomozaik uyarı metni (`hud.js:104`) eski JP2 bayrağına bağlı; WMTS katmanı ayrı sunulurken iki çelişkili mesaj görünüyor.
 

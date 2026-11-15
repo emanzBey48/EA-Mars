@@ -56,8 +56,8 @@ export const TERRAIN_SHADING_PARAMS = Object.freeze({
   // Each layer: cell size, max pebble radius (<= 0.22 cell so pebble + contact ring stay inside the cell), presence
   // probability, relative tone amplitude, and the distance range over which the layer fades out (metres).
   pebbles: Object.freeze([
-    Object.freeze({ cellM: 0.30, radiusM: 0.066, density: 0.55, toneAmp: 0.16, fadeStartM: 8, fadeEndM: 24 }),
-    Object.freeze({ cellM: 0.95, radiusM: 0.20, density: 0.10, toneAmp: 0.12, fadeStartM: 20, fadeEndM: 60 }),
+    Object.freeze({ cellM: 0.30, radiusM: 0.066, density: 0.18, toneAmp: 0.09, fadeStartM: 8, fadeEndM: 24 }),
+    Object.freeze({ cellM: 0.95, radiusM: 0.20, density: 0.015, toneAmp: 0.07, fadeStartM: 20, fadeEndM: 60 }),
   ]),
   pebbleHeightPerRadius: 0.9,
   pebbleSlopeMax: 0.6,
@@ -66,8 +66,8 @@ export const TERRAIN_SHADING_PARAMS = Object.freeze({
   // Rocks and scattered boulders (gorsel detay, veri degildir):
   // Medium stones and boulders with angular, faceted profiles, sun-facing highlights and contact shadows.
   rocks: Object.freeze([
-    Object.freeze({ cellM: 1.8, radiusM: 0.38, density: 0.32, toneAmp: 0.18, fadeStartM: 18, fadeEndM: 55 }),
-    Object.freeze({ cellM: 4.8, radiusM: 1.02, density: 0.22, toneAmp: 0.22, fadeStartM: 30, fadeEndM: 95 }),
+    Object.freeze({ cellM: 1.8, radiusM: 0.38, density: 0.08, toneAmp: 0.10, fadeStartM: 18, fadeEndM: 55 }),
+    Object.freeze({ cellM: 4.8, radiusM: 1.02, density: 0.04, toneAmp: 0.13, fadeStartM: 30, fadeEndM: 95 }),
   ]),
   rockHeightPerRadius: 0.85,
   rockSlopeMax: 0.65,
@@ -76,8 +76,8 @@ export const TERRAIN_SHADING_PARAMS = Object.freeze({
   // Impact pits and small craters (gorsel detay, veri degildir):
   // Deterministic world-fixed bowl depressions with inward sloping walls, shaded interiors, and raised rims.
   craters: Object.freeze([
-    Object.freeze({ cellM: 3.8, radiusM: 0.78, density: 0.28, depthAmp: 0.50, toneAmp: 0.20, fadeStartM: 15, fadeEndM: 65 }),
-    Object.freeze({ cellM: 9.6, radiusM: 1.95, density: 0.20, depthAmp: 0.60, toneAmp: 0.25, fadeStartM: 30, fadeEndM: 120 }),
+    Object.freeze({ cellM: 3.8, radiusM: 0.78, density: 0.025, depthAmp: 0.08, toneAmp: 0.07, fadeStartM: 15, fadeEndM: 65 }),
+    Object.freeze({ cellM: 9.6, radiusM: 1.95, density: 0.015, depthAmp: 0.10, toneAmp: 0.09, fadeStartM: 30, fadeEndM: 120 }),
   ]),
   craterSlopeMax: 0.55,
   craterOrthoToneReduction: 0.75,

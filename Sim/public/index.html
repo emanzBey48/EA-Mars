@@ -178,11 +178,15 @@
               <option value="balanced" selected>Dengeli EVA Yürünebilirlik</option>
               <option value="shortest">En Kısa Mesafe</option>
               <option value="flattest">En Düz / Düşük Eğim</option>
+              <option value="highland_explore">Yüksek Arazi Keşfi</option>
+              <option value="depression_explore">Çukur / Krater Benzeri Arazi Keşfi</option>
             </select>
           </div>
+          <p id="route-preference-note" class="route-preference-note" aria-live="polite">Rota tercihi DTM kotu, eğimi ve pürüzlülüğüyle hesaplanan senaryo ağırlığıdır. Çukur/krater benzeri görünüm, doğrulanmış krater tespiti değildir.</p>
           <button id="minimap-plan-route" type="button" disabled>Başlangıç ve bitiş seçin</button>
           <p class="planning-disclaimer">Planlama göstergesi — güvenli rota sertifikası değildir.</p>
           <dl id="minimap-route-summary" class="minimap-summary" aria-live="polite"><dt>Rota</dt><dd>Henüz hesaplanmadı</dd></dl>
+          <dl id="route-evidence" class="route-evidence" aria-live="polite"><dt>Veri dayanağı</dt><dd>Rota hesaplanınca çözünürlük, kapsam ve süre varsayımı burada gösterilir; güvenlik olasılığı hesaplanmaz.</dd></dl>
           <p id="minimap-status" class="muted small" role="status" aria-live="polite">Başlangıç ve bitiş seçin; ardından planlayın.</p>
           <section id="minimap-cell-explanation" class="minimap-cell-explanation" aria-live="polite" hidden></section>
         </div>

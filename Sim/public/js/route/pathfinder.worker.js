@@ -7,6 +7,7 @@ import {
   REFERENCE_PREFERENCE_ID, describeRoutePreference, planRouteVariants,
   resolveRoutePreferenceId, routePreferenceParams,
 } from './route-compare.js';
+import { buildTerrainPreferenceField, describeTerrainPreference, summarizeTerrainPreferenceRoute } from './terrain-preference.js';
 import { SCENARIO } from '../config.js';
 
 function workerError(id, err) {
@@ -93,6 +94,36 @@ export function attachWorker(scope) {
           // Tercih belirtilmedi: eski davranış (init-window params + field), mesaj biçimi değişmez.
           const result = planWalkingRoute({ window, field, params, startLocal: message.startLocal, endLocal: message.endLocal, options, budget });
           scope.postMessage({ type: 'result', id, result });
+          return;
+        }
+        const terrainDescription = describeTerrainPreference(requested);
+        if (terrainDescription) {
+          const themed = buildTerrainPreferenceField(window, field, requested);
+          if (themed.status !== 'ready') {
+            scope.postMessage({
+              type: 'result', id, preference: requested, requestedPreference: requested,
+              preferenceNote: terrainDescription.description,
+              result: { status: themed.status, reason: themed.reason, path: [], segments: [], stats: null },
+            });
+            return;
+          }
+          const planned = planWalkingRoute({ window, field: themed.field, params, startLocal: message.startLocal, endLocal: message.endLocal, options, budget });
+          const routeExposure = planned.status === 'ok'
+            ? summarizeTerrainPreferenceRoute(planned.segments, themed.candidateMask, window.rows, window.cols)
+            : null;
+          if (planned.status === 'ok' && !(routeExposure?.featureExposureM > 0)) {
+            scope.postMessage({
+              type: 'result', id, preference: requested, requestedPreference: requested,
+              preferenceNote: terrainDescription.description,
+              result: { status: 'feature_unavailable', reason: 'Planlanan yol seçilen DTM arazi örüntüsüne ulaşmıyor; bu aralıkta ayrı keşif rotası doğrulanamadı.', path: [], segments: [], stats: null },
+            });
+            return;
+          }
+          scope.postMessage({
+            type: 'result', id, preference: requested, requestedPreference: requested,
+            preferenceNote: terrainDescription.description,
+            result: { ...planned, terrainPreference: { ...themed.metadata, routeExposure } },
+          });
           return;
         }
         const preference = resolveRoutePreferenceId(requested);

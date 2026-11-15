@@ -35,6 +35,9 @@ import { combineTraverseMarkers, prepareArchiveTraverse, prepareArchiveTraverse3
 import { createMinimap } from './view/minimap/minimap.js';
 import { createMarsGlobe } from './view/globe/mars-globe.js';
 import { classifyPlanResponse } from './route/plan-response-state.js';
+import { summarizeRouteEvidence } from './route/route-evidence.js';
+import { describeTerrainPreference } from './route/terrain-preference.js';
+import { describeRoutePreference, resolveRoutePreferenceId } from './route/route-compare.js';
 
 const $ = (id) => document.getElementById(id);
 const urlParams = new URLSearchParams(window.location.search);
@@ -185,7 +188,9 @@ const minimapLayerStatus = $('minimap-layer-status');
 const minimapHeatmapToggle = $('minimap-toggle-heatmap');
 const minimapPlanButton = $('minimap-plan-route');
 const minimapRoutePreference = $('minimap-route-preference');
+const routePreferenceNote = $('route-preference-note');
 const minimapRouteSummary = $('minimap-route-summary');
+const routeEvidencePanel = $('route-evidence');
 const minimapCellExplanation = $('minimap-cell-explanation');
 const orthoStatus = $('ortho-status');
 const btnDemoMode = $('btn-demo-mode');
@@ -758,6 +763,50 @@ function formatDurationS(totalS) {
   return mins > 0 ? `${mins} dk ${secs} sn` : `${secs} sn`;
 }
 
+function updateRoutePreferenceNote() {
+  if (!routePreferenceNote) return;
+  const selected = minimapRoutePreference?.value;
+  const terrain = describeTerrainPreference(selected);
+  if (terrain) {
+    routePreferenceNote.textContent = `${terrain.description} Yerel DTM ~1 m çözünürlük ve senaryo eşikleri gerekir. Küreden seçilen A/B için arama penceresi iki noktanın çevresinde 250 m marjla sınırlıdır; aynı güzergâh seçilebilir.`;
+    return;
+  }
+  const id = resolveRoutePreferenceId(selected);
+  routePreferenceNote.textContent = id
+    ? describeRoutePreference(id).text
+    : 'Bilinmeyen rota tercihi; planlama yapılmaz.';
+}
+
+function renderRouteEvidence(result) {
+  if (!routeEvidencePanel) return;
+  const evidence = summarizeRouteEvidence({
+    route: result,
+    descriptor: layers.dtm.descriptor,
+    providerStatus: layers.dtm.available ? 'ok' : 'unavailable',
+    scenarioSpeedMps: SCENARIO.walkSpeedMps,
+    timeScale: SCENARIO.timeScale,
+  });
+  const rows = evidence.eta
+    ? [
+        ['Tahmini varış', `${formatDurationS(Math.round(evidence.eta.simulationSeconds))} simülasyon saati · ${evidence.eta.wallSeconds === null ? 'duvar saati bilinmiyor' : `${formatDurationS(Math.round(evidence.eta.wallSeconds))} tahmini duvar saati`}`],
+        ['Süre yöntemi', `${result.stats.lengthM.toFixed(0)} m / ${evidence.eta.speedMps} m/s senaryo hızı; eğim, duraklama ve giysi etkisi yok`],
+      ]
+    : [['Tahmini varış', 'Geçerli rota veya senaryo hızı olmadığından hesaplanmadı']];
+  rows.push(
+    ['Veri durumu', evidence.status === 'ready' ? 'Kaynak, datum ve rota kapsamı kayıtlı' : evidence.reason || 'Sınırlı'],
+    ['DTM çözünürlüğü', evidence.data.resolutionM === null ? 'bilinmiyor' : `${evidence.data.resolutionM.toFixed(2)} m/hücre`],
+    ['Ürün', evidence.data.product || 'belirtilmemiş'],
+    ['Düşey datum', `${evidence.data.verticalDatum.name || 'bilinmiyor'} · ${evidence.data.verticalDatum.status === 'verified' ? 'kanıt kayıtlı' : 'doğrulama eksik'}`],
+    ['Rota kapsamı', evidence.data.pathElevationProfile === 'complete' && evidence.data.plannedPathImpassableCrossings === 0 ? 'Planlı yol kot profili tam; kapalı hücre geçişi 0' : 'eksik veya doğrulanmadı'],
+    ['Sınır', 'Güvenlik olasılığı veya güvenli rota sertifikası hesaplanmaz; kaya, regolit ve güncel koşullar bilinmez.'],
+  );
+  routeEvidencePanel.replaceChildren(...rows.flatMap(([key, value]) => {
+    const dt = document.createElement('dt'); dt.textContent = key;
+    const dd = document.createElement('dd'); dd.textContent = value;
+    return [dt, dd];
+  }));
+}
+
 function renderRouteSummary(result) {
   const rows = [];
   const add = (key, value, className = '') => rows.push([key, value, className]);
@@ -785,6 +834,13 @@ function renderRouteSummary(result) {
     } else {
       add('En dik eğim', `çarpan: ${Number(stats.maxCost).toFixed(2)}`);
     }
+    if (result.terrainPreference) {
+      const theme = result.terrainPreference;
+      add('Keşif hedefi', `${theme.label} (DTM morfoloji adayı; dağ/krater doğrulaması değil)`);
+      if (Number.isFinite(theme.routeExposure?.featureExposureM) && Number.isFinite(theme.routeExposure?.featureExposureFraction)) {
+        add('Aday örüntü teması', `${theme.routeExposure.featureExposureM.toFixed(0)} m · rotanın %${(theme.routeExposure.featureExposureFraction * 100).toFixed(1)}'i (yaklaşık)`);
+      }
+    }
     if (stats.elevationProfileComplete && Number.isFinite(stats.elevationGainM) && Number.isFinite(stats.elevationLossM)) {
       const netDelta = stats.elevationGainM - stats.elevationLossM;
       const netStr = netDelta >= 0 ? `+${netDelta.toFixed(1)} m` : `${netDelta.toFixed(1)} m`;
@@ -799,6 +855,7 @@ function renderRouteSummary(result) {
     if (className) dd.className = className;
     return [dt, dd];
   }));
+  renderRouteEvidence(result);
 }
 
 function updateHeatmap(data) {
@@ -999,8 +1056,9 @@ function initializeRouteWorker(regionEndpoints = null) {
           validMin: routeGrid.grid.validMin, validMax: routeGrid.grid.validMax,
         }
       : nativePlannerWindow(false);
+    const themedSearch = Boolean(describeTerrainPreference(minimapRoutePreference?.value));
     const cropped = cropDemWindowForEndpoints(source, regionEndpoints.start, regionEndpoints.end, {
-      marginM: Math.max(50, sim.corridorHalfWidthM + 10),
+      marginM: Math.max(themedSearch ? 250 : 50, sim.corridorHalfWidthM + 10),
       maxCells: 2_000_000,
     });
     if (cropped.status !== 'ready') {
@@ -1106,10 +1164,14 @@ $('minimap-pick-start').addEventListener('click', () => setMinimapPickMode('star
 $('minimap-pick-end').addEventListener('click', () => setMinimapPickMode('end'));
 $('minimap-plan-route').addEventListener('click', planMinimapRoute);
 minimapRoutePreference?.addEventListener('change', () => {
-  if (minimapEndpoints.start && minimapEndpoints.end && routeWorkerReady) {
+  updateRoutePreferenceNote();
+  if (globeRegionActive && minimapEndpoints.start && minimapEndpoints.end) {
+    pendingAutoPlan = initializeRouteWorker({ start: minimapEndpoints.start, end: minimapEndpoints.end });
+  } else if (minimapEndpoints.start && minimapEndpoints.end && routeWorkerReady) {
     planMinimapRoute();
   }
 });
+updateRoutePreferenceNote();
 minimapHeatmapToggle.addEventListener('change', () => {
   const planningState = {
     heatmap: routeHeatmap,

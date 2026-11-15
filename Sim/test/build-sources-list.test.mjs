@@ -56,7 +56,7 @@ test('markdown output is deterministic, LF-only, escapes pipes, and counts unspe
   assert.match(first, new RegExp(`${entries.length} kaynaktan ${unspecified} tanesinde lisans belirtilmemiş`));
 });
 
-test('real repository records: stable output, DTM carries its CC0 statement, nothing else claims a licence', () => {
+test('real repository records: stable output, DTM and Viking metadata carry their stated usage terms', () => {
   const markdown = buildSourcesMarkdown(SIM_ROOT);
   assert.equal(markdown, buildSourcesMarkdown(SIM_ROOT));
   const entries = buildSourceEntries({
@@ -65,7 +65,11 @@ test('real repository records: stable output, DTM carries its CC0 statement, not
     viking: JSON.parse(fs.readFileSync(path.join(SIM_ROOT, 'data', 'viking-mdim', 'manifest.json'), 'utf8')),
   });
   const stated = entries.filter((item) => item.license !== UNSPECIFIED).map((item) => item.id);
-  assert.deepEqual(stated, ['hirise-dtm']);
+  assert.deepEqual(stated, ['hirise-dtm', 'viking-mdim']);
+  const viking = entries.find((item) => item.id === 'viking-mdim');
+  assert.equal(viking.license, 'Public domain');
+  assert.match(viking.licenseEvidence, /Access Constraints = Public domain; Use Constraints = None/);
+  assert.equal(viking.sourceUrl, 'https://astrogeology.usgs.gov/search/map/mars_viking_colorized_global_mosaic_232m');
 });
 
 test('committed SOURCES.md is up to date with the generator (run node scripts/build-sources-list.mjs after data changes)', () => {

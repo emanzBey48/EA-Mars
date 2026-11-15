@@ -174,7 +174,7 @@ export function buildSourceEntries({ dtm = null, legacyDtm = null, trek = null, 
     license: get(viking, 'license'),
     licenseEvidence: get(viking, 'licenseEvidence'),
     attribution: get(viking, 'attribution'),
-    sourceUrl: null,
+    sourceUrl: get(viking, 'sourceUrl'),
     usage: 'Küresel minimap bağlam zemini (data/viking-mdim); ortogörüntü ve kot verisi değildir',
     caveat: 'İşlenmiş renk ürünü; 232 m/piksel yerel doku olarak kullanılamaz.',
   }));

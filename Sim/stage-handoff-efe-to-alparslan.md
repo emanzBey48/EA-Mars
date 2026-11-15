@@ -66,10 +66,12 @@ Yeni pass gerekirse 8 ve sonrası kullanılır. Pass 4 erken döner; pass 7'nin 
 - Rota süresi tutarsızlığı: `route-service.js:301` (0,8 m/s) ile `config.js:5` (1,2 m/s). `main.js:348` sabit metni de bunu yazıyor.
 
 **Efe:**
-- K1-4 Viking MDIM 2.1 lisans/atıf teyidi (elle, USGS sayfası). Metin yoksa "belirtilmemiş" kalır.
 - K2-5 son gerçekçilik turu (önce/sonra ekran görüntüleri).
-- K3-4 rig `left*` adları fiziksel sağ tarafta (`side` metadatası var; renderer/main kullanımı gözden geçirilmedi).
-- K3-6: `stage39-ortho-diagnosis.md` "Yazar: Efe" ifadesi düzeltilecek; bu rapor Efe'nin değildir. Ayrıca "0,0 m projeksiyon sapması" aritmetik tutarlılıktır, bağımsız kanıt değildir; korelasyon r≈0,40 zayıftır. `stage34b` raporundaki "costParams iletilir" ifadesi düzeltme öncesinden kalmadır.
+
+**Efe tamamladı:**
+- K1-4 Viking MDIM 2.1 lisans/atıf teyidi: USGS Astropedia ürün metadata'sı erişimi "Public domain", kullanım kısıtını "None" olarak bildiriyor; kaynak URL'si ve alan kanıtı, manifest ve `SOURCES.md` içine işlendi. USGS ürün sayfasının bu ortamda doğrudan açılması 403 döndürdü; arama sonucu resmi ürün metadata alanlarını gösterdi.
+- K3-4 rig taraf denetimi: `renderer.js` parça kimliklerini geometri/poz eşlemesi için kullanıyor; `main.js` ve renderer içinde `side` üzerinden kullanıcıya taraf etiketi üretilmiyor. `astronaut-rig.js` yorumu, `+X = fiziksel sol` ve geriye uyumlu `left*` adlarının fiziksel sağda olduğunu açıklıyor; `part()` taraf metadatasını koordinattan çıkarıyor. Bu nedenle mevcut arayüzde ters taraf etiketi hatası gözlenmedi; `left*` kimlikleri uyumluluk için korunmalı.
+- K3-6 rapor düzeltmesi Alparslan'ın `9e13043` commit'inde tamamlandı: `stage39-ortho-diagnosis.md` yazarı düzeltildi ve 0,0 m değeri aritmetik katalog/grid tutarlılığı olarak etiketlendi. `stage34b` costParams notu da düzeltilmiş.
 
 **Açık veri/karar:**
 - **Aktif arazi = legacy fallback; karar bekleyen konu (K3-7):** Ekranda gösterilen arazi legacy PDS3 DTEEC yedek DTM'dir (`data/legacy-hirise/`, 1669×1129, ~1,0097 m/px). USGS 1 m adayı (`data/dtm_subset.json`, 1676×1135) `needs_review_verticalReference` nedeniyle fail-closed reddedilip legacy'ye düşülüyor (`surface/registry.js` `resolveActiveProvider`). Karar: legacy kalsın mı, yoksa USGS 1 m 'datum doğrulanmadı' etiketiyle (`needs_review`) mi etkinleştirilsin? 38B ile bağlantılı; ürün kararı kullanıcıdadır.

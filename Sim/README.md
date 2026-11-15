@@ -107,7 +107,7 @@ Uygulama veri yoksa da açılır; DTM'ye bağlı göstergeler "Kullanılamıyor"
 - **Senaryo:** hız, zaman hızlandırma, koridor, yürünebilirlik eşikleri (20° vb.), rota tercih ağırlıkları.
 - **Sunum:** gökyüzü ve ton, gölge, ayak izi, şerit, kamera salınımı, giysi malzemesi, abartı seçenekleri.
 
-Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/build-sources-list.mjs` ile üretilir). Kaynakta lisans yazmayan alan **belirtilmemiş** olarak kalır; 14 kaynaktan 13'ünde lisans belirtilmemiştir.
+Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/build-sources-list.mjs` ile üretilir). Kaynakta lisans yazmayan alan **belirtilmemiş** olarak kalır; 14 kaynaktan 12'sinde lisans belirtilmemiştir.
 
 ## Bilinen sınırlar
 
@@ -116,7 +116,7 @@ Tüm kaynak, lisans ve birim bilgileri `SOURCES.md` dosyasındadır (`scripts/bu
 - **"En düz" tercihi:** Maksimum eğimi dengeli tercihten düşürmeyebilir (aktif legacy UI özetinde 10,1° ve 9,8°; USGS adayında 9,27° ve 9,81°). Tercih adı ne ölçtüğünü tam açıklamaz.
 - **Aktif DTM ↔ analiz DTM'i:** UI aktif legacy DTM ile çalışır; rota ve eğim analizlerinin çoğu USGS adayı penceresinde yapıldı. Aynı uç noktalarda en kısa rota maks. eğimi UI'de 14,1°, USGS adayında 10,64°. Analizlerin legacy üzerinde yeniden koşulması K3-9'dadır.
 - **Ortomozaik hizası:** ±1,5 m belirsizlik (USGS adayı penceresinde ölçüldü); aktif legacy DTM ile hizası **ölçülmedi**; yarım piksel hizası kanıtlanmadı. `hud.js:104` uyarısı WMTS katmanıyla çelişkili görünebilir.
-- **Viking:** Renk bağlamıdır (232 m/px). Lisans "belirtilmemiş"; teyit bekliyor (K1-4).
+- **Viking:** Renk bağlamıdır (232 m/px); USGS Astropedia ürün metadata'sı erişimi "Public domain", kullanım kısıtını "None" olarak verir. Kaynak atfı ve kanıt `SOURCES.md` #9'da.
 - **MOLA ufku:** Datum doğrulanmadı (`needs_review`); uzak silüet alçak ve bulanık, bölgesel bağlam olarak sunulur.
 - **Datum bayrağı:** `config.js` içinde `verticalDatumVerified: false` yapılarak `data/dtm_subset.json` ile eşitlendi (Stage 38B / K5-6). Kanıt eklenene kadar mutlak kot iddiası yapılmaz.
 - **Görsel kalite:** Gölge yumuşak; eller kalın; uzak ufuk silüeti alçaktır. Bunlar sunum tercihleridir, ölçülmüş değildir.

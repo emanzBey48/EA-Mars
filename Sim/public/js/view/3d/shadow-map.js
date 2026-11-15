@@ -18,17 +18,17 @@ const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 export const SHADOW_QUALITY = Object.freeze({
   off: Object.freeze({ name: 'off', resolution: 0, radiusM: 0, kernel: 0 }),
   low: Object.freeze({ name: 'low', resolution: 1024, radiusM: 70, kernel: 0 }),
-  high: Object.freeze({ name: 'high', resolution: 2048, radiusM: 90, kernel: 1 }),
+  high: Object.freeze({ name: 'high', resolution: 2048, radiusM: 60, kernel: 1 }),
 });
 export const DEFAULT_SHADOW_QUALITY = 'high';
 export const SHADOW_QUALITY_NAMES = Object.freeze(Object.keys(SHADOW_QUALITY));
 
 /** Receiver bias constants (metres in light depth) — mirrored by the renderer's GLSL. Presentation. */
 export const SHADOW_BIAS = Object.freeze({
-  baseBiasM: 0.04,
+  baseBiasM: 0.025,
   slopeBiasTexels: 1.2,
   maxSlopeTan: 4.0,
-  normalOffsetTexels: 1.5,
+  normalOffsetTexels: 1.0,
 });
 /** Sun elevation (sin) below which shadows are disabled (long, unstable shadows; direct light already faded). */
 export const SHADOW_MIN_SUN_SIN = 0.03;

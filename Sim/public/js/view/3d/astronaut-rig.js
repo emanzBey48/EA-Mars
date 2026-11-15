@@ -56,7 +56,7 @@ const MODULE_GRAY = [0.58, 0.60, 0.63];
 const GLOVE_DARK = [0.20, 0.22, 0.25];
 const BOOT_DARK = [0.17, 0.17, 0.19];
 const SOLE_DARK = [0.07, 0.07, 0.08];
-const VISOR_GOLD = [0.62, 0.46, 0.16];
+const VISOR_GOLD = [0.86, 0.66, 0.24];
 const PLSS_WHITE = [0.82, 0.81, 0.77];
 const PANEL_DARK = [0.25, 0.26, 0.28];
 const ANTENNA_GRAY = [0.75, 0.78, 0.82];
@@ -88,7 +88,7 @@ export const ASTRONAUT_RIG = deepFreeze({
     axes: { x: 'left/right', y: 'horizontal depth', z: 'up' },
     forward: '-Y',
     forwardHeadingOffsetRad: Math.PI / 2,
-    geometryDescription: 'Low-poly cuboids; no physical or suit-biomechanics claim',
+    geometryDescription: 'Low-poly rounded boxes, capsules, spheres and cylinders (units: unitBox, roundedBox, capsule, sphere, cylinder; see createRigGeometryAtlas); presentation silhouette only, no physical or suit-biomechanics claim',
     sideConvention: AXIS_SIDE_NOTE,
     appearance: 'white/off-white fabric outer layer, grey metallic coupling rings, dark boots/gloves, gold reflective visor; ' +
       'visual approach inspired by public EVA imagery, no suit measurement or exact colour claim',
@@ -123,29 +123,29 @@ export const ASTRONAUT_RIG = deepFreeze({
   },
   geometry: createUnitBoxGeometry(),
   parts: {
-    torso: part('torso', [0.44, 0.34, 0.58], [0, 0, 0.99], [0, 0, 0.99], SUIT_WHITE, 'fabric'),
-    chestPack: part('chestPack', [0.26, 0.14, 0.22], [0, -0.23, 0.99], [0, 0, 0.99], MODULE_GRAY, 'module'),
-    helmet: part('helmet', [0.34, 0.31, 0.32], [0, 0, 1.48], [0, 0, 1.34], HELMET_WHITE, 'shell'),
-    visor: part('visor', [0.23, 0.035, 0.16], [0, -0.17, 1.48], [0, 0, 1.34], VISOR_GOLD, 'gold'),
-    backpack: part('backpack', [0.34, 0.23, 0.43], [0, 0.21, 0.99], [0, 0.21, 0.99], PLSS_WHITE, 'shell'),
-    plssAntenna: part('plssAntenna', [0.035, 0.035, 0.30], [0.12, 0.23, 1.35], [0.12, 0.23, 1.205], ANTENNA_GRAY, 'metal'),
+    torso: part('torso', [0.44, 0.34, 0.58], [0, 0, 0.99], [0, 0, 0.99], SUIT_WHITE, 'fabric', 'roundedBox'),
+    chestPack: part('chestPack', [0.26, 0.14, 0.22], [0, -0.23, 0.99], [0, 0, 0.99], MODULE_GRAY, 'module', 'roundedBox'),
+    helmet: part('helmet', [0.34, 0.31, 0.32], [0, 0, 1.48], [0, 0, 1.34], HELMET_WHITE, 'shell', 'sphere'),
+    visor: part('visor', [0.27, 0.18, 0.21], [0, -0.075, 1.49], [0, 0, 1.34], VISOR_GOLD, 'gold', 'sphere'),
+    backpack: part('backpack', [0.34, 0.23, 0.43], [0, 0.21, 0.99], [0, 0.21, 0.99], PLSS_WHITE, 'shell', 'roundedBox'),
+    plssAntenna: part('plssAntenna', [0.035, 0.035, 0.30], [0.12, 0.23, 1.35], [0.12, 0.23, 1.205], ANTENNA_GRAY, 'metal', 'cylinder'),
     plssPanel: part('plssPanel', [0.22, 0.02, 0.20], [0, 0.335, 1.02], [0, 0.335, 1.02], PANEL_DARK, 'module'),
-    neckRing: part('neckRing', [0.27, 0.25, 0.06], [0, 0, 1.30], [0, 0, 1.30], METAL_GRAY, 'metal'),
-    waistRing: part('waistRing', [0.46, 0.36, 0.05], [0, 0, 0.70], [0, 0, 0.70], METAL_GRAY, 'metal'),
-    leftArm: part('leftArm', [0.19, 0.23, 0.53], [-0.34, 0, 0.96], [-0.27, 0, 1.22], SUIT_LIMB_WHITE, 'fabric'),
-    rightArm: part('rightArm', [0.19, 0.23, 0.53], [0.34, 0, 0.96], [0.27, 0, 1.22], SUIT_LIMB_WHITE, 'fabric'),
-    leftWristRing: part('leftWristRing', [0.215, 0.255, 0.05], [-0.34, 0, 0.70], [-0.34, 0, 0.70], METAL_GRAY, 'metal'),
-    rightWristRing: part('rightWristRing', [0.215, 0.255, 0.05], [0.34, 0, 0.70], [0.34, 0, 0.70], METAL_GRAY, 'metal'),
-    leftGlove: part('leftGlove', [0.13, 0.16, 0.17], [-0.34, -0.02, 0.615], [-0.34, 0, 0.695], GLOVE_DARK, 'rubber'),
-    rightGlove: part('rightGlove', [0.13, 0.16, 0.17], [0.34, -0.02, 0.615], [0.34, 0, 0.695], GLOVE_DARK, 'rubber'),
-    leftLeg: part('leftLeg', [0.21, 0.25, 0.53], [-0.14, 0, 0.40], [-0.14, 0, 0.65], SUIT_LIMB_WHITE, 'fabric'),
-    rightLeg: part('rightLeg', [0.21, 0.25, 0.53], [0.14, 0, 0.40], [0.14, 0, 0.65], SUIT_LIMB_WHITE, 'fabric'),
-    leftAnkleRing: part('leftAnkleRing', [0.235, 0.27, 0.045], [-0.14, 0, 0.152], [-0.14, 0, 0.152], METAL_GRAY, 'metal'),
-    rightAnkleRing: part('rightAnkleRing', [0.235, 0.27, 0.045], [0.14, 0, 0.152], [0.14, 0, 0.152], METAL_GRAY, 'metal'),
-    leftBoot: part('leftBoot', [0.23, 0.34, 0.16], [-0.14, -0.035, 0.09], [-0.14, 0, 0.17], BOOT_DARK, 'rubber'),
-    rightBoot: part('rightBoot', [0.23, 0.34, 0.16], [0.14, -0.035, 0.09], [0.14, 0, 0.17], BOOT_DARK, 'rubber'),
-    leftSole: part('leftSole', [0.238, 0.348, 0.047], [-0.14, -0.035, 0.0315], [-0.14, -0.035, 0.0315], SOLE_DARK, 'rubber'),
-    rightSole: part('rightSole', [0.238, 0.348, 0.047], [0.14, -0.035, 0.0315], [0.14, -0.035, 0.0315], SOLE_DARK, 'rubber'),
+    neckRing: part('neckRing', [0.27, 0.25, 0.06], [0, 0, 1.30], [0, 0, 1.30], METAL_GRAY, 'metal', 'cylinder'),
+    waistRing: part('waistRing', [0.46, 0.36, 0.05], [0, 0, 0.70], [0, 0, 0.70], METAL_GRAY, 'metal', 'cylinder'),
+    leftArm: part('leftArm', [0.19, 0.23, 0.53], [-0.34, 0, 0.96], [-0.27, 0, 1.22], SUIT_LIMB_WHITE, 'fabric', 'capsule'),
+    rightArm: part('rightArm', [0.19, 0.23, 0.53], [0.34, 0, 0.96], [0.27, 0, 1.22], SUIT_LIMB_WHITE, 'fabric', 'capsule'),
+    leftWristRing: part('leftWristRing', [0.215, 0.255, 0.05], [-0.34, 0, 0.70], [-0.34, 0, 0.70], METAL_GRAY, 'metal', 'cylinder'),
+    rightWristRing: part('rightWristRing', [0.215, 0.255, 0.05], [0.34, 0, 0.70], [0.34, 0, 0.70], METAL_GRAY, 'metal', 'cylinder'),
+    leftGlove: part('leftGlove', [0.13, 0.16, 0.17], [-0.34, -0.02, 0.615], [-0.34, 0, 0.695], GLOVE_DARK, 'rubber', 'roundedBox'),
+    rightGlove: part('rightGlove', [0.13, 0.16, 0.17], [0.34, -0.02, 0.615], [0.34, 0, 0.695], GLOVE_DARK, 'rubber', 'roundedBox'),
+    leftLeg: part('leftLeg', [0.21, 0.25, 0.53], [-0.14, 0, 0.40], [-0.14, 0, 0.65], SUIT_LIMB_WHITE, 'fabric', 'capsule'),
+    rightLeg: part('rightLeg', [0.21, 0.25, 0.53], [0.14, 0, 0.40], [0.14, 0, 0.65], SUIT_LIMB_WHITE, 'fabric', 'capsule'),
+    leftAnkleRing: part('leftAnkleRing', [0.235, 0.27, 0.045], [-0.14, 0, 0.152], [-0.14, 0, 0.152], METAL_GRAY, 'metal', 'cylinder'),
+    rightAnkleRing: part('rightAnkleRing', [0.235, 0.27, 0.045], [0.14, 0, 0.152], [0.14, 0, 0.152], METAL_GRAY, 'metal', 'cylinder'),
+    leftBoot: part('leftBoot', [0.23, 0.34, 0.16], [-0.14, -0.035, 0.09], [-0.14, 0, 0.17], BOOT_DARK, 'rubber', 'roundedBox'),
+    rightBoot: part('rightBoot', [0.23, 0.34, 0.16], [0.14, -0.035, 0.09], [0.14, 0, 0.17], BOOT_DARK, 'rubber', 'roundedBox'),
+    leftSole: part('leftSole', [0.238, 0.348, 0.047], [-0.14, -0.035, 0.0315], [-0.14, -0.035, 0.0315], SOLE_DARK, 'rubber', 'roundedBox'),
+    rightSole: part('rightSole', [0.238, 0.348, 0.047], [0.14, -0.035, 0.0315], [0.14, -0.035, 0.0315], SOLE_DARK, 'rubber', 'roundedBox'),
   },
 });
 
@@ -496,7 +496,7 @@ function flightCore(timeS, vz) {
   const tDescent = smoothstep01((-vz - 0.5) / 1.0);
   const tApex = 1 - tAscent - tDescent;
 
-  const rootPitch = tAscent * 0.045 - tDescent * 0.04;
+  const rootPitch = tAscent * 0.07 - tDescent * 0.06;
   const rootRotationRad = [rootPitch, 0, 0];
   const apexFloat = tApex * 0.012 * Math.sin(timeS * 2.5);
   const rootOffset = [0, 0, apexFloat];
@@ -504,8 +504,8 @@ function flightCore(timeS, vz) {
   const parts = {};
   parts.helmet = hingedPart3D('helmet', [-0.45 * rootPitch - tDescent * 0.06, 0, 0]);
 
-  const leftArmPitch = tAscent * -0.55 + tApex * -0.26 + tDescent * -0.32;
-  const leftArmRoll = tAscent * 0.10 + tApex * 0.20 + tDescent * 0.14;
+  const leftArmPitch = tAscent * -0.95 + tApex * -0.34 + tDescent * -0.50;
+  const leftArmRoll = tAscent * 0.22 + tApex * 0.55 + tDescent * 0.38;
   // Hands adapt dynamically across jump regimes
   const gripPitch = tAscent * -0.08 + tApex * -0.06 + tDescent * -0.12;
   const gripRoll = tAscent * 0.04 + tApex * 0.08 + tDescent * 0.05;
@@ -517,15 +517,15 @@ function flightCore(timeS, vz) {
     [gripPitch, -gripRoll, 0],
   );
 
-  const legPitch = tAscent * 0.22 + tApex * 0.06 - tDescent * 0.26;
-  const legSpread = 0.03 + tApex * 0.02;
-  const stagger = tApex * 0.04;
+  const legPitch = tAscent * 0.38 + tApex * 0.0 - tDescent * 0.50;
+  const legSpread = 0.04 + tApex * 0.05 + tDescent * 0.03;
+  const stagger = tApex * 0.14 + tAscent * 0.10;
   const leftLegRot = [legPitch + stagger, -legSpread, 0];
   const rightLegRot = [legPitch - stagger, legSpread, 0];
   parts.leftLeg = hingedPart3D('leftLeg', leftLegRot);
   parts.rightLeg = hingedPart3D('rightLeg', rightLegRot);
 
-  const bootPitch = tAscent * 0.10 + tApex * 0.02 - tDescent * 0.14;
+  const bootPitch = tAscent * 0.20 + tApex * 0.04 - tDescent * 0.30;
   parts.leftBoot = chainedLimbPart('leftBoot', 'leftLeg', leftLegRot, [bootPitch + stagger * 0.5 - leftLegRot[0], 0, 0]);
   parts.rightBoot = chainedLimbPart('rightBoot', 'rightLeg', rightLegRot, [bootPitch - stagger * 0.5 - rightLegRot[0], 0, 0]);
 
@@ -633,11 +633,11 @@ function srgbToLinear(c) {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 
-function part(id, size, center, pivot, colorRgb, materialKey) {
+function part(id, size, center, pivot, colorRgb, materialKey, geometry = 'unitBox') {
   const material = MATERIALS[materialKey];
   const side = center[0] > 1e-9 ? 'physicalLeft' : center[0] < -1e-9 ? 'physicalRight' : 'center';
   return {
-    id, geometry: 'unitBox', size, center, pivot, colorRgb, side,
+    id, geometry, size, center, pivot, colorRgb, side,
     material: {
       albedoLinear: colorRgb.map((c) => Math.round(srgbToLinear(c) * 1e4) / 1e4),
       roughness: material.roughness,
@@ -834,6 +834,120 @@ function createUnitBoxGeometry() {
     indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
   }
   return { primitive: 'triangles', positions, normals, indices };
+}
+
+// ---- Rounded unit geometries (presentation silhouette only) ----------------------------------
+// All unit meshes fit the cube [-0.5, 0.5]^3 so `part.size` scales them exactly like the unit box.
+// Normals are analytic for the unit shape; the vertex shader divides them by `uPartSize` (inverse
+// transpose of a diagonal scale), so non-uniformly scaled ellipsoids stay correctly lit.
+
+/**
+ * Superellipsoid-style unit solid. Radial form F = (x^2 + y^2)^(q/2) + |z|^q = (0.5-scaled) 1.
+ * q = 2 is a sphere; larger q gives a pill/capsule with flatter caps (circular cross-section).
+ * `axial: false` uses the fully symmetric |x|^q + |y|^q + |z|^q form (rounded box for q ~ 5).
+ */
+function createSuperSolid(q, axial, segU = 20, segV = 12) {
+  const positions = [];
+  const normals = [];
+  const indices = [];
+  for (let i = 0; i <= segV; i++) {
+    const theta = (Math.PI * i) / segV;
+    for (let j = 0; j <= segU; j++) {
+      const phi = (TAU * j) / segU;
+      const d = [Math.sin(theta) * Math.cos(phi), Math.sin(theta) * Math.sin(phi), Math.cos(theta)];
+      let f;
+      if (axial) f = Math.pow(Math.pow(d[0] * d[0] + d[1] * d[1], q / 2) + Math.pow(Math.abs(d[2]), q), 1 / q);
+      else f = Math.pow(Math.pow(Math.abs(d[0]), q) + Math.pow(Math.abs(d[1]), q) + Math.pow(Math.abs(d[2]), q), 1 / q);
+      const u = d.map((v) => v / f);
+      positions.push(0.5 * u[0], 0.5 * u[1], 0.5 * u[2]);
+      let n;
+      if (axial) {
+        const rr = Math.pow(u[0] * u[0] + u[1] * u[1], q / 2 - 1);
+        n = [rr * u[0], rr * u[1], Math.sign(u[2]) * Math.pow(Math.abs(u[2]), q - 1)];
+      } else {
+        n = u.map((v) => Math.sign(v) * Math.pow(Math.abs(v), q - 1));
+      }
+      const len = Math.hypot(n[0], n[1], n[2]) || 1;
+      normals.push(n[0] / len, n[1] / len, n[2] / len);
+    }
+  }
+  const stride = segU + 1;
+  for (let i = 0; i < segV; i++) {
+    for (let j = 0; j < segU; j++) {
+      const a = i * stride + j, b = a + 1, c = a + stride, e = c + 1;
+      // theta increases downward, phi counter-clockwise from above: (a, c, b) winds outward.
+      if (i > 0) indices.push(a, c, b);
+      if (i < segV - 1) indices.push(b, c, e);
+    }
+  }
+  return { primitive: 'triangles', positions, normals, indices };
+}
+
+function createUnitCylinderGeometry(segments = 20) {
+  const positions = [];
+  const normals = [];
+  const indices = [];
+  for (let j = 0; j <= segments; j++) {
+    const phi = (TAU * j) / segments;
+    const x = Math.cos(phi), y = Math.sin(phi);
+    positions.push(0.5 * x, 0.5 * y, -0.5, 0.5 * x, 0.5 * y, 0.5);
+    normals.push(x, y, 0, x, y, 0);
+  }
+  for (let j = 0; j < segments; j++) {
+    const a = 2 * j, b = a + 1, c = a + 2, e = a + 3;
+    indices.push(a, c, b, b, c, e);
+  }
+  for (const [z, nz] of [[0.5, 1], [-0.5, -1]]) {
+    const centre = positions.length / 3;
+    positions.push(0, 0, z);
+    normals.push(0, 0, nz);
+    const first = positions.length / 3;
+    for (let j = 0; j <= segments; j++) {
+      const phi = (TAU * j) / segments;
+      positions.push(0.5 * Math.cos(phi), 0.5 * Math.sin(phi), z);
+      normals.push(0, 0, nz);
+    }
+    for (let j = 0; j < segments; j++) {
+      if (nz > 0) indices.push(centre, first + j, first + j + 1);
+      else indices.push(centre, first + j + 1, first + j);
+    }
+  }
+  return { primitive: 'triangles', positions, normals, indices };
+}
+
+export const RIG_GEOMETRY_NAMES = Object.freeze(['unitBox', 'roundedBox', 'capsule', 'sphere', 'cylinder']);
+
+/** Pure builder for each named unit mesh (fresh arrays each call). */
+export function createRigUnitGeometry(name) {
+  switch (name) {
+    case 'unitBox': return createUnitBoxGeometry();
+    case 'roundedBox': return createSuperSolid(5, false, 24, 16);
+    case 'capsule': return createSuperSolid(3.4, true, 20, 14);
+    case 'sphere': return createSuperSolid(2, true, 24, 16);
+    case 'cylinder': return createUnitCylinderGeometry(20);
+    default: throw new TypeError(`unknown rig geometry: ${name}`);
+  }
+}
+
+/**
+ * All unit meshes concatenated for a single GPU upload. `ranges[name]` = { indexStart, indexCount }
+ * (indices are absolute into the shared vertex arrays; Uint16-safe).
+ */
+export function createRigGeometryAtlas() {
+  const positions = [];
+  const normals = [];
+  const indices = [];
+  const ranges = {};
+  for (const name of RIG_GEOMETRY_NAMES) {
+    const g = createRigUnitGeometry(name);
+    const base = positions.length / 3;
+    positions.push(...g.positions);
+    normals.push(...g.normals);
+    const indexStart = indices.length;
+    for (const index of g.indices) indices.push(index + base);
+    ranges[name] = { indexStart, indexCount: indices.length - indexStart };
+  }
+  return { positions, normals, indices, ranges };
 }
 
 function deepFreeze(value) {

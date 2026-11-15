@@ -52,6 +52,16 @@ export const TERRAIN_SHADING_PARAMS = Object.freeze({
   // its features fall below ~2 px (≈0.0019 rad/px for the 80° first-person FOV at ~900 px).
   fadeStartPerWavelength: 50,
   fadeEndPerWavelength: 220,
+  // Pebble/gravel scatter (gorsel detay, veri degildir): world-fixed deterministic discs, one per jittered grid cell.
+  // Each layer: cell size, max pebble radius (<= 0.22 cell so pebble + contact ring stay inside the cell), presence
+  // probability, relative tone amplitude, and the distance range over which the layer fades out (metres).
+  pebbles: Object.freeze([
+    Object.freeze({ cellM: 0.30, radiusM: 0.066, density: 0.55, toneAmp: 0.16, fadeStartM: 8, fadeEndM: 24 }),
+    Object.freeze({ cellM: 0.95, radiusM: 0.20, density: 0.10, toneAmp: 0.12, fadeStartM: 20, fadeEndM: 60 }),
+  ]),
+  pebbleHeightPerRadius: 0.9,
+  pebbleSlopeMax: 0.6,
+  pebbleOrthoToneReduction: 0.85,
   // Hard cap on the total micro slope perturbation (|dh/dx,dh/dy| vector length).
   microSlopeMax: 0.45,
   // Ortho coverage tone detail already resolves ~0.32 m texels: micro tone is reduced by this fraction there.
@@ -157,6 +167,45 @@ export function microDetail(xM, yM, distM, roughness = 1) {
   return { slopeX: sx, slopeY: sy, tone, weights };
 }
 
+/** Salted per-cell random in [0, 1): k selects the independent stream (mirrors terrainPebbleRand in GLSL). */
+export const pebbleRand = (ix, iy, k) => hashUnit(ix + 7919 * k, iy + 104729 * k);
+
+/**
+ * Pebble/gravel scatter at local world position (xM, yM) seen from `distM` (JS mirror of the GLSL
+ * terrainPebbles). Deterministic, world-fixed, fades with distance. Returns { slopeX, slopeY, tone }.
+ * Visual detail only: carries no terrain data and never feeds routes or slope analysis.
+ */
+export function pebbleDetail(xM, yM, distM) {
+  let sx = 0, sy = 0, tone = 0;
+  for (const L of P.pebbles) {
+    const fade = 1 - smoothstep(L.fadeStartM, L.fadeEndM, Math.max(distM, 0));
+    if (fade <= 0) continue;
+    const px = xM / L.cellM, py = yM / L.cellM;
+    const ix = Math.floor(px), iy = Math.floor(py);
+    const fx = px - ix, fy = py - iy;
+    const cx = 0.3 + 0.4 * pebbleRand(ix, iy, 1);
+    const cy = 0.3 + 0.4 * pebbleRand(ix, iy, 2);
+    const radius = (0.5 + 0.5 * pebbleRand(ix, iy, 3)) * (L.radiusM / L.cellM);
+    if (pebbleRand(ix, iy, 4) >= L.density) continue;
+    const dxw = (fx - cx) * L.cellM, dyw = (fy - cy) * L.cellM;
+    const rw = radius * L.cellM;
+    const d = Math.hypot(dxw, dyw) / rw;
+    const shade = (pebbleRand(ix, iy, 5) - 0.5) * 2; // -1 dark .. +1 light pebble
+    if (d < 1) {
+      const h = Math.max(Math.sqrt(1 - d * d), 0.3);
+      // Dome H = hPerR * rw * sqrt(1 - d^2): dH/dx = -hPerR * (dxw / rw) / sqrt(1 - d^2) (dimensionless slope).
+      const k = -P.pebbleHeightPerRadius / h * fade;
+      sx += k * dxw / rw;
+      sy += k * dyw / rw;
+      tone += L.toneAmp * shade * 0.8 * fade;
+    } else if (d < 1.35) {
+      tone -= 0.08 * (1 - smoothstep(1, 1.35, d)) * fade; // contact darkening ring
+    }
+  }
+  const len = Math.hypot(sx, sy);
+  if (len > P.pebbleSlopeMax) { sx *= P.pebbleSlopeMax / len; sy *= P.pebbleSlopeMax / len; }
+  return { slopeX: sx, slopeY: sy, tone };
+}
 /** Applies the micro slope to a unit normal (local X east, Y north, Z up) and renormalises. */
 export function perturbNormal(normal, slopeX, slopeY) {
   const x = normal[0] - slopeX * normal[2];
@@ -231,6 +280,29 @@ const octaveGlsl = P.octaves.map((o, i) => `
     }
   }`).join('');
 
+const pebbleGlsl = P.pebbles.map((L) => `
+  {
+    float fade = 1.0 - smoothstep(${f(L.fadeStartM)}, ${f(L.fadeEndM)}, dist);
+    if (fade > 0.0) {
+      vec2 p = xy / ${f(L.cellM)};
+      ivec2 ic = ivec2(floor(p));
+      vec2 fr = p - vec2(ic);
+      vec2 c = vec2(0.3 + 0.4 * terrainPebbleRand(ic, 1), 0.3 + 0.4 * terrainPebbleRand(ic, 2));
+      float rw = (0.5 + 0.5 * terrainPebbleRand(ic, 3)) * ${f(L.radiusM)};
+      if (terrainPebbleRand(ic, 4) < ${f(L.density)}) {
+        vec2 dw = (fr - c) * ${f(L.cellM)};
+        float d = length(dw) / rw;
+        float shade = (terrainPebbleRand(ic, 5) - 0.5) * 2.0;
+        if (d < 1.0) {
+          float h = max(sqrt(1.0 - d * d), 0.3);
+          slope += -${f(P.pebbleHeightPerRadius)} / h * fade * dw / rw;
+          tone += ${f(L.toneAmp)} * shade * 0.8 * fade;
+        } else if (d < 1.35) {
+          tone -= 0.08 * (1.0 - smoothstep(1.0, 1.35, d)) * fade;
+        }
+      }
+    }
+  }`).join('');
 export const TERRAIN_SHADING_GLSL = `
 const vec3 TERRAIN_BASIN = ${v3(PALETTE_LINEAR.basin)};
 const vec3 TERRAIN_DELTA = ${v3(PALETTE_LINEAR.delta)};
@@ -268,6 +340,14 @@ void terrainMicro(vec2 xy, float dist, float roughness, out vec2 slope, out floa
   tone = 0.0;${octaveGlsl}
   float len = length(slope);
   if (len > ${f(P.microSlopeMax)}) slope *= ${f(P.microSlopeMax)} / len;
+}
+float terrainPebbleRand(ivec2 cell, int k) { return terrainHashUnit(cell + ivec2(7919 * k, 104729 * k)); }
+// Pebble/gravel scatter (gorsel detay, veri degildir): world-fixed, deterministic, distance-faded. Mirrors pebbleDetail().
+void terrainPebbles(vec2 xy, float dist, out vec2 slope, out float tone) {
+  slope = vec2(0.0);
+  tone = 0.0;${pebbleGlsl}
+  float len = length(slope);
+  if (len > ${f(P.pebbleSlopeMax)}) slope *= ${f(P.pebbleSlopeMax)} / len;
 }
 vec3 terrainPerturbNormal(vec3 n, vec2 slope) {
   return normalize(vec3(n.xy - slope * n.z, n.z));

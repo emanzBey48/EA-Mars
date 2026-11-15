@@ -1,7 +1,7 @@
 # Efe → Alparslan devir notu (güncel, 15 Kasım 2026)
 
 **Dal:** `codex/efe-visual-realism` @ `53068e6` (bu oturumda çalışılan worktree: `C:\Users\efese\Desktop\Nasaspaceapps-efe`). Önceki sürüm (`190e133` ve `codex/efe-stage13-eva-kinematics` dalı) bu notta yerini bu sürüme bırakmıştır.
-**Test durumu (bu oturum):** `cd Sim; node --test test/` → **574/574, çıkış kodu 0** (mevcut çalışma ağacı). `node scripts/preflight.mjs` → **HAZIR**. Tarayıcı kabulü: `Sim/stage-final-acceptance.md` (PASS/FAIL/NOT-TESTED). `npm run smoke` bu oturumda çalıştırılmadı.
+**Test durumu (bu oturum):** `cd Sim; node --test test/` → **598/598, çıkış kodu 0** (mevcut çalışma ağacı). `node scripts/preflight.mjs` → **HAZIR**. Tarayıcı kabulü: `Sim/stage-final-acceptance.md` (PASS/FAIL/NOT-TESTED). `npm run smoke` bu oturumda çalıştırılmadı.
 
 ## 1. Ortak çalışma klasörü uyarısı
 
@@ -50,7 +50,7 @@ Yeni pass gerekirse 8 ve sonrası kullanılır. Pass 4 erken döner; pass 7'nin 
 
 | Konu | Değer | Kaynak |
 |---|---|---|
-| Birim testleri | 574/574 | `node --test test/` (çıkış kodu 0) |
+| Birim testleri | 598/598 | `node --test test/` (çıkış kodu 0) |
 | Ön uçuş | HAZIR, hata 0, uyarı 0 | `node scripts/preflight.mjs` |
 | Tarayıcı | PASS: D1, D2, D2b, R1, M1, F1, H1, H2, S1, X1, X2. NOT-TESTED: M2, sıçrama, varış rozeti, galeri, ortho hizası | `stage-final-acceptance.md` |
 | Rota (UI, **[AKTİF] legacy DTM**) | Dengeli 730 m / 9,8°; en kısa 730 m / 14,1°; en düz 731 m / 10,1° | Tarayıcı özeti. Bu bölümdeki 730,505 / 732,161 m ve 9,81° / 10,64° / 9,27° değerleri **[ADAY] USGS 1 m** penceresinde worker ölçümüdür (`stage-perf-and-preference-review.md`); iki DTM farklı sonuç verir. |

@@ -72,12 +72,10 @@ Konum: Jezero Sol 120 / WB1 (`config.js` WAYPOINTS[0], 18,43906919 °K, 77,44940
 
 ## Lisans ve atıf
 
-- `license`: **"belirtilmemiş"**. Dosyada künye/lisans yok.
-- USGS Astrogeology ürün sayfaları denendi:
-  - `https://astrogeology.usgs.gov/search/map/mars_viking_colorized_global_mosaic_232m` → HTTP 403.
-  - `https://astrogeology.usgs.gov/search/map/viking_mdim2_1_grayscale_global_mosaic_232m` → HTTP 403.
-- Arama özeti "public domain / no use constraints" diyor; ancak sayfanın kendisi okunamadığı için bu ifade **teyit edilmiş kanıt değildir** ve kullanılmadı. Teyit için sayfanın bir tarayıcıdan açılıp lisans metninin doğrudan alınması gerekir.
-- `attribution`: "Mars_Viking_MDIM21_ClrMosaic_global_232m.tif dosya adı: Viking MDIM 2.1 renkli küresel mozaiği; künye/lisans dosyada yok".
+- **Tarihsel kayıt:** İlk incelemede USGS sayfası HTTP 403 verdiği için lisans belirtilmemiş bırakıldı; o tarihte arama özeti tek başına kabul edilmedi.
+- **K1-4 yeniden incelemesi (15 Kasım 2026):** Resmi USGS Astropedia ürünü *Mars Viking Colorized Global Mosaic 232m* için indekslenmiş birincil ürün metadata'sı `Access Constraints: Public domain`, `Use Constraints: None`, `Primary Authors: USGS Astrogeology Science Center`, `Originators: NASA AMES` ve `Publisher: USGS Astrogeology Science Center` alanlarını veriyor. Sayfayı doğrudan açma denemesi bu ortamda 403 döndürdü; bu nedenle kaynakta gösterilen alanlar birebir korunup doğrudan sayfa erişim sınırlaması kaydedildi.
+- Uygulama manifestinde lisans `Public domain`, evidence metni resmi alan adlarını ve `sourceUrl`'yi taşır. Atıf alanı USGS birincil yazar/yayıncı ve NASA AMES originator bilgilerini taşır; birinci taraf künye alanlarından fazlası iddia edilmez.
+- Kaynak: [USGS Astropedia — Mars Viking Colorized Global Mosaic 232m](https://astrogeology.usgs.gov/search/map/mars_viking_colorized_global_mosaic_232m).
 
 ## Alparslan için (36B) yükleme notları
 

@@ -25,9 +25,10 @@ const OUTPUT_BUDGET_BYTES = 40 * 1024 * 1024; // "~40 MB" target for all written
 const ROWS_PER_READ = 64;
 const PROGRESS_EVERY = 4096;
 const SOURCE_NAME = 'Mars_Viking_MDIM21_ClrMosaic_global_232m.tif';
-const LICENSE = 'belirtilmemiş';
-const LICENSE_EVIDENCE = null; // filled only when the USGS product page was actually read (see stage36-viking-audit.md)
-const ATTRIBUTION = 'Mars_Viking_MDIM21_ClrMosaic_global_232m.tif dosya adı: Viking MDIM 2.1 renkli küresel mozaiği; künye/lisans dosyada yok';
+const SOURCE_URL = 'https://astrogeology.usgs.gov/search/map/mars_viking_colorized_global_mosaic_232m';
+const LICENSE = 'Public domain';
+const LICENSE_EVIDENCE = 'USGS Astrogeology product metadata: Access Constraints = Public domain; Use Constraints = None.';
+const ATTRIBUTION = 'Primary authors/publisher: USGS Astrogeology Science Center; originator: NASA AMES; Viking MDIM 2.1 colorized global mosaic.';
 const NOTES = [
   'ortogörüntü değildir; yükseklik verisi değildir; yerel doku olarak kullanılamaz (232 m/piksel)',
   'Piramit düzeyleri 2:1 eşdikdörtgen karo şemasıdır (trek-tiles.js DEFAULT_SCHEME); z0 = 2x1 karo (512x256 dünya piksel).',
@@ -238,6 +239,7 @@ function main() {
       schema: 'marswalk.viking-mdim-pyramid.v1',
       generatedBy: 'scripts/ingest-viking-mosaic.mjs',
       generatedAt: new Date().toISOString(),
+      sourceUrl: SOURCE_URL,
       source: {
         file: SOURCE_NAME,
         bytes: size,

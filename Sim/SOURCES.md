@@ -1,7 +1,7 @@
 # Marswalk kaynaklar ve atıflar
 
 Bu dosya `node scripts/build-sources-list.mjs` ile üretilir; elle düzenlemeyin. İçerik yalnızca depodaki `data/*/manifest.json` ve üst veri kayıtlarından, ayrıca kodun/belgelerin zaten andığı dış kaynaklardan gelir.
-Kaynakta yazılı olmayan her alan **belirtilmemiş** olarak bırakılır; hiçbir lisans tahmin edilmez. Aşağıdaki 14 kaynaktan 13 tanesinde lisans belirtilmemiş.
+Kaynakta yazılı olmayan her alan **belirtilmemiş** olarak bırakılır; hiçbir lisans tahmin edilmez. Aşağıdaki 14 kaynaktan 12 tanesinde lisans belirtilmemiş.
 
 | # | Kaynak | Ürün kimliği | Çözünürlük | Lisans | Atıf |
 |---|---|---|---|---|---|
@@ -13,7 +13,7 @@ Kaynakta yazılı olmayan her alan **belirtilmemiş** olarak bırakılır; hiçb
 | 6 | USGS SIM 3464 Jezero krateri ve Nili Planum jeolojik haritası | USGS Scientific Investigations Map 3464 | harita ölçeği 1:75.000 (vektör) | belirtilmemiş | Sun, V.Z., and Stack, K.M., 2020, Geologic map of Jezero crater and the Nili Planum region, Mars: U.S. Geological Survey Scientific Investigations Map 3464, pamphlet 14 p., 1 sheet, scale 1:75,000, https://doi.org/10.3133/sim3464 |
 | 7 | NASA/JPL-Caltech Mars 2020 Perseverance ham görüntü arşivi (Sol 120 ve Sol 164) | 12 ham görüntü; Navcam, Hazcam, SuperCam, Mastcam-Z, CacheCam | JPEG ön izleme (dosya adı soneki _1200; boyutlar manifestte); ham, kalibre edilmemiş | belirtilmemiş | NASA/JPL-Caltech |
 | 8 | NASA Mars Trek MOLA ImageServer bölgesel kot penceresi | mola128_mola64_merge_90Nto90S_SimpleC_clon0 | 463 m nominal; 384 x 384 hücre, 0.0078125° | belirtilmemiş | NASA Mars Trek / MOLA (mola128_mola64_merge_90Nto90S_SimpleC_clon0) |
-| 9 | USGS Astrogeology Viking MDIM 2.1 renkli küresel mozaik (karo piramidi) | Mars_Viking_MDIM21_ClrMosaic_global_232m.tif | 231.5417872 m/piksel yerel çözünürlük (piramit z0-z3) | belirtilmemiş | Mars_Viking_MDIM21_ClrMosaic_global_232m.tif dosya adı: Viking MDIM 2.1 renkli küresel mozaiği; künye/lisans dosyada yok |
+| 9 | USGS Astrogeology Viking MDIM 2.1 renkli küresel mozaik (karo piramidi) | Mars_Viking_MDIM21_ClrMosaic_global_232m.tif | 231.5417872 m/piksel yerel çözünürlük (piramit z0-z3) | Public domain | Primary authors/publisher: USGS Astrogeology Science Center; originator: NASA AMES; Viking MDIM 2.1 colorized global mosaic. |
 | 10 | NASA Planet Compare (Mars yüzey yerçekimi) | Mars yüzey yerçekimi 3.71 m/s² | tek sayı (yuvarlatılmış) | belirtilmemiş | NASA |
 | 11 | NASA NSSDC Mars Fact Sheet | Mars Fact Sheet | tek sayılar / aralıklar | belirtilmemiş | NASA NSSDC |
 | 12 | NASA NSSDC Sun Fact Sheet | Sun Fact Sheet | tek sayı | belirtilmemiş | NASA NSSDC |
@@ -88,9 +88,9 @@ Kaynakta yazılı olmayan her alan **belirtilmemiş** olarak bırakılır; hiçb
 
 ### 9. USGS Astrogeology Viking MDIM 2.1 renkli küresel mozaik (karo piramidi)
 
-- **Kaynak adresi:** belirtilmemiş
-- **Lisans:** belirtilmemiş
-- **Lisans kanıtı:** belirtilmemiş
+- **Kaynak adresi:** https://astrogeology.usgs.gov/search/map/mars_viking_colorized_global_mosaic_232m
+- **Lisans:** Public domain
+- **Lisans kanıtı:** USGS Astrogeology product metadata: Access Constraints = Public domain; Use Constraints = None.
 - **Uygulamadaki kullanım:** Küresel minimap bağlam zemini (data/viking-mdim); ortogörüntü ve kot verisi değildir
 - **Sınır / uyarı:** İşlenmiş renk ürünü; 232 m/piksel yerel doku olarak kullanılamaz.
 

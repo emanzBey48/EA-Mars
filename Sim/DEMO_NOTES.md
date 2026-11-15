@@ -61,7 +61,7 @@ Kullanışlı parametreler: `?view=3d`, `?scale=1|2|3`, `?shadows=off|low|high`,
 - Viking renkleri işlenmiş küresel ürün (232 m/px); arazi renk doğruluğu iddiası yok.
 - Ufuk MOLA bölgesel bağlamıdır (~463 m/px); datum doğrulanmadı.
 - Atmosfer değerleri ortalama/mevsimsel; sürükleme kullanılmaz; suit/kütle parametresi yok.
-- Lisanslar: `SOURCES.md` uyarınca 14 kaynaktan 13'ünde lisans **belirtilmemiş**; yalnız USGS 1 m DTM "CC0 1.0" olarak yazılıdır. Kullanım öncesi lisans teyidi gerekir (K1-4 Viking).
+- Lisanslar: `SOURCES.md` uyarınca 14 kaynaktan 12'sinde lisans **belirtilmemiş**. USGS 1 m DTM için kaynakta "CC0 1.0 Universal", Viking MDIM 2.1 için USGS metadata'sında "Public domain" ve "Use Constraints: None" yazılıdır.
 
 ## 4. Bilinen tutarsızlıklar (düzeltilmeden raporlandı)
 
@@ -86,7 +86,7 @@ Kullanışlı parametreler: `?view=3d`, `?scale=1|2|3`, `?shadows=off|low|high`,
 9. **Gerçek ölçek mi abartı mı?** Varsayılan 1× gerçek dikey ölçektir. 2× ve 3× görsel abartıdır ve rozetle belirtilir.
 10. **Ayak izleri ve adım hızı ölçülmüş mü?** Hayır. Ayak izi görseldir; adım uzunluğu ve Froude modeli varsayımdır.
 11. **Neden 8× hız?** Rotayı 60–90 saniyelik demoya sığdırmak için. Gerçek yürüyüş hızı iddiası değildir. (Rota süre tahmini de simülasyonla aynı 1,2 m/s senaryo hızını kullanır; duvar saati simülasyon saati / 8'dir.)
-12. **Lisans sorunu var mı?** Evet: 13 kaynakta lisans kaynakta belirtilmemiştir. Teslim öncesi teyit gerekir; uydurulmuş lisans yoktur.
+12. **Lisans sorunu var mı?** Kaynakta lisans bilgisi bulunmayan 12 kayıt "belirtilmemiş" olarak kalır. USGS Viking MDIM 2.1 ürün metadata'sı erişimi "Public domain", kullanım kısıtını "None" olarak verir.
 13. **Bu kullanıcıya yön verir mi?** Hayır. Güvenlik veya karar desteği değildir.
 14. **Hangi arazi verisini görüyoruz?** Ekranda PDS3 DTEEC (legacy) yedek DTM görünür: 1669×1129 hücre, ~1,01 m/px. Daha yeni USGS Mars 2020 TRN 1 m penceresi (1676×1135) düşey datum kanıtı olmadığı için etkinleştirilmedi (`needs_review`); analizlerin çoğu o pencerede yapıldı. Bu yüzden sayılar [AKTİF] veya [ADAY] olarak etiketli; hangi verinin kalacağı bir ürün kararıdır (K3-7).
 

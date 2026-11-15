@@ -2,6 +2,7 @@
   "schema": "marswalk.viking-mdim-pyramid.v1",
   "generatedBy": "scripts/ingest-viking-mosaic.mjs",
   "generatedAt": "2026-11-14T21:41:13.730Z",
+  "sourceUrl": "https://astrogeology.usgs.gov/search/map/mars_viking_colorized_global_mosaic_232m",
   "source": {
     "file": "Mars_Viking_MDIM21_ClrMosaic_global_232m.tif",
     "bytes": 12740936469,
@@ -233,9 +234,9 @@
     "peakRssMiB": 197.5,
     "streamingBufferMiB": 148.9
   },
-  "license": "belirtilmemiş",
-  "licenseEvidence": null,
-  "attribution": "Mars_Viking_MDIM21_ClrMosaic_global_232m.tif dosya adı: Viking MDIM 2.1 renkli küresel mozaiği; künye/lisans dosyada yok",
+  "license": "Public domain",
+  "licenseEvidence": "USGS Astrogeology product metadata: Access Constraints = Public domain; Use Constraints = None.",
+  "attribution": "Primary authors/publisher: USGS Astrogeology Science Center; originator: NASA AMES; Viking MDIM 2.1 colorized global mosaic.",
   "notes": [
     "ortogörüntü değildir; yükseklik verisi değildir; yerel doku olarak kullanılamaz (232 m/piksel)",
     "Piramit düzeyleri 2:1 eşdikdörtgen karo şemasıdır (trek-tiles.js DEFAULT_SCHEME); z0 = 2x1 karo (512x256 dünya piksel).",

@@ -85,6 +85,7 @@ let routeWorkerId = 0;
 let routeWorkerReady = false;
 let pendingInitId = null;
 let pendingPlanId = null;
+let latestDeadlinePlanId = null;
 let latestExplainId = null;
 let endpointRevision = 0;
 const routeWorkerRequests = new Map();
@@ -147,6 +148,11 @@ const simulationSpeedControl = $('simulation-speed-control');
 const simulationSpeedInput = $('simulation-speed');
 const simulationSpeedValue = $('simulation-speed-value');
 const stopSimulationButton = $('btn-stop-simulation');
+const deadlineMinutesInput = $('deadline-minutes');
+const deadlineRerouteButton = $('btn-deadline-reroute');
+const deadlineStatus = $('deadline-status');
+const deadlineWarning = $('deadline-warning');
+let deadlineWarningTimer = null;
 
 let presentationModeActive = false;
 let pendingDemoTour = false;
@@ -239,6 +245,7 @@ function updateSimulationControls() {
     simulationSpeedInput.value = String(sim.scenario.timeScale);
     simulationSpeedValue.value = `${Number(sim.scenario.timeScale).toFixed(1).replace(/\.0$/, '')}×`;
     simulationSpeedValue.textContent = simulationSpeedValue.value;
+    simulationSpeedInput.disabled = latestDeadlinePlanId !== null;
   }
   if (autoDriveNote && sim.phase === 'running' && autoDriveController && autoDriveState) {
     const slopeText = autoDriveState.slopeDeg === null ? 'eğim bilinmiyor' : `eğim ${autoDriveState.slopeDeg.toFixed(1)}°`;
@@ -246,7 +253,65 @@ function updateSimulationControls() {
   }
 }
 
+function showDeadlineWarning(message) {
+  if (!deadlineWarning) return;
+  if (deadlineWarningTimer !== null) clearTimeout(deadlineWarningTimer);
+  deadlineWarning.classList.remove('visible');
+  deadlineWarning.textContent = message;
+  deadlineWarning.hidden = false;
+  void deadlineWarning.offsetWidth;
+  deadlineWarning.classList.add('visible');
+  deadlineWarningTimer = setTimeout(() => {
+    deadlineWarning.hidden = true;
+    deadlineWarning.classList.remove('visible');
+    deadlineWarningTimer = null;
+  }, 4100);
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return 'süre bilinmiyor';
+  const total = Math.ceil(seconds);
+  const mins = Math.floor(total / 60), secs = total % 60;
+  return mins ? `${mins} dk ${secs} sn` : `${secs} sn`;
+}
+
+function joinRoutePath(start, plannedPath, goal) {
+  const candidates = [start, ...(plannedPath ?? []).slice(1, -1), goal];
+  return candidates.filter((point, index) => index === 0 ||
+    Math.hypot(point.xM - candidates[index - 1].xM, point.yM - candidates[index - 1].yM) > 0.05);
+}
+
+function requestDeadlineRoute() {
+  const deadlineMinutes = Number(deadlineMinutesInput?.value);
+  if (sim.phase !== 'running' || !autoDriveController) {
+    showDeadlineWarning('Süreye göre rota yenilemek için otomatik sürüşü başlatın.');
+    return;
+  }
+  if (!routeWorkerReady || !Number.isFinite(deadlineMinutes) || deadlineMinutes <= 0) {
+    showDeadlineWarning('DTM rota planlayıcısı hazır değil veya kalan süre geçersiz.');
+    return;
+  }
+
+  if (latestDeadlinePlanId !== null) routeWorkerRequests.delete(latestDeadlinePlanId);
+  const id = ++routeWorkerId;
+  latestDeadlinePlanId = id;
+  const deadlineSeconds = deadlineMinutes * 60;
+  const startLocal = { xM: sim.pos.x, yM: sim.pos.y };
+  const endLocal = { xM: sim.route.b.x, yM: sim.route.b.y };
+  routeWorkerRequests.set(id, { kind: 'deadline', startLocal, endLocal, deadlineSeconds, timeScale: sim.scenario.timeScale, startedSimTimeS: sim.simTimeS });
+  if (deadlineRerouteButton) deadlineRerouteButton.disabled = true;
+  if (deadlineStatus) deadlineStatus.textContent = 'Kalan süre için döngüsüz EVA rota adayları hesaplanıyor…';
+  ensureRouteWorker().postMessage({
+    type: 'plan-deadline-routes', id, startLocal, endLocal, deadlineSeconds,
+    walkSpeedMps: sim.scenario.walkSpeedMps,
+    timeScale: sim.scenario.timeScale,
+  });
+}
+
 function resetSimulationToSettings() {
+  if (latestDeadlinePlanId !== null) routeWorkerRequests.delete(latestDeadlinePlanId);
+  latestDeadlinePlanId = null;
+  if (deadlineRerouteButton) deadlineRerouteButton.disabled = false;
   sim.restart();
   autoDriveController = null;
   autoDriveState = null;
@@ -277,7 +342,7 @@ async function startSimulation() {
       if (autoDriveNote) autoDriveNote.textContent = 'Önce minimap üzerinde başlangıç ve bitiş seçip EVA yürünebilirlik rotasını planlayın.';
       return;
     }
-    const path = [start, ...activeRoute.path.slice(1, -1), goal];
+    const path = joinRoutePath(start, activeRoute.path, goal);
     autoDriveController = createAutoDriveController(path);
     if (!autoDriveController) {
       if (autoDriveNote) autoDriveNote.textContent = 'Planlanan rota otomatik sürüş için kullanılabilir bir çizgi içermiyor.';
@@ -288,6 +353,7 @@ async function startSimulation() {
       if (autoDriveNote) autoDriveNote.textContent = 'Seçilen rota noktaları geçerli değil.';
       return;
     }
+    sim.setRoutePath(path);
     camera3d.xM = start.xM;
     camera3d.yM = start.yM;
     const firstTarget = path[Math.min(1, path.length - 1)];
@@ -443,13 +509,19 @@ function renderRouteSummary(result) {
     add('Rota', result?.reason || result?.status || 'Henüz hesaplanmadı');
   } else {
     add('Toplam mesafe', Number.isFinite(stats.lengthM) ? `${stats.lengthM.toFixed(0)} m` : 'bilinmiyor');
-    if (Number.isFinite(stats.estimatedDurationS)) {
-      const mins = Math.floor(stats.estimatedDurationS / 60);
-      const secs = Math.round(stats.estimatedDurationS % 60);
+    const etaSeconds = Number.isFinite(stats.deadlineEstimatedDurationS)
+      ? stats.deadlineEstimatedDurationS
+      : Number.isFinite(stats.estimatedDurationS) ? stats.estimatedDurationS / sim.scenario.timeScale : null;
+    if (Number.isFinite(etaSeconds)) {
+      const mins = Math.floor(etaSeconds / 60);
+      const secs = Math.round(etaSeconds % 60);
       const timeStr = mins > 0 ? `${mins} dk ${secs} sn` : `${secs} sn`;
-      add('Tahmini yürüme süresi', `${timeStr} (0,8 m/s senaryo hızı)`);
+      const estimateNote = Number.isFinite(stats.deadlineEstimatedDurationS)
+        ? `duvar saati · ${stats.deadlineBaseSpeedMps.toFixed(1)} m/s senaryo temposu × ${stats.deadlineTimeScale.toFixed(1)}×; DTM eğim temposu varsayımı`
+        : `duvar saati · ${stats.durationAssumption?.value ?? SCENARIO.walkSpeedMps} m/s senaryo hızı × ${sim.scenario.timeScale.toFixed(1)}×; eğim temposu yok`;
+      add('Tahmini varış süresi', `${timeStr} (${estimateNote})`);
     } else {
-      add('Tahmini yürüme süresi', 'yok (bölgesel çözünürlük)');
+      add('Tahmini varış süresi', 'yok (bölgesel çözünürlük)');
     }
     if (Number.isFinite(stats.meanScore)) {
       const score = Math.round(stats.meanScore);
@@ -507,6 +579,78 @@ function handleRouteWorkerMessage({ data }) {
   if (!data || !routeWorkerRequests.has(data.id)) return;
   const pending = routeWorkerRequests.get(data.id);
   routeWorkerRequests.delete(data.id);
+  if (pending.kind === 'deadline') {
+    if (data.id !== latestDeadlinePlanId) return;
+    latestDeadlinePlanId = null;
+    if (deadlineRerouteButton) deadlineRerouteButton.disabled = false;
+    if ((sim.phase !== 'running' && sim.phase !== 'paused') || !autoDriveController) {
+      updateSimulationControls();
+      return;
+    }
+    if (data.type === 'error') {
+      if (deadlineStatus) deadlineStatus.textContent = `Rota yenilenemedi: ${data.reason || data.message || 'Worker hatası'}`;
+      showDeadlineWarning('Süreye göre rota hesaplanamadı. Mevcut rota değişmedi.');
+      updateSimulationControls();
+      return;
+    }
+    const result = data.result;
+    const elapsedS = Math.max(0, (sim.simTimeS - pending.startedSimTimeS) / pending.timeScale);
+    const currentDeadlineS = Number(deadlineMinutesInput?.value) * 60;
+    const remainingS = Math.max(0, currentDeadlineS - elapsedS);
+    const currentScale = sim.scenario.timeScale;
+    const rescaled = (result?.candidates ?? []).map((candidate) => ({
+      ...candidate,
+      etaSeconds: candidate.etaSeconds * pending.timeScale / currentScale,
+    }));
+    const feasible = rescaled.filter((candidate) => candidate.etaSeconds <= remainingS);
+    feasible.sort((a, b) => b.minScore - a.minScore || b.meanScore - a.meanScore || b.etaSeconds - a.etaSeconds);
+    const selected = feasible[0];
+    if (!selected || selected.route?.mode !== 'eva_walkability') {
+      if (deadlineStatus) deadlineStatus.textContent = 'Bu kalan sürede DTM tabanlı döngüsüz aday yok; mevcut rota korundu.';
+      showDeadlineWarning('Bu süre için planlama göstergesine göre tamamlanabilir bir rota bulunamadı. Süreyi artırın. Bu bir güvenlik uyarısı değildir.');
+      updateSimulationControls();
+      return;
+    }
+
+    const current = { xM: sim.pos.x, yM: sim.pos.y };
+    const goal = pending.endLocal;
+    const path = joinRoutePath(current, selected.route.path, goal);
+    const controller = createAutoDriveController(path);
+    if (!controller || !sim.updateRoute({ a: { x: current.xM, y: current.yM }, b: { x: goal.xM, y: goal.yM } }) || !sim.setRoutePath(path)) {
+      if (deadlineStatus) deadlineStatus.textContent = 'Yeni rota uygulanamadı; mevcut rota korundu.';
+      updateSimulationControls();
+      return;
+    }
+    activeRoute = {
+      ...selected.route,
+      stats: {
+        ...selected.route.stats,
+        deadlineEstimatedDurationS: selected.etaSeconds,
+        deadlineTimeScale: sim.scenario.timeScale,
+        deadlineBaseSpeedMps: sim.scenario.walkSpeedMps,
+      },
+    };
+    autoDriveController = controller;
+    minimapEndpoints = { ...minimapEndpoints, start: current };
+    endpointRevision++;
+    minimapController.setEndpoints(minimapEndpoints);
+    minimapStartLabel.textContent = `${current.xM.toFixed(1)} m doğu, ${current.yM.toFixed(1)} m kuzey (güncel konum)`;
+    autoDriveState = autoDriveController.update(current, layers.dtm.sampleSlope(current.xM, current.yM));
+    if (autoDriveState && activeView === '3d') {
+      camera3d.yawRad = autoDriveState.headingRad;
+      sim.headingRad = autoDriveState.headingRad;
+    }
+    preparePlannedRouteGuide();
+    minimapController.setPlanning({ heatmap: routeHeatmap, heatmapVisible: minimapHeatmapToggle.checked, route: activeRoute.path, segments: activeRoute.segments });
+    renderRouteSummary(activeRoute);
+    const leftover = Math.max(0, remainingS - selected.etaSeconds);
+    const scoreText = `${Math.round(selected.minScore)}/100 min · ${Math.round(selected.meanScore)}/100 ortalama EVA göstergesi (yaklaşık 1 m DTM, senaryo K=${selected.costK})`;
+    if (deadlineStatus) {
+      deadlineStatus.textContent = `Döngüsüz aday uygulandı: tahmini ${formatDuration(selected.etaSeconds)}, ${scoreText}. ${leftover > 20 ? `İstenen süreden ${formatDuration(leftover)} kısa; DTM'de daha uzun, daha yüksek puanlı aday bulunmadı.` : ''} Güvenli rota garantisi değildir.`;
+    }
+    updateSimulationControls();
+    return;
+  }
   if (pending.kind === 'init') {
     if (data.id !== pendingInitId) return;
     pendingInitId = null;
@@ -588,8 +732,10 @@ function ensureRouteWorker() {
     routeWorkerReady = false;
     pendingInitId = null;
     pendingPlanId = null;
+    latestDeadlinePlanId = null;
     latestExplainId = null;
     routeWorkerRequests.clear();
+    if (deadlineRerouteButton) deadlineRerouteButton.disabled = false;
     minimapStatus.textContent = `Rota Worker kullanılamıyor: ${event.message || 'çalışma hatası'}.`;
     updateRouteButton();
   });
@@ -659,7 +805,7 @@ function planMinimapRoute() {
     id,
     startLocal: minimapEndpoints.start,
     endLocal: minimapEndpoints.end,
-    options: { preference: prefKey },
+    options: { preference: prefKey, scenarioSpeedMps: SCENARIO.walkSpeedMps },
   });
 }
 
@@ -1530,6 +1676,7 @@ const { keys } = bindControls({
 
 startSimulationButton?.addEventListener('click', () => { void startSimulation(); });
 stopSimulationButton?.addEventListener('click', resetSimulationToSettings);
+deadlineRerouteButton?.addEventListener('click', requestDeadlineRoute);
 autoDriveToggle?.addEventListener('change', () => {
   if (!autoDriveNote) return;
   autoDriveNote.textContent = autoDriveToggle.checked
@@ -1623,7 +1770,7 @@ function frame(now) {
   }
   if (activeView === '3d') {
     const move = autoDriveState && autoDriveController
-      ? { moveX: autoDriveState.moveX, moveY: autoDriveState.moveY }
+      ? { moveX: latestDeadlinePlanId === null ? autoDriveState.moveX : 0, moveY: latestDeadlinePlanId === null ? autoDriveState.moveY : 0 }
       : cameraRelativeMovement(camera3d.yawRad, keys);
     sim.stepFirstPerson(dt, {
       ...move,
@@ -1638,8 +1785,8 @@ function frame(now) {
   } else {
     sim.step(dt, autoDriveController
       ? {
-        moveX: autoDriveState?.moveX ?? 0,
-        moveY: autoDriveState?.moveY ?? 0,
+        moveX: latestDeadlinePlanId === null ? autoDriveState?.moveX ?? 0 : 0,
+        moveY: latestDeadlinePlanId === null ? autoDriveState?.moveY ?? 0 : 0,
         headingRad: autoDriveState?.headingRad,
         walkSpeedMps: SCENARIO.walkSpeedMps * (autoDriveState?.paceFactor ?? 1),
       }

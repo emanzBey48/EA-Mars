@@ -56,12 +56,49 @@ export class MarswalkSim {
   setRoute(route) {
     if (!route?.a || !route?.b || ![route.a.x, route.a.y, route.b.x, route.b.y].every(Number.isFinite)) return false;
     this.route = { a: { ...route.a }, b: { ...route.b } };
+    this.routePath = null;
+    this.routePathCumulativeM = null;
     const pad = this.scenario.roamLimitM;
     this.bounds = {
       xMin: Math.min(route.a.x, route.b.x) - pad, xMax: Math.max(route.a.x, route.b.x) + pad,
       yMin: Math.min(route.a.y, route.b.y) - pad, yMax: Math.max(route.a.y, route.b.y) + pad,
     };
     this.restart();
+    return true;
+  }
+
+  setRoutePath(path) {
+    if (!Array.isArray(path) || path.length < 2 || path.some((p) => !Number.isFinite(p?.xM) || !Number.isFinite(p?.yM))) return false;
+    const points = path.map((p) => ({ x: p.xM, y: p.yM }));
+    const cumulative = [0];
+    for (let i = 1; i < points.length; i++) {
+      cumulative.push(cumulative[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+    }
+    this.routePath = points;
+    this.routePathCumulativeM = cumulative;
+    this.route.a = { ...points[0] };
+    this.route.b = { ...points.at(-1) };
+    const pad = this.scenario.roamLimitM;
+    let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+    for (const point of points) {
+      xMin = Math.min(xMin, point.x); xMax = Math.max(xMax, point.x);
+      yMin = Math.min(yMin, point.y); yMax = Math.max(yMax, point.y);
+    }
+    this.bounds = {
+      xMin: xMin - pad, xMax: xMax + pad,
+      yMin: yMin - pad, yMax: yMax + pad,
+    };
+    return true;
+  }
+
+  updateRoute(route) {
+    if (!route?.a || !route?.b || ![route.a.x, route.a.y, route.b.x, route.b.y].every(Number.isFinite)) return false;
+    this.route = { a: { ...route.a }, b: { ...route.b } };
+    const pad = this.scenario.roamLimitM;
+    this.bounds = {
+      xMin: Math.min(route.a.x, route.b.x) - pad, xMax: Math.max(route.a.x, route.b.x) + pad,
+      yMin: Math.min(route.a.y, route.b.y) - pad, yMax: Math.max(route.a.y, route.b.y) + pad,
+    };
     return true;
   }
 
@@ -350,6 +387,36 @@ export class MarswalkSim {
   setPosition(x, y) { this.pos = { x, y }; }
 
   metrics() {
+    if (Array.isArray(this.routePath) && this.routePath.length >= 2 && Array.isArray(this.routePathCumulativeM)) {
+      let closest = null;
+      for (let i = 1; i < this.routePath.length; i++) {
+        const a = this.routePath[i - 1], b = this.routePath[i];
+        const candidate = pointToSegment(this.pos.x, this.pos.y, a.x, a.y, b.x, b.y);
+        if (!closest || candidate.distance < closest.distance) {
+          closest = {
+            distance: candidate.distance,
+            t: candidate.t,
+            segmentIndex: i - 1,
+            point: candidate.closest,
+          };
+        }
+      }
+      const routeLengthM = this.routePathCumulativeM.at(-1);
+      const progressM = closest
+        ? this.routePathCumulativeM[closest.segmentIndex] + closest.t * (this.routePathCumulativeM[closest.segmentIndex + 1] - this.routePathCumulativeM[closest.segmentIndex])
+        : 0;
+      const distToEndM = Math.hypot(this.pos.x - this.route.b.x, this.pos.y - this.route.b.y);
+      return {
+        routeLengthM,
+        deviationM: closest?.distance ?? 0,
+        outsideCorridor: (closest?.distance ?? 0) > this.corridorHalfWidthM,
+        corridorHalfWidthM: this.corridorHalfWidthM,
+        progressM,
+        progressFrac: routeLengthM > 0 ? progressM / routeLengthM : 0,
+        distToEndM,
+        closestPoint: { xM: closest?.point.x ?? this.pos.x, yM: closest?.point.y ?? this.pos.y },
+      };
+    }
     const { a, b } = this.route;
     const s = pointToSegment(this.pos.x, this.pos.y, a.x, a.y, b.x, b.y);
     return {

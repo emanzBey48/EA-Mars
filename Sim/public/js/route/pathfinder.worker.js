@@ -1,6 +1,7 @@
 // Worker boundary for route planning. Cost-field preparation stays off the UI thread.
 import { handlePlanMessage } from './pathfinder.js';
 import { buildFieldForWindow, createDemWindow, explainLocal, planWalkingRoute } from './route-service.js';
+import { planDeadlineRoutes } from './deadline-planner.js';
 import {
   REFERENCE_PREFERENCE_ID, describeRoutePreference, planRouteVariants,
   resolveRoutePreferenceId, routePreferenceParams,
@@ -103,6 +104,20 @@ export function attachWorker(scope) {
           window, startLocal: message.startLocal, endLocal: message.endLocal, budget: message.budget, preferences,
         });
         scope.postMessage({ type: 'variants-result', id, result });
+        return;
+      }
+      if (message.type === 'plan-deadline-routes') {
+        if (!window) throw new Error('önce init-window gönderilmeli');
+        const result = planDeadlineRoutes({
+          window,
+          referenceField: field,
+          startLocal: message.startLocal,
+          endLocal: message.endLocal,
+          deadlineSeconds: message.deadlineSeconds,
+          walkSpeedMps: message.walkSpeedMps,
+          timeScale: message.timeScale,
+        });
+        scope.postMessage({ type: 'deadline-result', id, result });
         return;
       }
       if (message.type === 'explain-cell') {

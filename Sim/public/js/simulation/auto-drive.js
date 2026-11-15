@@ -1,13 +1,9 @@
 // Deterministic route-following controller for the presentation simulation.
 // It follows the active planner polyline; pace variation is an explicit scenario heuristic.
-
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+import { paceFactorForSlope } from './walk-pace.js';
 
 export function createAutoDriveController(path, {
   waypointRadiusM = 1.2,
-  slopeComfortDeg = 5,
-  slopeSlowdownPerDeg = 0.018,
-  minPaceFactor = 0.62,
 } = {}) {
   if (!Array.isArray(path) || path.length < 2 || path.some((p) => !Number.isFinite(p?.xM) || !Number.isFinite(p?.yM))) {
     return null;
@@ -32,9 +28,7 @@ export function createAutoDriveController(path, {
       const distanceM = Math.hypot(dx, dy);
       const slopeDeg = slope?.status === 'ok' && Number.isFinite(slope.value) ? Math.max(0, slope.value) : null;
       // Scenario-only pace adjustment; no empirical suited-astronaut gait model is claimed.
-      const paceFactor = slopeDeg === null
-        ? 1
-        : clamp(1 - Math.max(0, slopeDeg - slopeComfortDeg) * slopeSlowdownPerDeg, minPaceFactor, 1);
+      const paceFactor = paceFactorForSlope(slopeDeg);
       return Object.freeze({
         moveX: distanceM > 1e-6 ? dx / distanceM : 0,
         moveY: distanceM > 1e-6 ? dy / distanceM : 0,

@@ -34,7 +34,12 @@ export function bindControls({
   const triggerRestart = () => { clearKeys(); onRestart(); };
 
   window.addEventListener('keydown', (e) => {
-    if (e.target instanceof HTMLInputElement) return;
+    // Let native controls and disclosure summaries keep their normal keyboard behavior.
+    // The document-level movement shortcuts remain available when focus is on the scene/body.
+    if (e.target instanceof Element) {
+      if (e.target.closest('input, select, textarea, [contenteditable="true"]')) return;
+      if ((e.code === 'Space' || e.code === 'Enter') && e.target.closest('button, summary, a[href]')) return;
+    }
     const k = KEYMAP[e.code];
     if (k) { keys[k] = true; e.preventDefault(); return; }
     if (e.code === 'Space' && isFirstPerson()) {
@@ -76,14 +81,13 @@ export function bindControls({
     onZoom(e.deltaY < 0 ? 1.15 : 1 / 1.15);
   }, { passive: false });
 
-  view2dBtn?.addEventListener('click', (e) => { onViewChange('2d'); e.currentTarget.blur(); });
+  view2dBtn?.addEventListener('click', () => { onViewChange('2d'); });
   view3dBtn?.addEventListener('click', (e) => {
     if (!e.currentTarget.disabled) onViewChange('3d');
-    e.currentTarget.blur();
   });
 
-  pauseBtn.addEventListener('click', (e) => { onTogglePause(); e.currentTarget.blur(); });
-  restartBtn.addEventListener('click', (e) => { triggerRestart(); e.currentTarget.blur(); });
+  pauseBtn.addEventListener('click', () => { onTogglePause(); });
+  restartBtn.addEventListener('click', () => { triggerRestart(); });
 
   corridorInput.min = corridorMin;
   corridorInput.max = corridorMax;

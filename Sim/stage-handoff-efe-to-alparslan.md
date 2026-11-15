@@ -66,16 +66,21 @@ Yeni pass gerekirse 8 ve sonrası kullanılır. Pass 4 erken döner; pass 7'nin 
 - Rota süresi tutarsızlığı: `route-service.js:301` (0,8 m/s) ile `config.js:5` (1,2 m/s). `main.js:348` sabit metni de bunu yazıyor.
 
 **Efe:**
-- K1-4 Viking MDIM 2.1 lisans/atıf teyidi (elle, USGS sayfası). Metin yoksa "belirtilmemiş" kalır.
 - K2-5 son gerçekçilik turu (önce/sonra ekran görüntüleri).
-- K3-4 rig `left*` adları fiziksel sağ tarafta (`side` metadatası var; renderer/main kullanımı gözden geçirilmedi).
-- K3-6: `stage39-ortho-diagnosis.md` "Yazar: Efe" ifadesi düzeltilecek; bu rapor Efe'nin değildir. Ayrıca "0,0 m projeksiyon sapması" aritmetik tutarlılıktır, bağımsız kanıt değildir; korelasyon r≈0,40 zayıftır. `stage34b` raporundaki "costParams iletilir" ifadesi düzeltme öncesinden kalmadır.
+
+**Efe tamamladı (ayrı dalda, bu dalın ancestor'ı değil):**
+- K1-4 ve K3-4: `codex/efe-k1-4` dalı, commit `740e316` push edildi. Viking MDIM için USGS Astropedia metadata alanları ve kaynak URL'si kaydedildi. Rig taraf denetiminde renderer/main kullanıcıya `side` etiketi üretmiyor; geriye uyum için `left*` kimlikleri korunmalı.
+
+**Alparslan tamamladı:**
+- K3-6 rapor düzeltmesi `9e13043` commit'inde tamamlandı: `stage39-ortho-diagnosis.md` yazarı düzeltildi ve 0,0 m değeri aritmetik katalog/grid tutarlılığı olarak etiketlendi. `stage34b` costParams notu da düzeltildi.
+- K3-7/K5-7: `c6ab77d` USGS Mars 2020 TRN HiRISE 1 m DTM'yi etkin yüzey yaptı. `config.js` ve DTM metadata'sı Mars equipotential surface (MOLA areoid / DeltaGeoid) datumunu resmi PDS3 label URL'siyle eşliyor; legacy HiRISE DTM fallback olarak korunuyor.
+- K3-9: `c6ab77d` planner, terrain ve raporları etkin grid'e birleştirdi. Ortomozaik ile etkin DTM hizası yine doğrulanmış sayılmaz (K3-8).
 
 **Açık veri/karar:**
-- **Aktif arazi = legacy fallback; karar bekleyen konu (K3-7):** Ekranda gösterilen arazi legacy PDS3 DTEEC yedek DTM'dir (`data/legacy-hirise/`, 1669×1129, ~1,0097 m/px). USGS 1 m adayı (`data/dtm_subset.json`, 1676×1135) `needs_review_verticalReference` nedeniyle fail-closed reddedilip legacy'ye düşülüyor (`surface/registry.js` `resolveActiveProvider`). Karar: legacy kalsın mı, yoksa USGS 1 m 'datum doğrulanmadı' etiketiyle (`needs_review`) mi etkinleştirilsin? 38B ile bağlantılı; ürün kararı kullanıcıdadır.
+- **Aktif arazi (K3-7):** `c6ab77d` sonrası etkin provider USGS Mars 2020 TRN HiRISE 1 m DTM'dir; legacy DTM yedektir. Güncel UI/README/source bu davranış için esas alınmalı.
 - **Ortomozaik ↔ aktif DTM hizası ölçülmedi (K3-8):** 21B/39A ölçümleri USGS adayı penceresinde yapıldı. Legacy DTEEC farklı çerçeve (yarıçap 3394,84 km, merkez 77,44°E, standart enlem 15°; USGS: 3396,19 km, 0°E, 0°). Köprü ve ölçüm yapılana kadar hizalı denmez.
-- **Analizlerin aktif DTM'de yeniden koşulması (K3-9):** kabartma (35A), rota doğrulama (23C), tercih tablosu, `relief-report` ve ufuk dikiş ölçümü (37A) USGS adayında yapıldı.
-- Datum: `config.js:56` `verticalDatumVerified: true`; `data/dtm_subset.json` `false`. Kanıt yoksa `false` olmalı (K3-5).
+- **Analizlerin etkin DTM'de yeniden koşulması (K3-9):** `c6ab77d` planner, terrain ve raporları etkin grid'e birleştirdi; sayısal sonuçlar için güncel README ve analiz raporlarını kullan.
+- **Düşey datum (K3-5):** Eski uyuşmazlık notu `c6ab77d` ile güncellendi. Güncel config ve DTM metadata'sını birlikte kontrol et; kod PDS3 label URL'siyle Mars equipotential surface / MOLA areoid-DeltaGeoid ifadesini belgeliyor.
 - Göz yüksekliği: kod 1,48 m (`camera.js:9`); `e9a0a78` mesajı 1,75 m. Kod esas alındı.
 - Ortomozaik uyarı metni (`hud.js:104`) eski JP2 bayrağına bağlı; WMTS katmanı ayrı sunulurken iki çelişkili mesaj görünüyor.
 

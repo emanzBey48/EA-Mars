@@ -180,6 +180,8 @@ export class MarswalkSim {
     const dtSim = this.advanceSimClock(dt, this.airborne || this.landingRecovery || jumpStarts);
 
     // Landing recovery timer: elapsed in scenario time
+    const recoveryWasActive = this.landingRecovery;
+    const recoveryTimerBeforeStepS = this.landingRecoveryTimerS;
     if (this.landingRecovery && dtSim > 0) {
       this.landingRecoveryTimerS = Math.max(0, this.landingRecoveryTimerS - dtSim);
       if (this.landingRecoveryTimerS <= 0) {
@@ -199,39 +201,69 @@ export class MarswalkSim {
       }
     }
 
+    let airborneDtSim = this.airborne ? dtSim : 0;
+    let groundedDtSim = 0;
+    let landedThisStep = false;
     if (this.airborne && this.bodyWorldZReferenceM !== null && dtSim > 0) {
-      const previousVerticalSpeedMps = this.verticalSpeedMps;
-      this.verticalSpeedMps -= this.scenario.marsGravityMps2 * dtSim;
-      this.heightAboveReferenceM += (previousVerticalSpeedMps + this.verticalSpeedMps) * 0.5 * dtSim;
-      if (this.heightAboveReferenceM <= 0 && sampleKnown) {
+      const gravity = this.scenario.marsGravityMps2;
+      const height = this.heightAboveReferenceM;
+      const velocity = this.verticalSpeedMps;
+      // Solve h + v*t - 1/2*g*t^2 = 0 instead of snapping contact to a frame
+      // boundary. This keeps the ballistic duration and the horizontal flight
+      // distance stable as rendering frame time changes.
+      const impactDtSim = gravity > 0
+        ? (velocity + Math.sqrt(Math.max(0, velocity * velocity + 2 * gravity * height))) / gravity
+        : Infinity;
+      if (sampleKnown && Number.isFinite(impactDtSim) && impactDtSim >= 0 && impactDtSim <= dtSim) {
+        airborneDtSim = impactDtSim;
+        groundedDtSim = dtSim - impactDtSim;
         this.heightAboveReferenceM = 0;
         this.verticalSpeedMps = 0;
         this.grounded = true;
         this.airborne = false;
+        landedThisStep = true;
         const recDur = this.scenario.landingRecoveryDurationS ?? 0.25;
         if (recDur > 0) {
           this.landingRecovery = true;
-          this.landingRecoveryTimerS = recDur;
+          this.landingRecoveryTimerS = Math.max(0, recDur - groundedDtSim);
+          if (this.landingRecoveryTimerS === 0) this.landingRecovery = false;
         } else {
           this.landingRecovery = false;
           this.landingRecoveryTimerS = 0;
         }
+      } else {
+        this.verticalSpeedMps = velocity - gravity * dtSim;
+        this.heightAboveReferenceM = height + velocity * dtSim - 0.5 * gravity * dtSim * dtSim;
       }
     }
 
     this.simTimeS += dtSim;
 
+    let recoveryStartVx = this.horizontalVelocityXMps;
+    let recoveryStartVy = this.horizontalVelocityYMps;
+    let recoveryMotionDtSim = 0;
+    const recoveryDurationS = Math.max(0, this.scenario.landingRecoveryDurationS ?? 0.25);
+    let recoveryTargetVx = null;
+    let recoveryTargetVy = null;
     if (this.airborne) {
       // In ballistic flight, horizontal velocity is conserved; mid-air braking is unphysical without thrusters.
-    } else if (this.landingRecovery) {
+    } else if (recoveryWasActive || this.landingRecovery || landedThisStep) {
       // During landing recovery, ground velocity smoothly equalizes toward commanded ground input
       const targetSpeed = moving ? this.scenario.walkSpeedMps : 0;
-      const targetVx = moving ? (moveX / moveLength) * targetSpeed : 0;
-      const targetVy = moving ? (moveY / moveLength) * targetSpeed : 0;
-      const recDur = this.scenario.landingRecoveryDurationS ?? 0.25;
-      const blendFactor = recDur > 0 ? Math.min(1, Math.max(0, dtSim / recDur)) : 1;
-      this.horizontalVelocityXMps += (targetVx - this.horizontalVelocityXMps) * blendFactor;
-      this.horizontalVelocityYMps += (targetVy - this.horizontalVelocityYMps) * blendFactor;
+      recoveryTargetVx = moving ? (moveX / moveLength) * targetSpeed : 0;
+      recoveryTargetVy = moving ? (moveY / moveLength) * targetSpeed : 0;
+      const recoveryDtSim = landedThisStep ? groundedDtSim : dtSim;
+      const recoveryRemainingS = landedThisStep
+        ? recoveryDurationS
+        : (recoveryWasActive ? recoveryTimerBeforeStepS : this.landingRecoveryTimerS);
+      recoveryMotionDtSim = recoveryDurationS > 0
+        ? Math.min(recoveryDtSim, recoveryRemainingS)
+        : 0;
+      const blendFactor = recoveryRemainingS > 0
+        ? Math.min(1, Math.max(0, recoveryMotionDtSim / recoveryRemainingS))
+        : 1;
+      this.horizontalVelocityXMps += (recoveryTargetVx - this.horizontalVelocityXMps) * blendFactor;
+      this.horizontalVelocityYMps += (recoveryTargetVy - this.horizontalVelocityYMps) * blendFactor;
     } else if (moving && dtSim > 0) {
       const nx = moveX / moveLength, ny = moveY / moveLength;
       const speed = this.scenario.walkSpeedMps;
@@ -243,9 +275,29 @@ export class MarswalkSim {
     }
 
     const currentSpeed = this.horizontalSpeedMps;
-    if (currentSpeed > 0 && dtSim > 0) {
-      const dx = this.horizontalVelocityXMps * dtSim;
-      const dy = this.horizontalVelocityYMps * dtSim;
+    if ((currentSpeed > 0 || Math.hypot(recoveryStartVx, recoveryStartVy) > 0) && dtSim > 0) {
+      const flightDt = landedThisStep ? airborneDtSim : (this.airborne ? dtSim : 0);
+      const groundedDt = landedThisStep ? groundedDtSim : 0;
+      const recoveryDt = landedThisStep ? groundedDt : (recoveryWasActive ? dtSim : 0);
+      const remainingAfterRecoveryDt = Math.max(0, recoveryDt - recoveryMotionDtSim);
+      const recoveryTargetX = recoveryTargetVx ?? this.horizontalVelocityXMps;
+      const recoveryTargetY = recoveryTargetVy ?? this.horizontalVelocityYMps;
+      // If touchdown occurs within this frame, travel with the conserved flight
+      // velocity until impact, then with the recovery-blended ground velocity.
+      const recoveryDx = recoveryWasActive || landedThisStep
+        ? (recoveryStartVx + this.horizontalVelocityXMps) * 0.5 * recoveryMotionDtSim +
+          recoveryTargetX * remainingAfterRecoveryDt
+        : 0;
+      const recoveryDy = recoveryWasActive || landedThisStep
+        ? (recoveryStartVy + this.horizontalVelocityYMps) * 0.5 * recoveryMotionDtSim +
+          recoveryTargetY * remainingAfterRecoveryDt
+        : 0;
+      const dx = landedThisStep
+        ? recoveryStartVx * flightDt + recoveryDx
+        : (recoveryWasActive ? recoveryDx : this.horizontalVelocityXMps * dtSim);
+      const dy = landedThisStep
+        ? recoveryStartVy * flightDt + recoveryDy
+        : (recoveryWasActive ? recoveryDy : this.horizontalVelocityYMps * dtSim);
       const nextX = Math.min(this.bounds.xMax, Math.max(this.bounds.xMin, this.pos.x + dx));
       const nextY = Math.min(this.bounds.yMax, Math.max(this.bounds.yMin, this.pos.y + dy));
       this.distanceWalkedM += Math.hypot(nextX - this.pos.x, nextY - this.pos.y);
@@ -289,8 +341,10 @@ export class MarswalkSim {
         const bodyWorldZM = this.bodyWorldZReferenceM + this.heightAboveReferenceM;
         this.bodyWorldZReferenceM = surface.value;
         this.heightAboveReferenceM = bodyWorldZM - surface.value;
-        if (this.heightAboveReferenceM > 0) {
+        if (this.heightAboveReferenceM > 0 || (this.airborne && this.verticalSpeedMps > 0)) {
           // A valid, lower surface confirms the retained body position is above ground.
+          // At exactly zero height, an upward take-off is still in flight (for example
+          // when the jump edge was processed on a zero-delta frame).
           this.airborne = true;
         } else {
           const wasAirborne = this.airborne;

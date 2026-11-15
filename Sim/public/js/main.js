@@ -62,6 +62,7 @@ let combinedArchiveMarkers = null;
 let markerMeshError = null;
 let lastSnapshot = null;
 let activeView = '2d';
+document.body.classList.add('view-2d');
 let hasEntered3dOnce = false;
 let viewRequestId = 0;
 let renderer3d = null;
@@ -648,6 +649,8 @@ try {
 
 function updateViewControls() {
   const is3d = activeView === '3d';
+  document.body.classList.toggle('view-3d', is3d);
+  document.body.classList.toggle('view-2d', !is3d);
   view2dBtn.setAttribute('aria-pressed', String(!is3d));
   view3dBtn.setAttribute('aria-pressed', String(is3d));
   view3dBtn.disabled = !renderer3d || !layers.dtm.available || Boolean(terrainMeshError);
@@ -1460,6 +1463,40 @@ btnDemoRestart?.addEventListener('click', () => {
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !document.pointerLockElement && presentationModeActive) {
     setPresentationMode(false);
+  }
+});
+
+const btnTogglePanel = $('btn-toggle-panel');
+btnTogglePanel?.addEventListener('click', () => {
+  const collapsed = document.body.classList.toggle('panel-collapsed');
+  btnTogglePanel.setAttribute('aria-pressed', String(!collapsed));
+  requestAnimationFrame(() => {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, mapWrap.clientWidth), h = Math.max(1, mapWrap.clientHeight);
+    if (activeView === '3d' && renderer3d) renderer3d.resize(w, h, dpr);
+  });
+});
+
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  const summary = target instanceof Element ? target.closest('summary') : null;
+  const details = summary?.parentElement;
+  if (details?.tagName === 'DETAILS' && !details.classList.contains('toolbar-settings') &&
+      (details.classList.contains('disclosure') || details.classList.contains('secondary-options'))) {
+    event.preventDefault();
+    details.open = true;
+    const isCollapsed = details.classList.toggle('is-collapsed');
+    if (!isCollapsed && details.matches('#panel > details.disclosure')) {
+      for (const card of document.querySelectorAll('#panel > details.disclosure')) {
+        if (card !== details) card.classList.add('is-collapsed');
+      }
+    }
+  }
+
+  for (const settingsEl of document.querySelectorAll('details.toolbar-settings[open]')) {
+    if (!(target instanceof Node) || !settingsEl.contains(target)) {
+      settingsEl.open = false;
+    }
   }
 });
 

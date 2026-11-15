@@ -89,22 +89,25 @@
         <button id="btn-demo-mode" class="btn-demo-mode" type="button" aria-pressed="false" title="Sunum ve Jüri Demo Modunu Aç/Kapat">🎬 Sunum Modu</button>
         <button id="btn-view-2d" type="button" aria-pressed="true">2D</button>
         <button id="btn-view-3d" type="button" aria-pressed="false" disabled>3D yükleniyor…</button>
+        <button id="btn-toggle-panel" type="button" aria-pressed="true" title="Yan Paneli Göster/Gizle">🗺️ Panel</button>
         <details class="toolbar-settings">
           <summary>Ayarlar</summary>
-        <select id="select-ortho-mode" title="HiRISE Ortomozaik Kaplama Modu" aria-label="HiRISE Ortomozaik Kaplama Modu">
-          <option value="hybrid" selected>Hibrit (HiRISE Orto + DTM Rölyef)</option>
-          <option value="ortho">HiRISE Ortomozaik (WMTS z17/z14)</option>
-          <option value="hillshade">DTM Gölgeli Kabartma (Hillshade)</option>
-        </select>
-        <label class="scale-selector-label" for="select-vertical-scale">Dikey Ölçek:</label>
-        <select id="select-vertical-scale" class="view-select" aria-label="Dikey ölçek ve kabartma abartısı" title="Dikey ölçek ve kabartma abartısı">
-          <option value="1" selected>1× Gerçek Ölçek (Bilimsel 1:1)</option>
-          <option value="2">2× Görsel Abartı (Sunum Parametresi)</option>
-          <option value="3">3× Görsel Abartı (Eski Sunum Parametresi)</option>
-        </select>
+          <div class="toolbar-settings-menu">
+            <select id="select-ortho-mode" title="HiRISE Ortomozaik Kaplama Modu" aria-label="HiRISE Ortomozaik Kaplama Modu">
+              <option value="hybrid" selected>Hibrit (HiRISE Orto + DTM Rölyef)</option>
+              <option value="ortho">HiRISE Ortomozaik (WMTS z17/z14)</option>
+              <option value="hillshade">DTM Gölgeli Kabartma (Hillshade)</option>
+            </select>
+            <label class="scale-selector-label" for="select-vertical-scale">Dikey Ölçek:</label>
+            <select id="select-vertical-scale" class="view-select" aria-label="Dikey ölçek ve kabartma abartısı" title="Dikey ölçek ve kabartma abartısı">
+              <option value="1" selected>1× Gerçek Ölçek (Bilimsel 1:1)</option>
+              <option value="2">2× Görsel Abartı (Sunum Parametresi)</option>
+              <option value="3">3× Görsel Abartı (Eski Sunum Parametresi)</option>
+            </select>
+          </div>
         </details>
       </div>
-      <div id="view-note" class="view-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. <span id="scale-indicator-text">Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).</span></div>
+      <div id="view-note" class="view-note visually-compact-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. <span id="scale-indicator-text">Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).</span></div>
       <div id="view-status" class="banner info" hidden role="status" aria-live="polite"></div>
       <div id="deviation-banner" class="banner warn" hidden role="alert"></div>
       <div id="arrived-banner" class="banner ok arrived-badge" hidden role="alert" aria-live="polite">
@@ -117,6 +120,10 @@
     </section>
 
     <aside id="panel">
+      <div class="quick-sim-bar">
+        <button id="btn-pause" type="button">Duraklat</button>
+        <button id="btn-restart" type="button">Yeniden başlat</button>
+      </div>
       <section class="card minimap-card" aria-labelledby="minimap-title">
         <h2 id="minimap-title">2D Mars ve Jezero minimap</h2>
         <p class="muted small minimap-intro">Jezero çevresinde başlangıç ve bitiş seçin, rota tercihini belirleyip planlayın. Sürükleyin; tekerlekle yakınlaştırın.</p>
@@ -128,7 +135,7 @@
           <button id="minimap-fit" type="button">Kapsama sığdır</button>
           <button id="minimap-fit-global" type="button" disabled>Mars globali göster</button>
         </div>
-        <details class="secondary-options">
+        <details open class="secondary-options is-collapsed">
           <summary>Katmanlar ve harita ayrıntıları</summary>
         <div class="minimap-layers" aria-label="Minimap katmanları">
           <label><input type="checkbox" checked disabled> HiRISE DTM hillshade</label>
@@ -159,14 +166,14 @@
         <dl id="minimap-route-summary" class="minimap-summary" aria-live="polite"><dt>Rota</dt><dd>Henüz hesaplanmadı</dd></dl>
         <p id="minimap-status" class="muted small" role="status" aria-live="polite">Başlangıç ve bitiş seçin; ardından planlayın.</p>
         <section id="minimap-cell-explanation" class="minimap-cell-explanation" aria-live="polite" hidden></section>
-        <details class="secondary-options">
+        <details open class="secondary-options is-collapsed">
           <summary>Harita açıklaması ve kaynak</summary>
           <p class="muted small">Eflatun tarama no-data/geçersiz hücreleri; koyu boş alan yüklenen DTM altkümesi dışını gösterir. Nokta seçimi bu alanlarda geçilebilirlik anlamına gelmez.</p>
           <p class="muted small">Kaynak: USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona. Ürün: USGS Mars 2020 TRN HiRISE DTM Mozaiği; Fergason vd. 2020, <a href="https://doi.org/10.5066/P9REJ9JN" target="_blank" rel="noreferrer">DOI: 10.5066/P9REJ9JN</a>.</p>
         </details>
       </section>
 
-      <details class="card disclosure">
+      <details open class="card disclosure is-collapsed">
         <summary><h2>Kontroller ve simülasyon</h2></summary>
         <ul class="keys">
           <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> hareket</li>
@@ -176,13 +183,9 @@
           <li><kbd>R</kbd> yeniden başlat</li>
           <li><kbd>+</kbd> / <kbd>−</kbd> / fare tekerleği yakınlaştırma (yalnız görünüm)</li>
         </ul>
-        <div class="buttons">
-          <button id="btn-pause" type="button">Duraklat</button>
-          <button id="btn-restart" type="button">Yeniden başlat</button>
-        </div>
       </details>
 
-      <details class="card scenario disclosure">
+      <details open class="card scenario disclosure is-collapsed">
         <summary><h2><span class="tag tag-scn">Senaryo/UI</span> Simülasyon durumu</h2></summary>
         <dl>
           <dt>Oyuncu konumu (yerel düzlem)</dt><dd id="v-pos">—</dd>
@@ -198,7 +201,7 @@
         <p class="muted small">Yerel düzlem: x doğu, y kuzey, metre; orijin Sol 120 / WB1. Mesafe ve koridor yerel equirectangular projeksiyon düzleminde hesaplanır; bu koridor bir güvenlik sınırı değildir. Saat yalnız simülasyon saatidir; duraklatmada durur, yeniden başlatmada sıfırlanır.</p>
       </details>
 
-      <details class="card computed disclosure">
+      <details open class="card computed disclosure is-collapsed">
         <summary><h2><span class="tag tag-calc">Hesaplanan</span> Oyuncu konumunda DTM</h2></summary>
         <dl>
           <dt>Kot</dt><dd id="v-elev">—</dd>
@@ -219,14 +222,14 @@
         <p class="muted small">Gösterge, geçerli DTM/planlama hücresine bağlıdır; rota kılavuzu veya EVA puanı güvenlik sertifikası değildir.</p>
       </section>
 
-      <details class="card route disclosure">
+      <details open class="card route disclosure is-collapsed">
         <summary><h2><span class="tag tag-route">Rota kökeni</span> Sol 120 → Sol 164</h2></summary>
         <p><b id="route-note"></b></p>
         <ul id="route-wps" class="small"></ul>
         <p class="muted small">Gerçek Perseverance traverse geometrisi (PDS PLACES) bu demoda kullanılmadı; ham PLACES dosyasına erişilemedi.</p>
       </details>
 
-      <details class="card archive disclosure">
+      <details open class="card archive disclosure is-collapsed">
         <summary><h2><span class="tag tag-arch">Arşiv ürünü</span> Katmanlar ve köken</h2></summary>
         <div id="scale-badge-container"></div>
         <label class="small"><input id="toggle-geology" type="checkbox" checked> Jeoloji sınırlarını göster (indikatiftir)</label>
@@ -240,7 +243,7 @@
         <p class="muted small">Mars Trek HiRISE ortomozaik katmanı, etkin DTM ile piksel hizası doğrulanınca açılabilir. Kaynak: USGS Astrogeology / NASA MRO HiRISE, NASA JPL Mars Trek. Lisans kaynakta belirtilmemiş.</p>
       </details>
 
-      <details class="card sources-card disclosure">
+      <details open class="card sources-card disclosure is-collapsed">
         <summary><h2 id="sources-title">Kaynaklar ve sınırlar</h2></summary>
         <p class="muted small">Kaynak, ürün kimliği, çözünürlük, lisans ve kullanım sınırları için <a href="/SOURCES.md" target="_blank" rel="noopener">tam kaynak dökümünü açın</a>. Kaynakta lisans yazmıyorsa “belirtilmemiş” olarak gösterilir.</p>
         <ul class="small sources-limits">
@@ -252,7 +255,7 @@
         <h3>Birincil bağlantılar</h3>
         <ul id="sources" class="small"></ul>
       </details>
-      <details class="card archive disclosure rover-disclosure">
+      <details open class="card archive disclosure rover-disclosure is-collapsed">
         <summary><h2>Perseverance arşiv fotoğrafları</h2></summary>
         <section id="rover-gallery" aria-label="Perseverance arşiv fotoğrafları"></section>
       </details>

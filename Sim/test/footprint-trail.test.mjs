@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createFootprintTrail,
+  FOOTPRINT_CONTOUR_FLOATS,
   FOOTPRINT_DEFAULTS,
   FOOTPRINT_INSTANCE_FLOATS,
+  FOOTPRINT_OUTLINE_POINT_COUNT,
   FOOTPRINT_QUAD_FLOATS,
 } from '../public/js/view/3d/footprint-trail.js';
 import { ASTRONAUT_RIG, poseAstronautRig } from '../public/js/view/3d/astronaut-rig.js';
@@ -59,6 +61,46 @@ test('footprint trail: left/right alternate, spacing is stride/2, lateral sign f
     const dx = inst(snap, i)[0] - inst(snap, i - 1)[0];
     assert.ok(Math.abs(dx - HALF_STEP) < 1e-4, `spacing ${i}`);
   }
+});
+
+test('footprint trail: boot-sole contour has 16 perimeter points inside the bounding quad; any unknown perimeter sample drops the print', () => {
+  const trail = createFootprintTrail({ sampleElevation: flat() });
+  walkStraight(trail, { toM: 2 }); // one footfall at 1.5 m, left side, heading 0
+  const snap = trail.getSnapshot();
+  assert.equal(snap.count, 1);
+  assert.equal(snap.shapePointCount, FOOTPRINT_OUTLINE_POINT_COUNT);
+  assert.equal(snap.soleContours.length, snap.count * FOOTPRINT_CONTOUR_FLOATS);
+  const q = quadOf(snap, 0);
+  const xs = [q[0], q[3], q[6], q[9]];
+  const ys = [q[1], q[4], q[7], q[10]];
+  const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const sole = Array.from(snap.soleContours.subarray(0, FOOTPRINT_CONTOUR_FLOATS));
+  // Index 0 is the centre; 1..16 are the perimeter. Heading 0 and a flat surface make contour xy equal footprint xy.
+  assert.ok(Math.abs(sole[0] - 1.5) < 1e-4 && Math.abs(sole[1] - LATERAL) < 1e-4, 'contour centre at the footprint centre');
+  for (let p = 1; p <= FOOTPRINT_OUTLINE_POINT_COUNT; p++) {
+    const x = sole[p * 3];
+    const y = sole[p * 3 + 1];
+    assert.ok(x >= minX - 1e-4 && x <= maxX + 1e-4 && y >= minY - 1e-4 && y <= maxY + 1e-4, `perimeter point ${p} lies inside the bounding quad`);
+  }
+  // Toe (+heading) reaches the bounding edge; heel stays behind the centre.
+  const xsPerimeter = Array.from({ length: FOOTPRINT_OUTLINE_POINT_COUNT }, (_, i) => sole[(i + 1) * 3]);
+  assert.ok(Math.max(...xsPerimeter) > 1.5 + 0.4 * FOOTPRINT_DEFAULTS.footprintLengthM);
+  assert.ok(Math.min(...xsPerimeter) < 1.5 - 0.4 * FOOTPRINT_DEFAULTS.footprintLengthM);
+
+  // Perimeter point 8 is the toe edge at (+a/2, -0.15 b) relative to the centre; a sampler hole there must reject the print.
+  const a = FOOTPRINT_DEFAULTS.footprintLengthM;
+  const b = FOOTPRINT_DEFAULTS.footprintWidthM;
+  const holeX = 1.5 + a / 2;
+  const holeY = LATERAL - 0.15 * b;
+  const holed = createFootprintTrail({
+    sampleElevation: (x, y) => (Math.abs(x - holeX) < 1e-9 && Math.abs(y - holeY) < 1e-9)
+      ? { status: 'nodata', value: null }
+      : { status: 'ok', value: BASE_Z },
+  });
+  walkStraight(holed, { toM: 2 });
+  const holedSnap = holed.getSnapshot();
+  assert.equal(holedSnap.count, 0, 'no footprint over an unknown perimeter sample');
+  assert.ok(holedSnap.counters.skippedUnknown >= 1);
 });
 
 test('footprint trail: heading rotates position; left of heading is physical left (+y at heading 0, -x at heading pi/2)', () => {

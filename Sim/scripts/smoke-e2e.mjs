@@ -58,6 +58,10 @@ try {
   };
   const send = (method, params = {}) => new Promise((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
   const evaluate = async (expr) => { const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.result?.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails)); return r.result?.result?.value; };
+  // Text checks (1, 5a, 5b) read the rendered text with every <details> temporarily opened: the product
+  // keeps its labels inside collapsed disclosures (controls, layer cards, scenario/computed notes), and
+  // innerText omits closed content. Open state is restored immediately, so the default view is unchanged.
+  const readTextWithDisclosuresOpen = (expr) => evaluate(`(() => { const ds = [...document.querySelectorAll('details')]; const prev = ds.map((d) => d.open); ds.forEach((d) => { d.open = true; }); try { return ${expr}; } finally { ds.forEach((d, i) => { d.open = prev[i]; }); } })()`);
   const VK = { KeyW: 87, KeyA: 65, KeyS: 83, KeyD: 68, KeyP: 80, KeyR: 82, Equal: 187, ArrowUp: 38 };
   const keyEvt = (type, code, key) => send('Input.dispatchKeyEvent', { type, code, key, windowsVirtualKeyCode: VK[code], nativeVirtualKeyCode: VK[code] });
   const press = async (code, key) => { await keyEvt('keyDown', code, key); await keyEvt('keyUp', code, key); await sleep(150); };
@@ -271,9 +275,10 @@ try {
   await sleep(300);
 
   // 1. Opens; map + controls visible + immutable WorldSnapshot check
-  const dom = await evaluate(`(() => { const c = document.getElementById('map'); const r = c.getBoundingClientRect(); const snap = window.marswalk.getSnapshot(); return { w: r.width, h: r.height, text: document.body.innerText, dtm: window.marswalk.layers.dtm.available, frozen: Object.isFrozen(snap) && Object.isFrozen(snap.astronaut) && Object.isFrozen(snap.route) && Object.isFrozen(snap.trail), zM: snap.astronaut.zM }; })()`);
+  const dom = await evaluate(`(() => { const c = document.getElementById('map'); const r = c.getBoundingClientRect(); const snap = window.marswalk.getSnapshot(); return { w: r.width, h: r.height, dtm: window.marswalk.layers.dtm.available, frozen: Object.isFrozen(snap) && Object.isFrozen(snap.astronaut) && Object.isFrozen(snap.route) && Object.isFrozen(snap.trail), zM: snap.astronaut.zM }; })()`);
+  const domText = await readTextWithDisclosuresOpen('document.body.innerText');
   await shot('01-start.png');
-  check('1 Uygulama açılıyor; harita kanvası, kontroller ve değiştirilemez WorldSnapshot hazır', dom.w > 400 && dom.h > 300 && dom.frozen && typeof dom.zM === 'number' && dom.zM < -2000 && /WASD|W\s*A\s*S\s*D/.test(dom.text.replace(/\n/g, ' ')) && dom.text.includes('yeniden başlat'), `kanvas ${dom.w}×${dom.h}, DTM=${dom.dtm}, frozen=${dom.frozen}, zM=${dom.zM?.toFixed(2)}`);
+  check('1 Uygulama açılıyor; harita kanvası, kontroller ve değiştirilemez WorldSnapshot hazır', dom.w > 400 && dom.h > 300 && dom.frozen && typeof dom.zM === 'number' && dom.zM < -2000 && /WASD|W\s*A\s*S\s*D/.test(domText.replace(/\n/g, ' ')) && domText.includes('yeniden başlat'), `kanvas ${dom.w}×${dom.h}, DTM=${dom.dtm}, frozen=${dom.frozen}, zM=${dom.zM?.toFixed(2)}`);
 
   // 2. Keyboard moves astronaut; clock runs; pause; restart
   let s0 = await state();
@@ -313,7 +318,7 @@ try {
   check('4f Geri yüklenince değerler dönüyor', /m \(Mars 2000/.test(nd.back.e) && /°/.test(nd.back.s));
 
   // 5. Labels and provenance
-  const text = await evaluate('document.body.innerText');
+  const text = await readTextWithDisclosuresOpen('document.body.innerText');
   const need = ['Arşiv ürünü', 'Hesaplanan', 'Senaryo/UI', 'Rota kökeni', 'Mars 2000', 'DTEEC_045994_1985_046060_1985_U01', 'Birim',
     'İki tarihsel waypoint arasında sadeleştirilmiş bağlantı; gerçek rover izi değil.', 'Ortogörüntü kullanılamıyor', 'ortogörüntü değil',
     'senaryo varsayımı', 'NASA operasyon sınırı değil', 'yerel equirectangular projeksiyon düzleminde hesaplanır', 'güvenlik sınırı değil'];

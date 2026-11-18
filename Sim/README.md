@@ -2,7 +2,7 @@
 
 Kullanıcı kontrollü, kısa (60–90 sn) bir Jezero yüzey keşif simülasyonu. Astronotu klavyeyle Sol 120 / WB1 waypoint'inden Sol 164 / Roubion waypoint'ine yürütürsünüz. **Mars fizik motoru, canlı NASA telemetrisi, güvenlik veya karar destek aracı değildir.** Jüri ve sınır notları için [`DEMO_NOTES.md`](DEMO_NOTES.md); son kabul kanıtı için [`stage-final-acceptance.md`](stage-final-acceptance.md); canlı yayınlama adımları için [`DEPLOYMENT.md`](DEPLOYMENT.md) dosyasına bakın.
 
-Uygulama klasörü: `Sim/` (depo kökünden `cd Sim`) · İngilizce/Türkçe üst proje tanıtımı: [`../README.md`](../README.md)
+Uygulama klasörü: `Sim/` (depo kökünden `cd Sim`) · İngilizce/Türkçe üst proje tanıtımı: [`../README.md`](../README.md) · 🚀 **Canlı Demo:** <https://emanzbey48.github.io/EA-Mars/>
 
 ## Gereksinimler
 

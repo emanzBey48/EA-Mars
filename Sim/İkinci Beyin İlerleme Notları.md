@@ -1,7 +1,8 @@
 # Marswalk — İkinci Beyin İlerleme Notları (Proje Kapanış ve Retrospektif)
 
 **Son Güncelleme:** 18 Kasım 2026  
-**Durum:** Hackathon tamamlandı — Derece alınamadı; Nihai Proje Durumu, Statik Dağıtım Hazırlığı ve Kapsamlı Retrospektif Kaydı  
+**Durum:** Hackathon tamamlandı — Derece alınamadı; Nihai Proje Durumu, Statik Dağıtım Hazırlığı, Canlı GitHub Pages Yayını ve Kapsamlı Retrospektif Kaydı  
+**Canlı Demo:** <https://emanzbey48.github.io/EA-Mars/>  
 **Kapsam:** NASA Space Apps Challenge 2026 — *Interplanetary Survival Guide: Martian Map*  
 **Kod Tabanı & Doğrulama:** `origin/codex/efe-visual-realism` (`6a6a27e` üzerine statik dağıtım ve dokümantasyon güncellemeleri), **769/769** birim testi PASS, preflight **HAZIR** (0 hata, 0 uyarı); tarayıcı smoke geçmişi (`6a6a27e` / `9a03250`): **38/38** PASS  
 **Notun Amacı:** Projenin başlangıcından hackathon teslimine ve hackathon sonrası statik yayınlama hazırlığına kadar geçen tüm teknik evrimini, tamamlanan 13+ faz ve F0–F13 vitrin özelliklerini, mimari kararları, bilimsel veri sınırlarını ve yarışma sonucunun derinlemesine retrospektif analizini tek bir doğrulanmış kaynakta toplamak.

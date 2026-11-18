@@ -1,11 +1,15 @@
 # Marswalk — Interplanetary Survival Guide: Martian Map
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-emanzbey48.github.io%2FEA--Mars-ff5722?style=flat-square&logo=github)](https://emanzbey48.github.io/EA-Mars/)
 [![NASA Space Apps 2026](https://img.shields.io/badge/NASA%20Space%20Apps%202026-Martian%20Map-e06d3b?style=flat-square)](#overview--genel-bak%C4%B1%C5%9F)
 [![Zero Dependencies](https://img.shields.io/badge/Dependencies-0%20(Vanilla%20ES%20Modules)-2ea44f?style=flat-square)](#architecture--module-map)
 [![Rendering](https://img.shields.io/badge/Rendering-WebGL2%20%2B%20Canvas%202D%20Fallback-007ec6?style=flat-square)](#key-features)
 [![Node.js >= 20](https://img.shields.io/badge/Node.js-%E2%89%A5%2020-339933?style=flat-square)](#quick-start-local-run--tests)
 [![Tests & Smoke](https://img.shields.io/badge/QA-Unit%20%26%20E2E%20Smoke%20Verified-1f883d?style=flat-square)](#quick-start-local-run--tests)
 [![Static Deploy Ready](https://img.shields.io/badge/Deploy-Static%20(Pages%20%7C%20CF%20%7C%20Netlify%20%7C%20Vercel)-6f42c1?style=flat-square)](#one-click--static-deployment)
+
+🚀 **Live Demo / Canlı Simülasyon:** [https://emanzbey48.github.io/EA-Mars/](https://emanzbey48.github.io/EA-Mars/)  
+Quick launch presets: [English (`?lang=en`)](https://emanzbey48.github.io/EA-Mars/?lang=en) · [Jury Demo (`?demo=1`)](https://emanzbey48.github.io/EA-Mars/?demo=1) · [Showreel (`?showreel=1`)](https://emanzbey48.github.io/EA-Mars/?showreel=1)
 
 > **User-controlled Mars exploration simulation over NASA/USGS Jezero Crater terrain — built with zero runtime dependencies.**  
 > **Not** a Mars physics engine, live NASA telemetry feed, rover command tool, or certified safe-route system.

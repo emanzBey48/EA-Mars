@@ -4,6 +4,17 @@ Kullanıcı kontrollü, kısa (60–90 sn) bir Jezero yüzey keşif simülasyonu
 
 Uygulama klasörü: `Sim/` (depo kökünden `cd Sim`) · İngilizce/Türkçe üst proje tanıtımı: [`../README.md`](../README.md) · 🚀 **Canlı Demo:** <https://emanzbey48.github.io/EA-Mars/>
 
+## Görsel Vitrin / Ekran Görüntüleri
+
+![3B Mars küresi giriş ekranı ve görev seçimi paneli](goruntu/globe.png)
+
+*1. **Etkileşimli 3B Mars Küresi ve Görev Seçimi** — USGS Astrogeology Viking MDIM 2.1 dokulu tam ekran 3B Mars küresi, prosedürel Samanyolu toz bandı ve yıldızlı uzay arka planı; sağda cam efektli `GÖREV SEÇİMİ` paneli, sol altta `TR | EN` dil anahtarı ve altta etkileşim ipucu çubuğu.*
+
+| 2. Birinci Şahıs Kask Görünümü ve Jezero HiRISE Arazisi | 3. Genişletilmiş Holografik Topo Minimap (`M` / `Topo`) |
+|---|---|
+| ![Kask vizörü içinden birinci şahıs Jezero HiRISE keşfi](goruntu/3d.png) | ![M tuşu ile %75 büyütülmüş Topo modunda holografik minimap](goruntu/topo%20map.png) |
+| Jezero HiRISE ~1 m regolit/çakıl arazisi üzerinde birinci şahıs kask vizörü ve astronot ön kolları; uzaktaki 3B waypoint işaretçilerine uzanan kesikli rota kılavuzu, üst-ortada `Simulation site: Jezero HiRISE` + `Crater floor · düz` biyom çipi, sol üstte 6 görüş modlu (`Normal`, `Optical`, `Thermal [MODEL]`, `Topo`, `Atmosphere [MODEL]`, `Radiation [MODEL]`) holografik minimap, sol altta `TR | EN` anahtarı ve sağ altta `Auto-drive: Off`. | `M` tuşuyla ekranın %75'ine genişletilmiş `Topo` modundaki holografik minimap: gerçek HiRISE DTM kotlarından türetilen 2 m aralıklı kontur çizgileri (`Kontur aralığı 2 m (her 5. çizgi kalın)`, no-data hücreler hariç), rota çizgisi (`Hedef: 687 m`) ve 6 görüş modu sekmesi. |
+
 ## Gereksinimler
 
 - **Node.js ≥ 20** (`npm test` ve yerel sunucu için). `npm run smoke` ve tarayıcı betiği için **Node.js ≥ 22** (genel `WebSocket`) ve yerel Edge veya Chrome gerekir.

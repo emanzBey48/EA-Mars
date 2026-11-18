@@ -1,0 +1,245 @@
+{
+  "schema": "marswalk.viking-mdim-pyramid.v1",
+  "generatedBy": "scripts/ingest-viking-mosaic.mjs",
+  "generatedAt": "2026-11-14T21:41:13.730Z",
+  "source": {
+    "file": "Mars_Viking_MDIM21_ClrMosaic_global_232m.tif",
+    "bytes": 12740936469,
+    "sha256": "61a5a2ee52c34f5cd76d4c8a45e6148b965514561bdd6bd06afe73130069adc3",
+    "sha256Method": "Full-file SHA-256 computed in the single streamed pass (header prefix, every strip, trailing bytes); all bytes hashed (bytesHashed equals file size).",
+    "headerSummary": {
+      "format": "BigTIFF",
+      "byteOrder": "little-endian",
+      "width": 92160,
+      "height": 46080,
+      "bands": 3,
+      "bitsPerSample": 8,
+      "compression": 1,
+      "photometric": 2,
+      "planarConfig": 1,
+      "rowsPerStrip": 1,
+      "stripCount": 46080,
+      "firstStripOffsets": [
+        738069,
+        1014549,
+        1291029,
+        1567509,
+        1843989,
+        2120469
+      ],
+      "dataStart": 738069,
+      "dataEnd": 12740936469,
+      "pixelScaleM": 231.5417872,
+      "tiepoint": {
+        "xM": -10669445.55419512,
+        "yM": 5334722.77709756,
+        "residualPx": 8.994059392059189e-12
+      },
+      "radiusM": 3396190,
+      "radiusMatchesInGeoDoubleParams": 2,
+      "geoKeys": {
+        "modelType": 1,
+        "rasterType": 1,
+        "semiMajorAxisM": 3396190
+      },
+      "geoAsciiText": "SimpleCylindrical Mars|GCS Name = GCS_Mars|Datum = D_Mars|Ellipsoid = Mars|Primem = Reference_Meridian||",
+      "noDataText": "0"
+    },
+    "stripCheck": {
+      "stripCount": 46080,
+      "expectedStrips": 46080,
+      "countMatches": true,
+      "contiguous": true,
+      "firstBreak": null,
+      "firstBadCount": null,
+      "totalBytesMatches": true,
+      "sumBytes": 12740198400,
+      "dataStart": 738069,
+      "dataEnd": 12740936469,
+      "withinFile": true,
+      "trailingBytes": 0
+    }
+  },
+  "projection": {
+    "type": "plate carree (equirectangular, lon/lat degrees), PixelIsArea, sphere R = 3396190 m",
+    "lonRangeDeg": [
+      -180,
+      180
+    ],
+    "latRangeDeg": [
+      90,
+      -90
+    ],
+    "pixelsPerDegree": 256,
+    "nativeMPerPx": 231.5417872,
+    "note": "Metre scale checked against R: 360/W deg x R x pi/180 = native pixel size."
+  },
+  "scheme": {
+    "tileSize": 256,
+    "baseColumns": 2,
+    "baseRows": 1,
+    "pathOrder": "tiles/{z}/{row}/{col}.png (z = level; row 0 = north; col 0 = west; same order as ortho-tiles)"
+  },
+  "levels": [
+    {
+      "z": 0,
+      "cols": 2,
+      "rows": 1,
+      "tiles": 2,
+      "worldPx": [
+        512,
+        256
+      ],
+      "mPerPx": 41677.521695999996,
+      "degPerPx": 0.703125,
+      "pngBytesTotal": 275494,
+      "pngBytesPerTileAvg": 137747,
+      "pngBytesMaxTile": 140294,
+      "alphaZeroFraction": 0,
+      "written": true
+    },
+    {
+      "z": 1,
+      "cols": 4,
+      "rows": 2,
+      "tiles": 8,
+      "worldPx": [
+        1024,
+        512
+      ],
+      "mPerPx": 20838.760847999998,
+      "degPerPx": 0.3515625,
+      "pngBytesTotal": 1074471,
+      "pngBytesPerTileAvg": 134309,
+      "pngBytesMaxTile": 140889,
+      "alphaZeroFraction": 0,
+      "written": true
+    },
+    {
+      "z": 2,
+      "cols": 8,
+      "rows": 4,
+      "tiles": 32,
+      "worldPx": [
+        2048,
+        1024
+      ],
+      "mPerPx": 10419.380423999999,
+      "degPerPx": 0.17578125,
+      "pngBytesTotal": 4115943,
+      "pngBytesPerTileAvg": 128623,
+      "pngBytesMaxTile": 148372,
+      "alphaZeroFraction": 0,
+      "written": true
+    },
+    {
+      "z": 3,
+      "cols": 16,
+      "rows": 8,
+      "tiles": 128,
+      "worldPx": [
+        4096,
+        2048
+      ],
+      "mPerPx": 5209.6902119999995,
+      "degPerPx": 0.087890625,
+      "pngBytesTotal": 15516150,
+      "pngBytesPerTileAvg": 121220,
+      "pngBytesMaxTile": 160034,
+      "alphaZeroFraction": 0,
+      "written": true
+    },
+    {
+      "z": 4,
+      "cols": 32,
+      "rows": 16,
+      "tiles": 512,
+      "worldPx": [
+        8192,
+        4096
+      ],
+      "mPerPx": 2604.8451059999998,
+      "degPerPx": 0.0439453125,
+      "pngBytesTotal": 57325172,
+      "pngBytesPerTileAvg": 111963,
+      "pngBytesMaxTile": 159229,
+      "alphaZeroFraction": 0,
+      "written": false
+    }
+  ],
+  "maxLevelSelection": {
+    "rule": "largest level z <= 4 whose cumulative output (z0..z plus regional PNG) is <= 41943040 bytes",
+    "requested": null,
+    "chosen": 3,
+    "budgetBytes": 41943040,
+    "cumulativeBytesByLevel": [
+      2230133,
+      3304604,
+      7420547,
+      22936697,
+      80261869
+    ],
+    "exceedsBudgetByExplicitRequest": false,
+    "streamLimitNote": "level 5 (z5) needs ~512 MiB of RGBA in memory and would be about 4x the level-4 PNG size; not produced."
+  },
+  "outputTotalBytes": 22936697,
+  "regional": {
+    "file": "regional-jezero-4deg-native.png",
+    "sizePx": [
+      1024,
+      1024
+    ],
+    "nativeMPerPx": 231.5417872,
+    "windowPixel": {
+      "col0": 65395,
+      "row0": 17807,
+      "cols": 1024,
+      "rows": 1024
+    },
+    "centrePixel": {
+      "col": 65907,
+      "row": 18319,
+      "lonDeg": 77.44940206,
+      "latDeg": 18.43906919,
+      "source": "config.js WAYPOINTS[0] (Sol 120 / WB1)"
+    },
+    "lonBoundsDeg": [
+      75.44921875,
+      79.44921875
+    ],
+    "latBoundsDeg": [
+      16.44140625,
+      20.44140625
+    ],
+    "bytes": 1954639,
+    "sha256": "2c3181318885aea87a456c9cddf8fdc1098b535aea99d6c106b4d48c80240c54",
+    "alphaZeroFraction": 0,
+    "label": "232 m/piksel: native resolution, not finer; yerel doku değildir."
+  },
+  "noData": {
+    "rule": "(0,0,0) = GDAL_NODATA 0 (all three bands zero); never averaged; blocks without valid pixels get alpha 0",
+    "scannedFullFile": true,
+    "totalPixels": 4246732800,
+    "allZeroPixels": 0,
+    "allZeroFraction": 0,
+    "anyZeroBandPixels": 0,
+    "anyZeroBandFraction": 0
+  },
+  "measurements": {
+    "elapsedSeconds": 53.5,
+    "rowsStreamed": 46080,
+    "bytesHashed": 12740936469,
+    "chunkRows": 64,
+    "peakRssMiB": 197.5,
+    "streamingBufferMiB": 148.9
+  },
+  "license": "belirtilmemiş",
+  "licenseEvidence": null,
+  "attribution": "Mars_Viking_MDIM21_ClrMosaic_global_232m.tif dosya adı: Viking MDIM 2.1 renkli küresel mozaiği; künye/lisans dosyada yok",
+  "notes": [
+    "ortogörüntü değildir; yükseklik verisi değildir; yerel doku olarak kullanılamaz (232 m/piksel)",
+    "Piramit düzeyleri 2:1 eşdikdörtgen karo şemasıdır (trek-tiles.js DEFAULT_SCHEME); z0 = 2x1 karo (512x256 dünya piksel).",
+    "Seviye 4 ve altı tek geçişte, alan-ağırlıklı kutu filtresiyle (oran 11,25) üretilir; üst seviyeler 2x2 kutu ile türetilir.",
+    "(0,0,0) = GDAL_NODATA 0: ortalamaya katılmaz; tüm bloğu no-data olan piksel alfa 0 olur, 0 renge ortalanmaz."
+  ]
+}

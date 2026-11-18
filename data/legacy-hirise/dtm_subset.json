@@ -1,0 +1,126 @@
+{
+  "generatedBy": "scripts/extract-dtm.mjs",
+  "generatedAt": "2026-11-12T16:19:15.078Z",
+  "sourceFile": {
+    "name": "DTEEC_045994_1985_046060_1985_U01.IMG",
+    "bytes": 380814764,
+    "modified": "2026-11-12T13:11:18.026Z"
+  },
+  "dataFile": "dtm_subset.f32",
+  "dataEncoding": "float32 little-endian, satır öncelikli, no-data bit deseni korunmuş",
+  "label": {
+    "productId": "DTEEC_045994_1985_046060_1985_U01",
+    "productVersionId": "1",
+    "dataSetId": "MRO-M-HIRISE-5-DTM-V1.0",
+    "sourceProductIds": "(ESP_045994_1985, ESP_046060_1985)",
+    "producer": "ALFRED MCEWEN, USGS-ASTROGEOLOGY",
+    "recordBytes": 26692,
+    "imagePointer": 2,
+    "lines": 14266,
+    "samples": 6673,
+    "bands": 1,
+    "sampleBits": 32,
+    "sampleType": "PC_REAL",
+    "offset": 0,
+    "scalingFactor": 1,
+    "missingConstantHex": "FF7FFFFB",
+    "validMin": -2679.2,
+    "validMax": -2388.31,
+    "note": "Pixel values in this file represent elevations in meters above the martian equipotential surface (Mars 2000 Datum) defined by Smith, et al. (2001). Conversion from pixel units to geophysical units is given by the keyvalues for SCALING_FACTOR and OFFSET. This DTM was produced using ISIS and SOCET Set (copyright BAE Systems) software as described in Kirk et al. (2008).",
+    "projectionType": "EQUIRECTANGULAR",
+    "latitudeType": "PLANETOCENTRIC",
+    "positiveLongitude": "EAST",
+    "radiusKm": 3394.8398133163,
+    "centerLatDeg": 15,
+    "centerLonDeg": 77.44,
+    "rotationDeg": 0,
+    "mapScaleM": 1.0096633268711,
+    "lineProjectionOffset": 1088495.5,
+    "sampleProjectionOffset": 3210.5000000001,
+    "minLatDeg": 18.305293550569,
+    "maxLatDeg": 18.548391096554,
+    "westLonDeg": 77.3833804,
+    "eastLonDeg": 77.50109494
+  },
+  "frameMatchesConfig": true,
+  "crsText": "Equirectangular, küre R=3394.8398133163 km (merkez enlemdeki yerel yarıçap), merkez meridyen 77.44°E, standart enlem 15°, planetosentrik, doğu-pozitif",
+  "window": {
+    "row0": 5915,
+    "col0": 3242,
+    "rows": 1669,
+    "cols": 1129,
+    "marginCells": 500
+  },
+  "coverage": {
+    "description": "Yüklenen alt küme: satır 5915–7583, sütun 3242–4370 (0 tabanlı). Ürünün tamamı 14266×6673 hücre, enlem 18.3053–18.5484°, boylam 77.3834–77.5011°E.",
+    "localBoundsM": {
+      "xMin": -505.79134195219183,
+      "xMax": 634.1185540852799,
+      "yMin": -1179.532125690952,
+      "yMax": 505.5959668569267
+    },
+    "latLonBounds": {
+      "north": 18.447602292188243,
+      "south": 18.419161855245324,
+      "west": 77.44056452883264,
+      "east": 77.46048181170927
+    }
+  },
+  "timeCoverage": "Stereo kaynak gözlemleri (ESP_045994_1985, ESP_046060_1985); gözlem kimlikleri yukarıda verilmiştir.",
+  "windowStats": {
+    "valid": 1884301,
+    "noData": 0,
+    "invalid": 0,
+    "min": -2592.83154296875,
+    "max": -2546.7431640625
+  },
+  "registration": {
+    "checked": true,
+    "sameDims": true,
+    "sameCrs": true,
+    "jp2RasterType": "PixelIsArea",
+    "pdsConvention": "PDS3: 1 tabanlı LINE/SAMPLE piksel merkezi; X=(SAMPLE−SAMPLE_PROJECTION_OFFSET)·MAP_SCALE, Y=(LINE_PROJECTION_OFFSET−LINE)·MAP_SCALE",
+    "jp2MinusPdsCenterOffsetPx": {
+      "col": 0.5,
+      "row": 0.5
+    },
+    "note": "Aynı boyut ve CRS: evet. JP2 GeoTIFF (PixelIsArea) ile DTM PDS etiketi arasında piksel merkezinde 0.500 sütun / 0.500 satır fark var (≈0.71 m). Uygulama örneklenen katman olan DTM’nin PDS etiketini esas alır; bu yarım piksellik belirsizlik konum/kot gösteriminde belirtilir."
+  },
+  "waypointCells": [
+    {
+      "id": "sol120-wb1",
+      "local": {
+        "x": 0,
+        "y": 0
+      },
+      "row": 6415,
+      "col": 3742,
+      "rowF": 6415.256988395238,
+      "colF": 3742.4504935864275
+    },
+    {
+      "id": "sol164-roubion",
+      "local": {
+        "x": 128.69232254761562,
+        "y": -674.0284385364503
+      },
+      "row": 7083,
+      "col": 3870,
+      "rowF": 7082.834408113034,
+      "colF": 3869.9111224144817
+    }
+  ],
+  "routeCheck": {
+    "lengthM": 686.204,
+    "samples": 681,
+    "nonOkElevationSamples": 0,
+    "slopeSamples": 681,
+    "elevMin": -2588.546,
+    "elevMax": -2568.352,
+    "elevStart": -2569.435,
+    "elevEnd": -2588.449,
+    "slopeMeanDeg": 4.691,
+    "slopeP90Deg": 8.36,
+    "slopeMaxDeg": 18.904
+  }
+}

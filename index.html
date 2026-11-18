@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marswalk — Interplanetary Survival Guide: Martian Map</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="css/globe.css">
+  <link rel="stylesheet" href="css/helmet.css">
+  <link rel="stylesheet" href="css/view-modes.css">
+  <link rel="stylesheet" href="js/view/holo-minimap.css">
+  <link rel="stylesheet" href="css/demo-flow.css">
+  <link rel="stylesheet" href="css/lang-switch.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Marswalk · Jezero</h1>
+      <p class="sub">Interplanetary Survival Guide: Martian Map — kullanıcı kontrollü keşif simülasyonu. Mars fizik motoru, canlı NASA telemetrisi veya güvenlik aracı değildir.</p>
+    </div>
+    <div class="header-actions">
+      <button id="btn-header-demo" class="demo-btn" type="button" aria-pressed="false" title="Sunum ve Jüri Demo Modunu Aç/Kapat" hidden>🎬 Sunum Modu</button>
+      <div class="phase" id="phase">Hazır</div>
+    </div>
+  </header>
+
+  <main>
+    <section id="mapwrap">
+      <canvas id="map" class="map-canvas" aria-label="Jezero 2D haritası ve astronot"></canvas>
+      <canvas id="map-3d" class="map-canvas" hidden aria-label="HiRISE DTM tabanlı Jezero 3D arazisi"></canvas>
+      <div id="presentation-hud" class="presentation-hud" hidden aria-label="Sunum ve Jüri Telemetri Kapsülü">
+        <div class="pres-header">
+          <div class="pres-title">
+            <span class="pres-badge">CANLI DEMO</span>
+            <span class="pres-heading">Marswalk · Jüri Sunum &amp; Keşif Modu</span>
+          </div>
+          <button id="btn-close-presentation" class="btn-pres-close" type="button" title="Sunum Modundan Çık (Esc)">✕ Kapat</button>
+        </div>
+        <div class="pres-actions">
+          <button id="btn-demo-tour" class="btn-pres-tour" type="button" title="Sol 120'den Sol 164'e A* EVA rotası hesapla ve 3D yürüyüşe geç">🚀 Örnek Görevi Başlat (Sol 120 → Sol 164)</button>
+          <button id="btn-demo-toggle-view" class="btn-pres-sec" type="button" title="2D Harita ve 3D Görünüm arasında geçiş yap">🔄 2D / 3D Görünüm</button>
+          <button id="btn-demo-restart" class="btn-pres-sec" type="button" title="Simülasyonu başlangıç noktasına döndür">↺ Başa Dön</button>
+        </div>
+        <div class="pres-grid">
+          <div class="pres-cell">
+            <span class="pres-lbl">Konum (WB1 Orijini)</span>
+            <span id="pres-pos" class="pres-val">—</span>
+          </div>
+          <div class="pres-cell">
+            <span class="pres-lbl">Rota İlerlemesi</span>
+            <span id="pres-progress" class="pres-val">—</span>
+          </div>
+          <div class="pres-cell">
+            <span class="pres-lbl">Yüzey Kotu (DTM)</span>
+            <span id="pres-elev" class="pres-val">—</span>
+          </div>
+          <div class="pres-cell">
+            <span class="pres-lbl">Yüzey Eğimi</span>
+            <span id="pres-slope" class="pres-val">—</span>
+          </div>
+          <div class="pres-cell">
+            <span class="pres-lbl">Yürünebilirlik Göstergesi</span>
+            <span id="pres-walkability" class="pres-val">—</span>
+          </div>
+          <div class="pres-cell">
+            <span class="pres-lbl">Senaryo Saati</span>
+            <span id="pres-clock" class="pres-val">—</span>
+          </div>
+          <div class="pres-cell pres-cell-wide">
+            <span class="pres-lbl">Dikey Ölçek</span>
+            <span id="pres-scale" class="pres-val">1× Gerçek Kot (1:1 Bilimsel)</span>
+          </div>
+        </div>
+        <div id="pres-guide-banner" class="pres-guide">Sol 120 (WB1) noktasındasınız. "Örnek Görevi Başlat" ile Sol 164 A* rotasını hesaplayıp 3D yürüyüşe başlayabilirsiniz.</div>
+        <div class="pres-controls-hint">
+          <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Yürü</span>
+          <span>🎯 Tıkla: Fare Bakışı</span>
+          <span><kbd>Space</kbd> Mars Sıçraması</span>
+          <span><kbd>M</kbd> Harita</span>
+          <span><kbd>P</kbd> Duraklat</span>
+          <span><kbd>Esc</kbd> Çıkış</span>
+        </div>
+      </div>
+      <div id="fp-reticle" class="fp-reticle" hidden aria-hidden="true">
+        <span class="reticle-ring"></span>
+        <span class="reticle-dot"></span>
+      </div>
+      <div id="fp-hud-hint" class="fp-hud-hint" hidden>
+        <span class="fp-hint-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Yürü</span>
+        <span class="fp-hint-item">🎯 Tıkla: Fare Bakışı</span>
+        <span class="fp-hint-item"><kbd>Space</kbd> Sıçra</span>
+        <span class="fp-hint-item"><kbd>M</kbd> Harita</span>
+        <span class="fp-hint-item"><kbd>P</kbd> Duraklat</span>
+        <span class="fp-hint-item"><kbd>Esc</kbd> Fareyi Bırak</span>
+      </div>
+      <div class="view-toolbar" role="group" aria-label="Harita görünümü">
+        <button id="btn-demo-mode" class="btn-demo-mode" type="button" aria-pressed="false" title="Sunum ve Jüri Demo Modunu Aç/Kapat">🎬 Sunum Modu</button>
+        <button id="btn-open-route-setup" type="button" title="Başlangıç/Bitiş ve Rota Kurulumunu Aç">🎯 Rota Kurulumu</button>
+        <button id="btn-view-2d" type="button" aria-pressed="true">2D</button>
+        <button id="btn-view-3d" type="button" aria-pressed="false" disabled>3D yükleniyor…</button>
+        <button id="btn-toggle-panel" type="button" aria-pressed="true" title="Yan Paneli Göster/Gizle">🗺️ Panel</button>
+        <details class="toolbar-settings">
+          <summary>Ayarlar</summary>
+          <div class="toolbar-settings-menu">
+            <select id="select-ortho-mode" title="HiRISE Ortomozaik Kaplama Modu" aria-label="HiRISE Ortomozaik Kaplama Modu">
+              <option value="hybrid" selected>Hibrit (HiRISE Orto + DTM Rölyef)</option>
+              <option value="ortho">HiRISE Ortomozaik (WMTS z17/z14)</option>
+              <option value="hillshade">DTM Gölgeli Kabartma (Hillshade)</option>
+            </select>
+            <label class="scale-selector-label" for="select-vertical-scale">Dikey Ölçek:</label>
+            <select id="select-vertical-scale" class="view-select" aria-label="Dikey ölçek ve kabartma abartısı" title="Dikey ölçek ve kabartma abartısı">
+              <option value="1" selected>1× Gerçek Ölçek (Bilimsel 1:1)</option>
+              <option value="2">2× Görsel Abartı (Sunum Parametresi)</option>
+              <option value="3">3× Görsel Abartı (Eski Sunum Parametresi)</option>
+            </select>
+          </div>
+        </details>
+      </div>
+      <div id="view-note" class="view-note visually-compact-note" hidden>Birinci şahıs: WASD ile yürü, 3D sahneye tıklayıp fareyle bak, Space ile küçük bir simülasyon sıçraması yap, P ile duraklat. Esc fare kilidini bırakır. <span id="scale-indicator-text">Dikey ölçek: 1× gerçek Mars kotu (bilimsel 1:1).</span></div>
+      <div id="view-status" class="banner info" hidden role="status" aria-live="polite"></div>
+      <div id="deviation-banner" class="banner warn" hidden role="alert"></div>
+      <div id="arrived-banner" class="banner ok arrived-badge" hidden role="alert" aria-live="polite">
+        <div class="arrived-title">🎯 Sol 164 / Roubion waypoint’ine ulaşıldı</div>
+        <div class="arrived-sub">Simülasyon hedef waypoint’e ulaştı; bu, tarihsel rover traversinin tamamlandığı anlamına gelmez. Yeniden başlatmak için <kbd>R</kbd>.</div>
+      </div>
+      <div id="raster-banner" class="banner info" hidden></div>
+      <div id="start-hint" class="hint">Başlangıç: <b>Sol 120 / WB1</b>. Hedef: <b>Sol 164 / Roubion</b>.<br>2D haritada WASD/oklarla hareket edin. 3D’de kamera yönüne göre yürüyün; senaryo saati ilk hareketle başlar.</div>
+      <div id="legend" class="legend"></div>
+      <div id="hud-minimap-widget" class="hud-minimap-widget" hidden aria-label="3D Oyun İçi Radar Minimap">
+        <div class="hud-minimap-header">
+          <span class="hud-minimap-title">🧭 MİNİMAP</span>
+          <span id="hud-minimap-dist" class="hud-minimap-dist">Hedef: —</span>
+          <div class="hud-minimap-actions">
+            <button id="hud-minimap-follow" type="button" class="hud-mm-btn" aria-pressed="true" title="Oyuncuyu Takip Et / Tüm Rotayı Göster">🎯</button>
+            <button id="hud-minimap-open-setup" type="button" class="hud-mm-btn hud-mm-route-btn" title="Yeni Başlangıç ve Bitiş Seç">Rota</button>
+          </div>
+        </div>
+        <canvas id="hud-minimap-canvas" class="hud-minimap-canvas" aria-label="3D oyun içi minimap"></canvas>
+      </div>
+    </section>
+
+    <aside id="panel">
+      <div class="quick-sim-bar">
+        <button id="btn-pause" type="button">Duraklat</button>
+        <button id="btn-restart" type="button">Yeniden başlat</button>
+      </div>
+      <section class="card minimap-card" aria-labelledby="minimap-title">
+        <h2 id="minimap-title">2D Mars ve Jezero minimap</h2>
+        <p class="muted small minimap-intro">Jezero çevresinde başlangıç ve bitiş seçin, rota tercihini belirleyip planlayın. Sürükleyin; tekerlekle yakınlaştırın.</p>
+        <div id="panel-map-home">
+          <canvas id="minimap-canvas" aria-label="Viking MDIM 2.1 küresel bağlamı ve Jezero HiRISE DTM minimap"></canvas>
+          <div class="minimap-controls" role="group" aria-label="Minimap kontrolleri">
+            <button id="minimap-pick-start" type="button">Başlangıç seç</button>
+            <button id="minimap-pick-end" type="button">Bitiş seç</button>
+            <button id="minimap-clear-points" type="button">Noktaları temizle</button>
+            <button id="minimap-fit" type="button">Kapsama sığdır</button>
+            <button id="minimap-fit-global" type="button" disabled>Mars globali göster</button>
+          </div>
+        </div>
+        <details open class="secondary-options is-collapsed">
+          <summary>Katmanlar ve harita ayrıntıları</summary>
+        <div class="minimap-layers" aria-label="Minimap katmanları">
+          <label><input type="checkbox" checked disabled> HiRISE DTM hillshade</label>
+          <label><input id="minimap-toggle-geology" type="checkbox" checked> Jeoloji sınırları</label>
+          <label><input id="minimap-toggle-archive" type="checkbox" checked> Arşiv sürüş izi</label>
+          <label><input id="minimap-toggle-ortho" type="checkbox" checked> HiRISE WMTS Ortomozaik (z17 0.32m / z14 2.5m)</label>
+          <label><input id="minimap-toggle-heatmap" type="checkbox"> Dengeli EVA yürünebilirlik alanı (planlama göstergesi)</label>
+          <label><input type="checkbox" checked disabled> Planlanan rota</label>
+        </div>
+        <p id="minimap-layer-status" class="muted small" aria-live="polite">Jeoloji: yükleniyor · Arşiv izi: yükleniyor · Viking global: yükleniyor</p>
+        <p class="muted small">Viking MDIM 2.1 küresel renk mozaiği bölgesel bağlam içindir (232 m/px; kot veya ortogörüntü değildir). Jezero yakınında HiRISE DTM hillshade görünür. Katman anahtarı: Viking mozaik bölgesel bağlamdır; HiRISE hillshade yerel yüzey ayrıntısını gösterir.</p>
+        <p class="muted small">Jeoloji sınırları 1:75.000 ölçekli indikatiftir ve yaklaşık 100–200 m konum belirsizliği taşır. Arşiv izi geçmiş MMGIS sürüş kaydıdır; canlı telemetri veya rota önerisi değildir.</p>
+        </details>
+        <div id="panel-planner-home">
+          <dl class="minimap-endpoints">
+            <dt>Başlangıç</dt><dd id="minimap-start">Seçilmedi</dd>
+            <dt>Bitiş</dt><dd id="minimap-end">Seçilmedi</dd>
+          </dl>
+          <div class="minimap-preference-row">
+            <label for="minimap-route-preference">Rota tercihi:</label>
+            <select id="minimap-route-preference" class="view-select">
+              <option value="balanced" selected>Dengeli EVA Yürünebilirlik</option>
+              <option value="shortest">En Kısa Mesafe</option>
+              <option value="flattest">En Düz / Düşük Eğim</option>
+            </select>
+          </div>
+          <button id="minimap-plan-route" type="button" disabled>Başlangıç ve bitiş seçin</button>
+          <p class="planning-disclaimer">Planlama göstergesi — güvenli rota sertifikası değildir.</p>
+          <dl id="minimap-route-summary" class="minimap-summary" aria-live="polite"><dt>Rota</dt><dd>Henüz hesaplanmadı</dd></dl>
+          <p id="minimap-status" class="muted small" role="status" aria-live="polite">Başlangıç ve bitiş seçin; ardından planlayın.</p>
+          <section id="minimap-cell-explanation" class="minimap-cell-explanation" aria-live="polite" hidden></section>
+        </div>
+        <details open class="secondary-options is-collapsed">
+          <summary>Harita açıklaması ve kaynak</summary>
+          <p class="muted small">Eflatun tarama ölçüm kapsamı dışındaki hücreleri gösterir; koyu alan yüklenen DTM altkümesinin dışındadır. Nokta seçimi bu alanlarda geçilebilirlik anlamına gelmez.</p>
+          <p class="muted small">Kaynak: USGS Astrogeology / NASA / JPL-Caltech / Univ. of Arizona. Ürün: USGS Mars 2020 TRN HiRISE DTM Mozaiği; Fergason vd. 2020, <a href="https://doi.org/10.5066/P9REJ9JN" target="_blank" rel="noreferrer">DOI: 10.5066/P9REJ9JN</a>.</p>
+        </details>
+      </section>
+
+      <details open class="card disclosure is-collapsed">
+        <summary><h2>Kontroller ve simülasyon</h2></summary>
+        <ul class="keys">
+          <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> hareket</li>
+          <li><kbd>P</kbd> duraklat · devam</li>
+          <li><kbd>Space</kbd> 2D’de duraklat · 3D’de küçük simülasyon sıçraması</li>
+          <li>3D sahneye tıkla: fare bakışı · <kbd>Esc</kbd> fare kilidini bırakır</li>
+          <li><kbd>R</kbd> yeniden başlat</li>
+          <li><kbd>+</kbd> / <kbd>−</kbd> / fare tekerleği yakınlaştırma (yalnız görünüm)</li>
+        </ul>
+      </details>
+
+      <details open class="card scenario disclosure is-collapsed">
+        <summary><h2><span class="tag tag-scn">Senaryo/UI</span> Simülasyon durumu</h2></summary>
+        <dl>
+          <dt>Oyuncu konumu (yerel düzlem)</dt><dd id="v-pos">—</dd>
+          <dt>Konum (projeksiyonla dönüştürülmüş)</dt><dd id="v-latlon">—</dd>
+          <dt>Senaryo saati</dt><dd id="v-clock">—</dd>
+          <dt>Hareket hızı</dt><dd id="v-speed">—</dd>
+          <dt>Rota ilerlemesi</dt><dd id="v-progress">—</dd>
+          <dt>Rotadan sapma (yerel equirectangular düzlemde sonlu segmente en kısa yatay uzaklık)</dt><dd id="v-dev">—</dd>
+          <dt><label for="in-corridor">Koridor yarı genişliği (her iki yan, m)</label></dt>
+          <dd><input id="in-corridor" type="number" step="1"> <span class="muted">senaryo varsayımı; yerel equirectangular projeksiyon düzleminde hesaplanır, güvenlik sınırı veya NASA operasyon sınırı değil</span></dd>
+          <dt>Yürünen mesafe</dt><dd id="v-walked">—</dd>
+        </dl>
+        <p class="muted small">Yerel düzlem: x doğu, y kuzey, metre; orijin Sol 120 / WB1. Mesafe ve koridor yerel equirectangular projeksiyon düzleminde hesaplanır; bu koridor bir güvenlik sınırı değildir. Saat yalnız simülasyon saatidir; duraklatmada durur, yeniden başlatmada sıfırlanır.</p>
+      </details>
+
+      <details open class="card computed disclosure is-collapsed">
+        <summary><h2><span class="tag tag-calc">Hesaplanan</span> Oyuncu konumunda DTM</h2></summary>
+        <dl>
+          <dt>Kot</dt><dd id="v-elev">—</dd>
+          <dt>Eğim</dt><dd id="v-slope">—</dd>
+        </dl>
+        <p class="muted small" id="v-calc-note"></p>
+        <p class="muted small">Kot ve eğim yalnız arşiv DTM’sinden türetilmiş değerlerdir; güvenli/güvensiz yorumu, tehlike skoru veya rover karar desteği değildir.</p>
+      </details>
+
+      <section id="planned-route-guidance" class="card planned-route-guidance" hidden aria-live="polite">
+        <h2>Planlanan rota kılavuzu</h2>
+        <dl>
+          <dt>Sonraki nokta yönü</dt><dd id="planned-route-next-direction">—</dd>
+          <dt>Sonraki nokta mesafesi</dt><dd id="planned-route-next-distance">—</dd>
+          <dt>Mevcut hücre EVA göstergesi</dt><dd id="planned-route-score">—</dd>
+          <dt>Mevcut hücre eğimi</dt><dd id="planned-route-slope">—</dd>
+        </dl>
+        <p class="muted small">Gösterge, geçerli DTM/planlama hücresine bağlıdır; rota kılavuzu veya EVA puanı güvenlik sertifikası değildir.</p>
+      </section>
+
+      <details open class="card route disclosure is-collapsed">
+        <summary><h2><span class="tag tag-route">Rota kökeni</span> Sol 120 → Sol 164</h2></summary>
+        <p><b id="route-note"></b></p>
+        <ul id="route-wps" class="small"></ul>
+        <p class="muted small">Gerçek Perseverance traverse geometrisi (PDS PLACES) bu demoda kullanılmadı; ham PLACES dosyasına erişilemedi.</p>
+      </details>
+
+      <details open class="card archive disclosure is-collapsed">
+        <summary><h2><span class="tag tag-arch">Arşiv ürünü</span> Katmanlar ve köken</h2></summary>
+        <div id="scale-badge-container"></div>
+        <label class="small"><input id="toggle-geology" type="checkbox" checked> Jeoloji sınırlarını göster (indikatiftir)</label>
+        <div id="geology-status" class="muted small" aria-live="polite"></div>
+        <p id="geology-provenance" class="muted small"></p>
+        <label class="small"><input id="toggle-archive-traverse" type="checkbox" checked> Arşiv Perseverance sürüş izini göster (MMGIS)</label>
+        <p id="archive-traverse-status" class="muted small" aria-live="polite"></p>
+        <p class="muted small">Mor çizgi arşiv sürüş izidir. Sarı düz hat ve koridor keşif senaryosuna aittir. Sürüş izi canlı telemetri veya güvenli rota bilgisi içermez. Kaynak: NASA/JPL Mars 2020 MMGIS.</p>
+        <div id="layers"></div>
+        <p id="ortho-status" class="muted small" aria-live="polite">HiRISE WMTS Ortomozaik: z17 (0.318 m/px) ve z14 (2.544 m/px) · WMTS projeksiyon aritmetiği · Stage 39A</p>
+        <p class="muted small">Mars Trek HiRISE ortomozaik katmanı, etkin DTM ile piksel hizası doğrulanınca açılabilir. Kaynak: USGS Astrogeology / NASA MRO HiRISE, NASA JPL Mars Trek.</p>
+      </details>
+
+      <details open class="card sources-card disclosure is-collapsed">
+        <summary><h2 id="sources-title">Kaynaklar ve sınırlar</h2></summary>
+        <p class="muted small">Kaynak, ürün kimliği, çözünürlük ve kullanım sınırları için <a href="SOURCES.md" target="_blank" rel="noopener">tam kaynak dökümünü açın</a>.</p>
+        <ul class="small sources-limits">
+          <li><b>Yüzey:</b> Yerel HiRISE DTM yaklaşık 1 m/piksel kot ve türetilmiş eğim sağlar. USGS veri yayımında CC0 beyanı vardır; ürün özel düşey datum doğrulaması hâlâ açıktır.</li>
+          <li><b>Görünüm:</b> HiRISE WMTS ortomozaik görsel kaplamadır; kayıt belirsizliği saklanmaz. Viking MDIM 2.1 işlenmiş renkli bölgesel bağlamdır, kot veya yerel ortogörüntü değildir.</li>
+          <li><b>Rota:</b> EVA yürünebilirlik puanı ve kılavuz çizgi planlama göstergesidir; güvenli rota sertifikası değildir. MMGIS rover izi arşiv kaydıdır, insan rotası veya canlı telemetri değildir.</li>
+          <li><b>Fizik:</b> 3,71 m/s² Mars yerçekimi genel referanstır. Görsel giysi hareketi ve gökyüzü sunum modelidir; Jezero anlık atmosfer ölçümü veya gerçek suit fiziği değildir.</li>
+        </ul>
+        <h3>Birincil bağlantılar</h3>
+        <ul id="sources" class="small"></ul>
+      </details>
+      <details open class="card archive disclosure rover-disclosure is-collapsed">
+        <summary><h2>Perseverance arşiv fotoğrafları</h2></summary>
+        <section id="rover-gallery" aria-label="Perseverance arşiv fotoğrafları"></section>
+      </details>
+    </aside>
+
+    <div id="mission-setup-overlay" class="mission-setup-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="setup-modal-title">
+      <div class="mission-setup-modal">
+        <div class="setup-modal-header">
+          <div>
+            <h2 id="setup-modal-title">🧭 Marswalk — Başlangıç ve Bitiş Noktası Seçimi</h2>
+            <p class="setup-modal-sub">Simülasyona girmeden önce harita üzerinden başlangıç ve hedef noktalarınızı belirleyin. Koridor ve A* yürüyüş rotası önceden hesaplanır.</p>
+          </div>
+          <button id="btn-close-setup" type="button" class="btn-setup-close" hidden title="Mevcut Rotayla Devam Et">✕ Kapat</button>
+        </div>
+        <div id="setup-step-banner" class="setup-step-banner">1. Adım: Harita üzerinde <b>Başlangıç</b> noktasını tıklayın veya alttaki örnek rotalardan birini seçin.</div>
+        <div class="setup-modal-body">
+          <div id="setup-map-slot" class="setup-map-slot"></div>
+          <div class="setup-side-col">
+            <div id="setup-planner-slot" class="setup-planner-slot"></div>
+            <div class="setup-corridor-row">
+              <label for="setup-corridor-input">Koridor yarı genişliği (m):</label>
+              <input id="setup-corridor-input" type="number" min="2" max="200" step="1" value="10">
+            </div>
+            <div class="setup-launch-actions">
+              <button id="btn-launch-3d" type="button" class="btn-launch-primary" disabled>Önce Başlangıç ve Bitiş Seçin</button>
+              <button id="btn-launch-2d" type="button" class="btn-launch-secondary" disabled>2D Haritada Başlat</button>
+            </div>
+          </div>
+        </div>
+        <div class="setup-presets-footer">
+          <span class="setup-presets-label">Örnek Rotalar (İsteğe Bağlı Seçenekler):</span>
+          <div class="setup-presets-list">
+            <button type="button" class="btn-preset-route" data-preset="sol120-sol164">📍 Sol 120 (WB1) → Sol 164 (Roubion)</button>
+            <button type="button" class="btn-preset-route" data-preset="crater-flat">📍 Jezero Düzlük Koridoru (Düşük Eğim)</button>
+            <button type="button" class="btn-preset-route" data-preset="nw-ridge">📍 Kuzey Sırtı → Güney Havzası</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

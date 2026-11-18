@@ -1,0 +1,8 @@
+.mw-lang-switch { position: fixed; left: 16px; bottom: 16px; z-index: 9000; display: flex; padding: 3px; gap: 2px;
+  background: rgba(10, 14, 26, 0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(90, 215, 255, 0.35); border-radius: 999px; font-family: system-ui, sans-serif; }
+.mw-lang-switch button { border: 0; background: transparent; color: #aebbd0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+  padding: 5px 12px; border-radius: 999px; cursor: pointer; }
+.mw-lang-switch button.is-on { background: rgba(255, 150, 80, 0.3); color: #fff; }
+.mw-lang-switch button:focus-visible { outline: 2px solid #8fe3ff; outline-offset: 1px; }
+body.mw-helmet-mode .mw-lang-switch { left: calc(5vw + 14px); bottom: calc(4vh + 14px); }

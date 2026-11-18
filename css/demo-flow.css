@@ -1,0 +1,77 @@
+﻿/* Tanıtım akışı entegrasyon düzeltmeleri. */
+.mw-holo-dock .hud-minimap-widget { position: relative; left: auto; bottom: auto; top: auto; }
+body:not(.view-3d) .mw-holo-dock, body:not(.view-3d) .mw-helmet, body:not(.view-3d) .mw-auto-panel, body:not(.view-3d) .mw-demo-tags { display: none !important; }
+.mw-helmet { pointer-events: none; }
+.mw-mode-overlay { position: absolute; z-index: 2; pointer-events: none; }
+.mw-demo-tags { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 8; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; pointer-events: none; }
+.mw-demo-tag { font: 600 12px/1.2 system-ui, sans-serif; color: #d6ecf2; background: rgba(8, 24, 30, 0.62); border: 1px solid rgba(150, 210, 230, 0.5); border-radius: 999px; padding: 4px 10px; }
+.mw-demo-tags[hidden] { display: none; }
+
+.mw-holo-dock { width: 250px; max-width: 250px; }
+.mw-holo-bar { display: flex; flex-wrap: wrap; gap: 3px; }
+.mw-holo-dock .mw-vm-legend { font-size: 10px; }
+
+/* --- Tanıtım düzeltmeleri v2: dock düzeni, tam ekran kask modu --- */
+.mw-holo-dock { width: 250px; max-width: 250px; gap: 6px; }
+.mw-holo-dock .mw-holo > canvas#hud-minimap-canvas { height: 200px; }
+.mw-holo-dock .mw-holo-bar { display: block; padding: 0; background: none; border: 0; }
+.mw-holo-dock .mw-vm-bar {
+  display: flex; flex-wrap: wrap; gap: 3px; margin: 0; padding: 4px;
+  background: rgba(6, 28, 34, 0.6); border: 1px solid rgba(90, 235, 235, 0.35); border-radius: 4px;
+  text-transform: none; letter-spacing: 0;
+}
+.mw-holo-dock .mw-vm-btn { flex: 1 1 calc(25% - 3px); justify-content: center; font-size: 11px; padding: 3px 4px; white-space: nowrap; }
+.mw-holo-dock .mw-vm-legend { margin: 4px 0 0; font-size: 11px; line-height: 1.25; }
+.mw-holo-dock .mw-vm-legend__note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Kask modu: üst başlık ve yan panel gizli, kask tüm görüntü alanında. */
+body.mw-helmet-mode header, body.mw-helmet-mode #panel { display: none !important; }
+body.mw-helmet-mode main { height: 100%; }
+body.mw-helmet-mode #mapwrap { flex: 1 1 100%; width: 100%; height: 100%; }
+body.mw-helmet-mode .mw-helmet { position: fixed; inset: 0; z-index: 20; }
+body.mw-helmet-mode .mw-holo-dock { left: calc(5vw + 14px); top: calc(3vh + 22px); z-index: 25; }
+body.mw-helmet-mode .mw-auto-panel { right: calc(5vw + 14px); bottom: calc(4vh + 14px); z-index: 30; }
+body.mw-helmet-mode .mw-helmet-chip { top: calc(3vh + 14px); font-size: 12px; padding: 4px 12px; max-width: min(60vw, 520px); }
+.mw-back-globe {
+  position: fixed; top: 12px; right: 14px; z-index: 40; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  font: 600 12px/1.2 system-ui, sans-serif; color: #e6f4f7; background: rgba(8, 20, 26, 0.55);
+  border: 1px solid rgba(150, 220, 235, 0.45); backdrop-filter: blur(4px);
+}
+.mw-back-globe:hover { background: rgba(20, 50, 62, 0.8); }
+.mw-back-globe[hidden] { display: none; }
+
+body.mw-helmet-mode .view-toolbar, body.mw-helmet-mode .hint, body.mw-helmet-mode #view-note { display: none !important; }
+body.mw-helmet-mode .mw-demo-tags { top: calc(3vh + 48px); z-index: 25; }
+.mw-holo-dock .mw-vm-legend, .mw-holo-dock .mw-vm-legend__row { text-transform: none; letter-spacing: 0; color: #cfe6ee; }
+.mw-holo-dock .mw-vm-legend { padding: 3px 6px; background: rgba(6, 28, 34, 0.6); border-radius: 4px; }
+
+/* --- Harita büyütme (M): dock ekranın %75'i --- */
+.mw-map-scrim { position: fixed; inset: 0; z-index: 59; background: rgba(2, 8, 12, 0.5); opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
+.mw-map-scrim.is-on { opacity: 1; pointer-events: auto; }
+.mw-holo-dock.is-expanded,
+body.mw-helmet-mode .mw-holo-dock.is-expanded {
+  position: fixed; left: 12.5vw; top: 12.5vh; width: 75vw; max-width: none; height: 75vh; z-index: 60;
+  box-sizing: border-box; display: flex; flex-direction: column; animation: mw-dock-grow 0.25s ease-out;
+}
+@keyframes mw-dock-grow { from { opacity: 0.4; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
+.mw-holo-dock.is-expanded .hud-minimap-widget { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.mw-holo-dock.is-expanded .mw-holo { transform: none; }
+.mw-holo-dock.is-expanded .mw-holo > canvas#hud-minimap-canvas,
+.mw-holo-dock.is-expanded #hud-minimap-canvas { height: auto; flex: 1 1 auto; min-height: 0; }
+.mw-holo-dock.is-expanded .mw-vm-btn { flex: 0 1 auto; padding: 4px 12px; font-size: 12px; }
+.mw-holo-dock.is-expanded .mw-vm-legend__note { white-space: normal; }
+.mw-map-hint { position: absolute; right: 10px; top: 6px; z-index: 5; font: 600 10px/1 system-ui, sans-serif; color: rgba(190, 240, 240, 0.7); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .mw-holo-dock.is-expanded { animation: none; } .mw-map-scrim { transition: none; } }
+
+/* --- Ekip şeridi --- */
+.mw-crew-strip { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 2px 4px 0; font: 500 11px/1.3 system-ui, sans-serif; color: rgba(214, 236, 242, 0.85); font-variant-numeric: tabular-nums; }
+.mw-crew-strip[hidden] { display: none; }
+
+/* --- Biyom çipi --- */
+.mw-biome-chip { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); z-index: 8; pointer-events: none; opacity: 0; transition: opacity 0.25s ease;
+  font: 600 12px/1.2 system-ui, sans-serif; color: #e4f3ee; background: rgba(8, 24, 22, 0.55); border: 1px solid rgba(150, 220, 200, 0.4); border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
+.mw-biome-chip.is-on { opacity: 1; }
+.mw-biome-chip:empty { display: none; }
+body.mw-helmet-mode .mw-biome-chip { top: calc(3vh + 82px); z-index: 25; }
+body:not(.view-3d) .mw-biome-chip { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .mw-biome-chip { transition: none; } }

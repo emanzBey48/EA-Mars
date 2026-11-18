@@ -12,7 +12,7 @@ function h(tag, cls, text) {
   return e;
 }
 
-export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null, dataBase = '/data/viking-mdim', regions = REGIONS, onUnavailable = null }) {
+export function createGlobeScreen({ root, onSimulate, getEtaMinutes = () => null, dataBase = 'data/viking-mdim', regions = REGIONS, onUnavailable = null }) {
   const screen = h('div', 'mw-globe-screen mw-globe-screen--hidden');
   const canvas = h('canvas', 'mw-globe-canvas');
   const title = h('div', 'mw-globe-title');

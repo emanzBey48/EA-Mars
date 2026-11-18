@@ -8,6 +8,8 @@
   "scripts": {
     "prepare-data": "node scripts/extract-dtm.mjs",
     "start": "node server.mjs",
+    "build": "node scripts/build-pages.mjs",
+    "build:pages": "node scripts/build-pages.mjs",
     "test": "node --test \"test/*.test.mjs\"",
     "smoke": "node scripts/smoke-e2e.mjs"
   }

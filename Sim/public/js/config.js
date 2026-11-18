@@ -76,10 +76,10 @@ export const SOURCES = [
 ];
 
 export const ORTHO_MOSAIC_SOURCES = {
-  z17Manifest: '/data/ortho/ortho-alignment-z17-tiles.json',
-  z17Image: '/data/ortho/ortho-mosaic-z17-tiles.png',
-  z14Manifest: '/data/ortho/ortho-alignment-z14-tiles.json',
-  z14Image: '/data/ortho/ortho-mosaic-z14-tiles.png',
+  z17Manifest: 'data/ortho/ortho-alignment-z17-tiles.json',
+  z17Image: 'data/ortho/ortho-mosaic-z17-tiles.png',
+  z14Manifest: 'data/ortho/ortho-alignment-z14-tiles.json',
+  z14Image: 'data/ortho/ortho-mosaic-z14-tiles.png',
   defaultMode: 'hybrid', // 'hybrid' = HiRISE Ortomozaik + Rölyef/Mars Regolit Renklendirmesi, 'ortho' = Saf HiRISE Ortomozaik Albedo, 'hillshade' = Yalnız DTM Gölgeli Kabartma
   licenseNotice: 'Kaynak: NASA / USGS Astrogeology / HiRISE (University of Arizona)',
 };

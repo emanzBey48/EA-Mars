@@ -16,3 +16,4 @@ node_modules/
 !data/regional-dem/**
 !data/nodata-fixture/
 !data/nodata-fixture/**
+dist/

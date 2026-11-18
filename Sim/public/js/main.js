@@ -1536,8 +1536,8 @@ function updateFootprints(snapshot) {
 async function loadGeology() {
   try {
     const [geoResponse, manifestResponse] = await Promise.all([
-      fetch('/data/usgs-sim3464-geology/jezero_geounits_corridor.geojson'),
-      fetch('/data/usgs-sim3464-geology/manifest.json'),
+      fetch('data/usgs-sim3464-geology/jezero_geounits_corridor.geojson'),
+      fetch('data/usgs-sim3464-geology/manifest.json'),
     ]);
     if (!geoResponse.ok || !manifestResponse.ok) throw new Error(`HTTP ${geoResponse.status}/${manifestResponse.status}`);
     const [geojson, manifest] = await Promise.all([geoResponse.json(), manifestResponse.json()]);

@@ -137,7 +137,7 @@ function loadImage(src, ImageCtor) {
 }
 
 // Önce z0 (hızlı), sonra z2 karolarını equirectangular tuvale birleştirir; onCanvas(canvas, z) çağırır.
-export async function loadMarsTexture({ dataBase = '/data/viking-mdim', levels = [0, 2], onCanvas, fetchImpl = globalThis.fetch,
+export async function loadMarsTexture({ dataBase = 'data/viking-mdim', levels = [0, 2], onCanvas, fetchImpl = globalThis.fetch,
   ImageCtor = globalThis.Image, makeCanvas = () => document.createElement('canvas') } = {}) {
   const manifest = await (await fetchImpl(`${dataBase}/manifest.json`)).json();
   const size = manifest.scheme.tileSize;
@@ -378,7 +378,7 @@ const DIST_MIN = 1.7, DIST_MAX = 4.5;
 
 // createGlobe({ canvas, dataBase, onPick({lat,lon}), onHover({lat,lon,clientX,clientY}|null) })
 // -> { setMarkers({start,end}), flyTo(lat,lon,ms,zoom), setActive(bool), setAutoRotatePaused(bool), resetView(), dispose(), usesFallbackTexture() }
-export function createGlobe({ canvas, dataBase = '/data/viking-mdim', onPick, onHover, makeCanvas = () => document.createElement('canvas') }) {
+export function createGlobe({ canvas, dataBase = 'data/viking-mdim', onPick, onHover, makeCanvas = () => document.createElement('canvas') }) {
   const gl = canvas.getContext('webgl2', { antialias: true }) || canvas.getContext('webgl', { antialias: true });
   if (!gl) throw new Error('WebGL kullanılamıyor');
   const sph = program(gl, SPHERE_VS, SPHERE_FS);

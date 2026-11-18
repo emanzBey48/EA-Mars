@@ -1,0 +1,4 @@
+[build]
+  base = "Sim"
+  command = "npm run build:pages"
+  publish = "dist"
